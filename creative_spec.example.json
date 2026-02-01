@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "channel": {
+    "name": "Short Form Video Agent",
+    "platforms": ["youtube_shorts", "tiktok", "instagram_reels"],
+    "voice": "narrator"
+  },
+  "style": {
+    "target_duration_seconds": 45,
+    "pacing": "fast",
+    "humor": "light",
+    "visuals": "kinetic subtitles + b-roll/illustrations",
+    "subtitle_style": "large, high-contrast, centered"
+  },
+  "cta_policy": {
+    "enabled": true,
+    "default": "Ask a question to drive comments"
+  },
+  "compliance": {
+    "no_medical_advice": true,
+    "no_hate_or_harassment": true,
+    "no_misinformation": true
+  }
+}
