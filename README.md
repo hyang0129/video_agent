@@ -18,36 +18,111 @@ The system uses specialized agents that collaborate to:
 ## Project Structure
 
 ```
-shortformvideoagent/
+video_agent/
 ├── src/
-│   ├── agent.py              # Market research agent
-│   ├── config.py             # Configuration management
-│   └── tools/
-│       └── youtube_tools.py  # YouTube API integration
+│   ├── agent.py                 # Market research agent
+│   ├── script_agent.py          # Script generation agent
+│   ├── video_planner.py         # Video planning utilities
+│   ├── video_agent.py           # Video planning agent wrapper
+│   ├── audio_agent.py           # ✨ Audio generation agent
+│   ├── config.py                # Configuration management
+│   ├── creative_spec.py         # Creative specifications
+│   ├── tools/
+│   │   ├── youtube_tools.py     # YouTube API integration
+│   │   └── tts_tools.py         # ✨ Text-to-speech tools (ElevenLabs)
+│   ├── artifacts/
+│   │   └── io.py                # Artifact I/O utilities
+│   └── utils/
+│       └── json_utils.py        # JSON parsing utilities
 ├── docs/
 │   ├── content-type-targeting.md
 │   ├── topic-identification.md
-│   └── market-research-agent-architecture.md
-├── main.py                   # Entry point for market research agent
-├── requirements.txt          # Python dependencies
-├── .env.example             # Environment variables template
-└── README.md                # This file
+│   ├── market-research-agent-architecture.md
+│   ├── video-production-pipeline-architecture.md
+│   └── audio-agent.md           # ✨ Audio agent documentation
+├── examples/
+│   └── audio_agent_example.py   # ✨ Audio agent usage example
+├── tests/
+│   └── test_audio_agent.py      # ✨ Audio agent tests
+├── results/                     # Output directory for artifacts
+├── assets/                      # Static assets (music, etc.)
+├── main.py                      # Entry point for market research
+├── requirements.txt             # Python dependencies
+├── .env.example                 # Environment variables template
+└── README.md                    # This file
 ```
 
-## Current Implementation: Market Research Agent 🔍
+## Current Implementation Status
 
-The first component of the pipeline is now live - a market research agent that identifies content opportunities by analyzing:
-- Long-form YouTube content performance
-- Short-form content gaps (YouTube Shorts)
-- Engagement metrics and trends
-- Topic and sub-topic hierarchies
+### ✅ Implemented Agents
 
-**Key Capabilities:**
+#### 1. Market Research Agent 🔍
+Identifies content opportunities through YouTube analysis.
+
+**Capabilities:**
 - Search and analyze YouTube videos by topic
 - Compare long-form vs short-form presence
 - Score opportunities (0-10 scale)
 - Identify specific sub-topics for content creation
 - Multi-category scanning for best opportunities
+
+**Output:** TopicBrief JSON for downstream agents
+
+#### 2. Script Generation Agent ✍️
+Converts topic briefs into structured video scripts.
+
+**Capabilities:**
+- Generate engaging hooks and captions
+- Create beat-by-beat script timing
+- On-screen text suggestions
+- Safety notes and fact-checking flags
+
+**Output:** ScriptPackage JSON with voiceover and timing
+
+#### 3. Video Planning Agent 📋
+Transforms scripts into actionable video plans.
+
+**Capabilities:**
+- Convert script beats to video scenes
+- Define visual direction per scene
+- Configure TTS and subtitle settings
+- Generate asset prompts
+
+**Output:** VideoPlan JSON for production agents
+
+#### 4. Audio Generation Agent 🎙️
+Generates voiceover audio using AI TTS.
+
+**Capabilities:**
+- ElevenLabs TTS integration with multiple voices
+- Scene-by-scene voiceover generation
+- Audio timeline manifest creation
+- Voice preset management (narrator, energetic, calm, authoritative)
+- Voiceover statistics and validation
+
+**Output:** AudioTimeline JSON + MP3 voiceover segments
+
+**Phase 2 Roadmap:**
+- Audio mixing with background music
+- Loudness normalization (LUFS)
+- Sound effects support
+- Master audio file export
+
+[📖 Audio Agent Documentation](docs/audio-agent.md)
+
+### 🔜 Planned Agents
+
+#### 5. Visual Agent (Phase 2)
+- Stock image/video search
+- AI image generation
+- Text overlay creation
+- Visual coherence management
+
+#### 6. Compositor Agent (Phase 2)
+- Final video assembly
+- Transition effects
+- Text rendering
+- Video export (MP4)
 
 ## Setup
 
@@ -88,6 +163,12 @@ Get your API keys:
   2. Click "Get API key" or "Create API key"
   3. No credit card required!
   4. Free tier: 15 requests/min, 1M tokens/day
+
+- **ElevenLabs TTS** (for audio generation): https://elevenlabs.io
+  1. Sign up for free account
+  2. Navigate to Profile → API Keys
+  3. Create new API key
+  4. Free tier: 10,000 characters/month
 
 ### 4. Verify Setup
 

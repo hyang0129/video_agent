@@ -61,3 +61,15 @@ VIDEO_RESOLUTION = (1080, 1920)  # Width x Height
 TARGET_DURATION_SECONDS = 45  # Default video length
 AUDIO_SAMPLE_RATE = 44100
 VIDEO_FPS = 30
+
+# Audio Generation Settings
+DEFAULT_VOICE = "narrator"  # Default ElevenLabs voice preset
+BACKGROUND_MUSIC_VOLUME_DB = -18.0  # Background music volume (dB)
+VOICEOVER_VOLUME_DB = 0.0  # Voiceover volume (dB)
+TARGET_LUFS = -16.0  # Target loudness normalization (LUFS)
+TTS_STABILITY = 0.5  # ElevenLabs voice stability (0.0-1.0)
+TTS_SIMILARITY_BOOST = 0.75  # ElevenLabs similarity boost (0.0-1.0)
+
+# Audio file formats
+AUDIO_EXPORT_FORMAT = "mp3"  # or "wav" for uncompressed
+AUDIO_BITRATE = "192k"  # MP3 bitrate
