@@ -15,19 +15,28 @@ from langchain.schema import HumanMessage, SystemMessage
 
 from .config import GOOGLE_API_KEY, GOOGLE_MODEL
 from .utils.json_utils import safe_json_loads
+from .facts.fact_store import FactStore
 
 
 SCRIPT_SYSTEM_PROMPT = """You are a short-form video Script Generation Agent.
 
-You will be given a Topic Brief produced by a Market Research stage.
-Your job is to generate an engaging short-form script that stays tightly
-within the Topic Brief (topic, subtopic, and angle) and follows the
-constraints.
+You will be given a Topic Brief produced by a Market Research stage, plus a set of
+VERIFIED FACTS from a fact database.
+
+Your job is to generate an engaging short-form script that:
+- Uses ONLY the provided verified facts (do not add facts from your training data)
+- Stays tightly within the Topic Brief (topic, subtopic, and angle)
+- Follows all constraints
+
+CRITICAL GROUNDING RULE:
+Every factual claim in your script MUST come from the provided facts list.
+If you don't have enough facts, create a shorter script or use more general statements.
+DO NOT hallucinate or invent facts.
 
 Requirements:
 - Output MUST be valid JSON only (no markdown).
 - Stay on-topic: do not drift to adjacent fandoms/subtopics.
-- Avoid unverifiable claims. If a claim may be uncertain, hedge it.
+- Use cautious language for any uncertain claims (e.g., "reportedly", "according to").
 - Prefer punchy, curiosity-driven writing suitable for 30–60s.
 
 Timing requirements:
@@ -48,6 +57,7 @@ Produce a `ScriptPackage` JSON object with:
 - caption (<= 120 chars)
 - hashtags: 5-10
 - safety_notes: list of any claims that should be fact-checked
+- fact_sources: list of fact_ids used in the script
 """
 
 
@@ -152,13 +162,22 @@ def _validate_or_fix_script_package(
 
     # If beats are missing or obviously invalid, normalize.
     if not beats:
-        script["beats"] = _normalize_beats(
-            beats=[
-                {"on_screen_text": "", "vo_line": ""}
-                for _ in range(7)
-            ],
-            target_seconds=target_seconds,
-        )
+        topic_id = str(topic_brief.get("topic_id") or script_package.get("topic_id") or "topic")
+        subtopic_id = str(topic_brief.get("subtopic_id") or script_package.get("subtopic_id") or "sub")
+        angle = str(topic_brief.get("angle") or "").strip()
+
+        fallback_beats = [
+            {"on_screen_text": "Wait for it…", "vo_line": f"Quick {topic_id.replace('_',' ')} fact you probably missed."},
+            {"on_screen_text": subtopic_id.replace("_", " ").title(), "vo_line": f"Today: {subtopic_id.replace('_',' ')}."},
+            {"on_screen_text": "The idea", "vo_line": angle or "Here’s the core idea in plain English."},
+            {"on_screen_text": "Why it matters", "vo_line": "It changes how you think about what’s possible."},
+            {"on_screen_text": "One example", "vo_line": "Imagine a simple scenario that makes it click."},
+            {"on_screen_text": "The takeaway", "vo_line": "The takeaway is surprisingly practical."},
+            {"on_screen_text": "Follow for more", "vo_line": "Want more quick facts like this?"},
+        ]
+
+        script["beats"] = _normalize_beats(beats=fallback_beats, target_seconds=target_seconds)
+        script["voiceover"] = " ".join([b.get("vo_line", "").strip() for b in script["beats"] if b.get("vo_line")])
         return script_package
 
     # Check monotonicity and bounds; if violated, overwrite timestamps.
@@ -185,29 +204,50 @@ def _validate_or_fix_script_package(
         script["beats"][0]["t_start_s"] = 0.0
         script["beats"][-1]["t_end_s"] = float(target_seconds)
 
+    # Ensure beats have usable text (avoid empty VO lines that break downstream audio generation).
+    for i, beat in enumerate(script.get("beats") or [], 1):
+        if not isinstance(beat, dict):
+            continue
+        vo = str(beat.get("vo_line") or "").strip()
+        ost = str(beat.get("on_screen_text") or "").strip()
+        if not ost:
+            beat["on_screen_text"] = f"Beat {i}"
+        if not vo:
+            beat["vo_line"] = f"Here’s a quick point for beat {i}."
+
+    if not str(script.get("voiceover") or "").strip():
+        script["voiceover"] = " ".join([str(b.get("vo_line") or "").strip() for b in script["beats"] if isinstance(b, dict)])
+
     return script_package
 
 
 class ScriptGenerationAgent:
     """Generate short-form scripts from Topic Brief artifacts."""
 
-    def __init__(self, model: str = GOOGLE_MODEL):
+    def __init__(self, model: str = GOOGLE_MODEL, fact_store: Optional[FactStore] = None):
         self.llm = ChatGoogleGenerativeAI(
             model=model,
             temperature=0.7,
             google_api_key=GOOGLE_API_KEY,
         )
+        self.fact_store = fact_store or FactStore()
 
     def generate_script_package(
         self,
         topic_brief: Dict[str, Any],
         creative_spec: Optional[Dict[str, Any]] = None,
+        use_fact_grounding: bool = True,
+        min_facts: int = 5,
+        max_facts: int = 10,
     ) -> Dict[str, Any]:
         """Generate a `ScriptPackage`.
 
         Args:
             topic_brief: A TopicBrief artifact dict.
             creative_spec: Optional CreativeSpec artifact dict.
+            use_fact_grounding: Whether to use RAG fact grounding.
+            min_facts: Minimum facts to retrieve from store.
+            max_facts: Maximum facts to retrieve from store.
 
         Returns:
             ScriptPackage dict.
@@ -225,12 +265,47 @@ class ScriptGenerationAgent:
 
         target_seconds = _target_duration_seconds(topic_brief=topic_brief, creative_spec=creative_spec)
 
+        # RAG: Retrieve facts from store
+        facts = []
+        if use_fact_grounding:
+            try:
+                facts = self.fact_store.query(
+                    topic_id=topic_id,
+                    subtopic_id=subtopic_id,
+                    limit=max_facts,
+                    min_engagement_score=3.0,
+                )
+                
+                # If not enough facts, try just topic_id
+                if len(facts) < min_facts:
+                    facts = self.fact_store.query(
+                        topic_id=topic_id,
+                        limit=max_facts,
+                        min_engagement_score=2.0,
+                    )
+                
+                print(f"[RAG] Retrieved {len(facts)} facts for script generation")
+            except Exception as e:
+                print(f"[RAG] Warning: Could not retrieve facts: {e}")
+                facts = []
+
         payload: Dict[str, Any] = {
             "topic_brief": topic_brief,
             "creative_spec": creative_spec,
             "target_duration_seconds": target_seconds,
             "time_now": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "verified_facts": facts,  # NEW: Provide facts to LLM
         }
+
+        # Build prompt with facts if available
+        if facts:
+            fact_section = "\n\nVERIFIED FACTS (use these in your script):\n"
+            for i, fact in enumerate(facts, 1):
+                fact_section += f"{i}. [{fact['fact_id']}] {fact['fact_text']}\n"
+                fact_section += f"   Engagement: {fact['engagement_score']:.1f}/10\n"
+            payload["facts_instruction"] = fact_section
+        else:
+            payload["facts_instruction"] = "\n\nNOTE: No verified facts available. Generate a general informational script without making specific factual claims."
 
         messages = [
             SystemMessage(content=SCRIPT_SYSTEM_PROMPT),
@@ -254,6 +329,9 @@ class ScriptGenerationAgent:
         parsed.setdefault("created_at", payload["time_now"])
         parsed.setdefault("topic_id", topic_id)
         parsed.setdefault("subtopic_id", subtopic_id)
+        
+        # Track which facts were used
+        parsed.setdefault("fact_sources", [f["fact_id"] for f in facts])
 
         parsed = _validate_or_fix_script_package(
             script_package=parsed,
@@ -263,6 +341,84 @@ class ScriptGenerationAgent:
         return parsed
 
 
-def create_script_agent() -> ScriptGenerationAgent:
+def generate_offline_script_package(
+    topic_brief: Dict[str, Any],
+    creative_spec: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Generate a deterministic ScriptPackage without calling an LLM.
+
+    This enables offline / keyless MVP runs while still producing a valid
+    artifact for downstream agents.
+
+    Args:
+        topic_brief: TopicBrief artifact dict.
+        creative_spec: Optional CreativeSpec.
+
+    Returns:
+        ScriptPackage dict.
+    """
+    if not isinstance(topic_brief, dict):
+        raise ValueError("topic_brief must be a dict")
+
+    topic_id = str(topic_brief.get("topic_id") or "topic")
+    subtopic_id = str(topic_brief.get("subtopic_id") or "sub")
+
+    angle = ""
+    if isinstance(topic_brief.get("angle"), str):
+        angle = topic_brief.get("angle", "").strip()
+
+    target_seconds = _target_duration_seconds(topic_brief=topic_brief, creative_spec=creative_spec)
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    # Make a compact 7-beat template.
+    beats = [
+        {"on_screen_text": "Wait for it…", "vo_line": f"Quick {topic_id} fact you probably missed."},
+        {"on_screen_text": subtopic_id.replace("_", " ").title(), "vo_line": f"Today: {subtopic_id.replace('_',' ')}."},
+        {"on_screen_text": "The idea", "vo_line": angle or "Here's the core idea in plain English."},
+        {"on_screen_text": "Why it matters", "vo_line": "It changes how you think about what's possible."},
+        {"on_screen_text": "One example", "vo_line": "Imagine a simple scenario that makes it click."},
+        {"on_screen_text": "The takeaway", "vo_line": "The takeaway is surprisingly practical."},
+        {"on_screen_text": "Follow for more", "vo_line": "Want more quick facts like this?"},
+    ]
+
+    script: Dict[str, Any] = {
+        "beats": _normalize_beats(beats=beats, target_seconds=target_seconds),
+    }
+    # Stitch voiceover from beats.
+    script["voiceover"] = " ".join([b.get("vo_line", "").strip() for b in script["beats"] if b.get("vo_line")])
+
+    script_package: Dict[str, Any] = {
+        "schema_version": "1.0.0",
+        "created_at": now,
+        "script_package_id": f"sg_{uuid.uuid4().hex}",
+        "topic_id": topic_id,
+        "subtopic_id": subtopic_id,
+        "hook_variants": [
+            f"A wild {topic_id} fact…",
+            f"This {subtopic_id.replace('_',' ')} detail is unreal",
+        ],
+        "script": script,
+        "caption": f"Quick {topic_id} bite: {subtopic_id.replace('_',' ')}.",
+        "hashtags": [
+            f"#{topic_id.replace('_','')}",
+            "#shorts",
+            "#didyouknow",
+            "#facts",
+            "#learn",
+        ],
+        "safety_notes": ["Offline script is template-based; verify factual claims before publishing."],
+        "generation": {
+            "mode": "offline_template",
+        },
+    }
+
+    return _validate_or_fix_script_package(
+        script_package=script_package,
+        topic_brief=topic_brief,
+        creative_spec=creative_spec,
+    )
+
+
+def create_script_agent(fact_store: Optional[FactStore] = None) -> ScriptGenerationAgent:
     """Factory for ScriptGenerationAgent."""
-    return ScriptGenerationAgent()
+    return ScriptGenerationAgent(fact_store=fact_store)

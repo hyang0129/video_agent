@@ -178,6 +178,12 @@ python main.py
 
 Should show usage instructions if setup is correct.
 
+Optional preflight:
+
+```powershell
+python main.py preflight
+```
+
 ## Usage
 
 ### Quick Start Examples
@@ -205,6 +211,29 @@ Scans multiple categories (sci-fi, history, space, true crime) for best opportun
 python main.py interactive
 ```
 Chat with the agent for custom research queries.
+
+### End-to-End MVP (TopicBrief → MP4)
+
+If you already have a `TopicBrief` JSON artifact, you can run the full MVP pipeline in one command:
+
+```powershell
+python main.py mvp <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]
+```
+
+Notes:
+- Requires `GOOGLE_API_KEY` (script generation) and `ELEVENLABS_API_KEY` (voiceover).
+- Uses placeholder images if `PEXELS_API_KEY` is not set.
+- Use `dry_run` if FFmpeg is not installed; use `ffmpeg` to generate a real MP4.
+
+#### Offline MVP (no API keys)
+
+If you just want to validate the pipeline wiring without any external services:
+
+```powershell
+python main.py mvp_offline <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]
+```
+
+This uses a template-based script and silent placeholder audio.
 
 ### Cross-Agent Artifact Outputs
 

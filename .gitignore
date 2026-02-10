@@ -63,3 +63,8 @@ assets/*.png
 # Logs
 *.log
 logs/
+
+# YouTube cookies (contains authentication - DO NOT COMMIT)
+youtube_cookies.txt
+cookies.txt
+*.cookies

@@ -1,0 +1,451 @@
+# Video Agent Pipeline - Development Roadmap
+
+**Last Updated:** February 3, 2026
+
+## Current Status
+
+### ✅ MVP Complete (Production-Ready)
+The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) with:
+- Market research → Topic identification
+- Script generation with timing
+- Video planning with scene structure
+- Audio generation (ElevenLabs TTS, 4 voice presets)
+- Visual assets (Pexels search + deterministic placeholder BMPs)
+- Composition (Ken Burns effects, text overlay specs)
+- Rendering (FFmpeg slideshow: images + voiceover)
+
+**Working Command:**
+```powershell
+python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
+```
+
+**Output:** MP4 video in `results/<run_id>/final_video.mp4`
+
+---
+
+## Known Limitations
+
+### 🚧 Phase 1 Gaps (MVP is functional but incomplete)
+
+1. **Text Overlays Not Rendered** 🔥
+   - `RenderSpecification` includes text elements with full styling
+   - FFmpeg engine **silently skips** text rendering
+   - Videos are missing on-screen text (50% of content value)
+   - **Workaround:** None; requires implementation
+
+2. **No Background Music Mixing**
+   - Audio timeline references music tracks but doesn't mix
+   - Placeholder track metadata only
+   - `apply_background_music()`, `mix_audio_tracks()` are stubs
+
+3. **No LUFS Normalization**
+   - Voiceover volume can be inconsistent across videos
+   - `normalize_audio()` is stubbed
+
+4. **No Advanced Video Effects**
+   - Ken Burns defined in spec but not applied
+   - Transitions stubbed (fade metadata present, not rendered)
+
+5. **No Content Moderation**
+   - Visual safety validation is passthrough (`provider="none"`)
+   - No CLIP relevance scoring
+
+---
+
+## Prioritized Action Items
+
+### 🎯 Tier 1: Production Readiness (1-2 weeks)
+
+**Goal:** Make the MVP fully production-complete with high-quality output
+
+#### 1.1 Text Overlay Rendering 🔥 CRITICAL
+- **Priority:** P0 (blocks production use)
+- **Problem:** Videos missing on-screen text captions
+- **Solution Options:**
+  - **Option A (Fast):** Add FFmpeg `drawtext` filter to [render_agent.py](src/render_agent.py)
+    - Parse text elements from `RenderSpecification`
+    - Build filter_complex with drawtext for each subtitle
+    - Handle font, color, stroke, positioning, timing
+    - **Effort:** 4-6 hours
+    - **Pros:** Minimal code change, keeps existing pipeline
+    - **Cons:** FFmpeg text rendering has limited styling
+  
+  - **Option B (Better):** Switch to `moviepy` for render engine
+    - Replace FFmpeg engine with `moviepy.editor`
+    - Get text, transitions, effects "for free"
+    - Cleaner Python API
+    - **Effort:** 2-3 days
+    - **Pros:** Better text control, easier debugging, pure Python
+    - **Cons:** Slower rendering, heavier dependency
+
+- **Recommended:** Option A first (unblock production), then Option B (quality improvement)
+- **Owner:** TBD
+- **Timeline:** Week 1
+
+#### 1.2 Background Music Mixing
+- **Priority:** P1 (quality improvement)
+- **Implementation:**
+  - Install `pydub` (`pip install pydub`)
+  - Implement `apply_background_music()` in [tts_tools.py](src/tools/tts_tools.py)
+  - Load voiceover + music tracks
+  - Apply volume_db adjustments
+  - Mix and export
+- **Dependencies:** Requires FFmpeg audio codecs
+- **Testing:** Integration test with sample music track
+- **Owner:** TBD
+- **Timeline:** Week 1-2
+- **Effort:** 2-3 days
+
+#### 1.3 LUFS Audio Normalization
+- **Priority:** P1 (quality improvement)
+- **Implementation:**
+  - Install `pyloudnorm` (`pip install pyloudnorm`)
+  - Implement `normalize_audio()` in [tts_tools.py](src/tools/tts_tools.py)
+  - Measure input LUFS
+  - Apply gain to reach target (-16.0 LUFS)
+  - Validate output
+- **Testing:** Unit test with various audio samples
+- **Owner:** TBD
+- **Timeline:** Week 2
+- **Effort:** 1 day
+
+#### 1.4 GitHub Actions CI/CD
+- **Priority:** P1 (infrastructure)
+- **Implementation:**
+  - Create `.github/workflows/test.yml`
+  - Run `pytest` on every PR
+  - Add preflight check (validate env vars)
+  - Add linting (`ruff` or `black`)
+  - Cache dependencies
+- **Benefits:** Catch regressions early, enforce code quality
+- **Owner:** TBD
+- **Timeline:** Week 2
+- **Effort:** 1 day
+
+---
+
+### 🚀 Tier 2: Scale & Reliability (2-4 weeks)
+
+**Goal:** Improve stability, maintainability, and performance
+
+#### 2.1 Upgrade LangChain to 0.3.x
+- **Priority:** P2 (technical debt + security)
+- **Current:** `langchain==0.1.20` (released ~2024)
+- **Target:** `langchain>=0.3.0`
+- **Risks:**
+  - Breaking changes in `create_tool_calling_agent()` API
+  - Tool decorator signatures changed
+  - Callback handling modified
+- **Implementation:**
+  1. Create feature branch
+  2. Update requirements.txt
+  3. Run tests, fix breakages
+  4. Update [agent.py](src/agent.py) API calls
+  5. Validate all market research modes still work
+- **Benefits:**
+  - Security patches
+  - Access to newer Gemini models (2.0-flash-exp)
+  - Better streaming support
+- **Owner:** TBD
+- **Timeline:** Week 3
+- **Effort:** 2-3 days
+
+#### 2.2 Results Directory Cleanup Job
+- **Priority:** P2 (maintenance)
+- **Problem:** `results/` dir has 19+ run folders, growing unbounded
+- **Implementation:**
+  - Create `scripts/cleanup_results.py`
+  - Configurable retention policy (default: 7 days)
+  - Dry-run mode for safety
+  - Can run as cron job or manually
+- **Example:**
+  ```python
+  python scripts/cleanup_results.py --days 7 --dry-run
+  ```
+- **Owner:** TBD
+- **Timeline:** Week 3
+- **Effort:** 1 day
+
+#### 2.3 YouTube Quota Persistence
+- **Priority:** P2 (reliability)
+- **Problem:** Quota counter resets on restart, can exceed daily limit (10K units)
+- **Implementation:**
+  - Create `cache/quota_tracker.json`
+  - Persist `quota_used` after each API call
+  - Reset daily at midnight UTC
+  - Warn when approaching 80% of limit
+  - Hard stop at 95% to prevent overage
+- **Testing:** Unit test with fixture dates
+- **Owner:** TBD
+- **Timeline:** Week 3-4
+- **Effort:** 1-2 days
+
+#### 2.4 Enhanced Error Recovery
+- **Priority:** P2 (reliability)
+- **Implementation:**
+  - Add exponential backoff to ElevenLabs TTS retries
+  - Graceful degradation (skip scene if asset download fails)
+  - Partial run recovery (resume from last successful agent)
+  - Better error messages with actionable guidance
+- **Example:**
+  ```
+  ❌ Failed to download asset for scene_03: HTTPError 503
+  ↪ Retrying in 2s... (attempt 2/3)
+  ```
+- **Owner:** TBD
+- **Timeline:** Week 4
+- **Effort:** 2 days
+
+---
+
+### 🔮 Tier 3: Features & Quality (4-8 weeks)
+
+**Goal:** Add advanced capabilities and polish
+
+#### 3.1 Content Moderation Integration
+- **Priority:** P3 (safety)
+- **Implementation:**
+  - Integrate Google Vision API for NSFW detection
+  - Add CLIP relevance scoring (image-text matching)
+  - Update [content_validation_tools.py](src/tools/content_validation_tools.py)
+  - Configurable safety thresholds
+- **Dependencies:**
+  - `google-cloud-vision` SDK
+  - `transformers` + `torch` for CLIP (optional)
+- **Owner:** TBD
+- **Timeline:** Weeks 5-6
+- **Effort:** 1 week
+
+#### 3.2 Stock Video Clips Support
+- **Priority:** P3 (feature)
+- **Implementation:**
+  - Add Pexels Video API to [image_search_tools.py](src/tools/image_search_tools.py)
+  - Video trimming/cropping to fit scene duration
+  - FFmpeg video concatenation (not just images)
+  - Update VisualManifest schema for video clips
+- **Challenges:**
+  - Larger file sizes (caching strategy)
+  - Preview/selection UI needed
+- **Owner:** TBD
+- **Timeline:** Weeks 6-7
+- **Effort:** 1-2 weeks
+
+#### 3.3 Advanced Video Effects
+- **Priority:** P3 (polish)
+- **Implementation:**
+  - Ken Burns (zoom/pan) via FFmpeg `zoompan` filter
+  - Crossfade transitions via `xfade` filter
+  - Color grading presets (LUTs)
+  - Vignette overlays
+- **References:**
+  - [FFmpeg Zoompan Wiki](https://trac.ffmpeg.org/wiki/Zoompan)
+  - [visual-composition-agents.md](docs/visual-composition-agents.md#phase-2-advanced-features)
+- **Owner:** TBD
+- **Timeline:** Week 7
+- **Effort:** 1 week
+
+#### 3.4 Thumbnail Generation
+- **Priority:** P3 (feature)
+- **Implementation:**
+  - Extract frame at t=2s or t=25% using FFmpeg
+  - Add text overlay for thumbnail (larger font)
+  - Export as JPEG to `results/<run_id>/thumbnail.jpg`
+  - Update [render_agent.py](src/render_agent.py) `generate_thumbnail()` stub
+- **Owner:** TBD
+- **Timeline:** Week 8
+- **Effort:** 2-3 days
+
+#### 3.5 Web Dashboard (Optional)
+- **Priority:** P4 (nice-to-have)
+- **Scope:**
+  - Browse market research reports
+  - View generated videos
+  - Trigger video generation jobs
+  - Download final MP4s
+- **Stack Options:**
+  - FastAPI + React (full-featured)
+  - Streamlit (rapid prototype)
+  - Gradio (minimal UI)
+- **Owner:** TBD
+- **Timeline:** Weeks 9-12
+- **Effort:** 3-4 weeks
+
+---
+
+## Quick Wins (Can Do This Week)
+
+### QW1: Add .gitignore for results/
+```gitignore
+# results/
+results/*/
+!results/README.md
+```
+- **Effort:** 2 minutes
+- **Benefit:** Stop tracking generated output files
+
+### QW2: Add requirements.txt comments
+```python
+# Core LangChain (pinned due to API stability)
+langchain==0.1.20  # TODO: Upgrade to 0.3.x in Q1 2026
+```
+- **Effort:** 5 minutes
+- **Benefit:** Document why versions are pinned
+
+### QW3: Create CONTRIBUTING.md
+- Development setup instructions
+- How to run tests
+- Code style guidelines
+- PR checklist
+- **Effort:** 30 minutes
+- **Benefit:** Easier onboarding for contributors
+
+### QW4: Update README.md with limitations
+Add "Known Limitations" section:
+- Text overlays not rendered (Phase 1)
+- No background music mixing (Phase 1)
+- No LUFS normalization (Phase 1)
+- **Effort:** 10 minutes
+- **Benefit:** Set correct expectations
+
+---
+
+## Dependencies & Prerequisites
+
+### Required for Tier 1
+```bash
+# Audio mixing
+pip install pydub>=0.25.0
+
+# Audio normalization
+pip install pyloudnorm>=0.1.0
+
+# Text rendering (Option B)
+pip install moviepy>=1.0.3
+```
+
+### Required for Tier 3
+```bash
+# Content moderation
+pip install google-cloud-vision>=3.0.0
+
+# CLIP relevance (optional)
+pip install transformers>=4.30.0 torch>=2.0.0
+```
+
+### System Dependencies
+```powershell
+# FFmpeg (already required)
+winget install Gyan.FFmpeg
+
+# ImageMagick (optional, for advanced image processing)
+winget install ImageMagick.ImageMagick
+```
+
+---
+
+## Decision Log
+
+### Why prioritize text rendering over music mixing?
+- **Text is content**, music is polish
+- Current videos are **incomplete** without text
+- Music can be added post-production, text cannot
+- User feedback: "Where are the captions?"
+
+### Why FFmpeg drawtext first, then MoviePy?
+- **Minimize risk:** Small change to existing working pipeline
+- **Learn fast:** Test with real users, iterate
+- **Option value:** Can still switch to MoviePy later if needed
+
+### Why not use cloud rendering (Shotstack)?
+- **Cost:** $9/month + per-minute fees
+- **Latency:** Network round-trip
+- **Vendor lock-in:** Hard to switch later
+- **Local is free:** FFmpeg is zero cost, proven reliable
+
+---
+
+## Success Criteria
+
+### Tier 1 Complete When:
+- [ ] Videos have on-screen text overlays rendered
+- [ ] Audio has background music mixed in
+- [ ] Voiceover is LUFS normalized (-16.0 ±1.0)
+- [ ] CI/CD runs tests on every PR
+- [ ] No P0/P1 bugs in issue tracker
+
+### Tier 2 Complete When:
+- [ ] LangChain upgraded to 0.3.x
+- [ ] Results cleanup job runs weekly
+- [ ] YouTube quota never exceeds limit
+- [ ] 95%+ render success rate (no crashes)
+
+### Tier 3 Complete When:
+- [ ] Content moderation active (0 unsafe assets shipped)
+- [ ] Stock video clips supported
+- [ ] Ken Burns + crossfade effects working
+- [ ] Thumbnails auto-generated
+
+---
+
+## Metrics to Track
+
+### Quality
+- **Text rendering accuracy:** 100% (all text visible, readable)
+- **Audio sync drift:** <50ms (imperceptible)
+- **Content safety:** 0 violations shipped
+- **Visual relevance:** 80%+ CLIP similarity
+
+### Performance
+- **Render time:** <60s for 45s video (CPU), <20s (GPU)
+- **API success rate:** 95%+ (YouTube, ElevenLabs, Pexels)
+- **Quota usage:** <80% of daily limits
+
+### Reliability
+- **Render success rate:** 95%+ first attempt
+- **Uptime:** 99.9% (no blocking bugs)
+- **Test coverage:** 80%+ (pytest)
+
+---
+
+## Getting Started
+
+### This Week (Feb 3-9, 2026)
+1. **Implement text rendering** ([Tier 1.1](#11-text-overlay-rendering--critical))
+   - Start with FFmpeg drawtext
+   - Test with 3 sample videos
+   - Ship if quality is acceptable
+2. **Add .gitignore** ([QW1](#qw1-add-gitignore-for-results))
+3. **Update README limitations** ([QW4](#qw4-update-readmemd-with-limitations))
+
+### Next Week (Feb 10-16, 2026)
+1. **Background music mixing** ([Tier 1.2](#12-background-music-mixing))
+2. **LUFS normalization** ([Tier 1.3](#13-lufs-audio-normalization))
+3. **GitHub Actions** ([Tier 1.4](#14-github-actions-cicd))
+
+### Month 2 (March 2026)
+- Complete Tier 2 items
+- Start Tier 3 content moderation
+
+---
+
+## References
+
+- [visual-composition-agents.md](docs/visual-composition-agents.md) - Detailed agent specs
+- [audio-agent.md](docs/audio-agent.md) - Audio pipeline architecture
+- [pipeline-integration.md](docs/pipeline-integration.md) - End-to-end flow
+- [market-research-agent-architecture.md](docs/market-research-agent-architecture.md) - Research stage
+- [FFmpeg Documentation](https://ffmpeg.org/documentation.html)
+- [MoviePy Documentation](https://zulko.github.io/moviepy/)
+
+---
+
+## Questions or Feedback?
+
+Open an issue or start a discussion in the repo to:
+- Propose new features
+- Report bugs or limitations
+- Suggest priority changes
+- Share use cases
+
+**Maintainer:** TBD  
+**Last Review:** February 3, 2026

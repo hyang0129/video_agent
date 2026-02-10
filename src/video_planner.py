@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+import uuid
 
 
 def script_package_to_video_plan(
@@ -44,6 +45,15 @@ def script_package_to_video_plan(
 
     created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
+    script_package_id = script_package.get("script_package_id")
+    if isinstance(script_package_id, str) and script_package_id:
+        if script_package_id.startswith("sg_"):
+            video_plan_id = "vp_" + script_package_id[len("sg_") :]
+        else:
+            video_plan_id = f"vp_{script_package_id}"
+    else:
+        video_plan_id = f"vp_{uuid.uuid4().hex[:8]}"
+
     scenes: List[Dict[str, Any]] = []
     for i, beat in enumerate(beats, 1):
         if not isinstance(beat, dict):
@@ -65,6 +75,7 @@ def script_package_to_video_plan(
     return {
         "schema_version": "1.0.0",
         "created_at": created_at,
+        "video_plan_id": video_plan_id,
         "topic_id": topic_id,
         "subtopic_id": subtopic_id,
         "inputs": {

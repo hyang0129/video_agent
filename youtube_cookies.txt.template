@@ -1,0 +1,14 @@
+# Netscape HTTP Cookie File
+# This is a sample/template file
+# 
+# To use this system:
+# 1. Install a cookie export extension in your browser
+# 2. Go to https://youtube.com (while logged in)
+# 3. Use the extension to export cookies
+# 4. Replace this file with your exported cookies
+# 5. Run: python test_with_cookies.py
+#
+# Cookie format (example):
+# .youtube.com	TRUE	/	TRUE	1234567890	YSC	cookie_value_here
+# .youtube.com	TRUE	/	TRUE	1234567890	VISITOR_INFO1_LIVE	cookie_value_here
+# .youtube.com	TRUE	/	TRUE	1234567890	PREF	cookie_value_here

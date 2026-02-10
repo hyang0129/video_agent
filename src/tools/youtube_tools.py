@@ -5,11 +5,21 @@ import re
 import json
 import math
 from datetime import datetime, timedelta
+from pathlib import Path
 import isodate
+import requests
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import requests_cache
 from langchain.tools import tool
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import (
+    TranscriptsDisabled,
+    NoTranscriptFound,
+    IpBlocked,
+    VideoUnavailable,
+)
+from http.cookiejar import MozillaCookieJar
 
 from ..config import (
     YOUTUBE_API_KEY,
@@ -33,11 +43,47 @@ if ENABLE_CACHE:
 class YouTubeClient:
     """Client for interacting with YouTube Data API."""
     
-    def __init__(self, api_key: str = YOUTUBE_API_KEY):
+    def __init__(self, api_key: str = YOUTUBE_API_KEY, cookies_file: Optional[str] = None):
         if not api_key:
             raise ValueError("YouTube API key is required")
         self.youtube = build("youtube", "v3", developerKey=api_key)
         self.quota_used = 0
+        
+        # Load cookies for transcript API if provided
+        self.cookies = None
+        self.http_client = None
+        if cookies_file:
+            cookies_path = Path(cookies_file)
+            if cookies_path.exists():
+                self.cookies = MozillaCookieJar(str(cookies_path))
+                try:
+                    self.cookies.load(ignore_discard=True, ignore_expires=True)
+                    # Create requests session with cookies
+                    self.http_client = requests.Session()
+                    self.http_client.cookies = self.cookies
+                    print(f"✓ Loaded {len(self.cookies)} cookies from {cookies_file}")
+                except Exception as e:
+                    print(f"✗ Failed to load cookies: {e}")
+                    self.cookies = None
+                    self.http_client = None
+            else:
+                print(f"✗ Cookie file not found: {cookies_file}")
+        
+        # Try default cookie location if not provided
+        if not self.cookies:
+            from ..config import PROJECT_ROOT
+            default_cookies = PROJECT_ROOT / "youtube_cookies.txt"
+            if default_cookies.exists():
+                self.cookies = MozillaCookieJar(str(default_cookies))
+                try:
+                    self.cookies.load(ignore_discard=True, ignore_expires=True)
+                    # Create requests session with cookies
+                    self.http_client = requests.Session()
+                    self.http_client.cookies = self.cookies
+                    print(f"✓ Loaded {len(self.cookies)} cookies from default location")
+                except:
+                    self.cookies = None
+                    self.http_client = None
     
     def parse_duration(self, duration_str: str) -> int:
         """Parse ISO 8601 duration to seconds."""
@@ -46,6 +92,50 @@ class YouTubeClient:
             return int(duration.total_seconds())
         except:
             return 0
+    
+    def get_video_captions(self, video_id: str, languages: List[str] = ["en"]) -> Optional[Dict[str, Any]]:
+        """Get video captions/subtitles if available.
+        
+        Uses youtube-transcript-api which doesn't consume YouTube API quota.
+        
+        Args:
+            video_id: YouTube video ID
+            languages: List of preferred language codes (default: ["en"])
+        
+        Returns:
+            Dict with 'text' (full transcript) and 'segments' (timestamped entries),
+            or None if unavailable
+        """
+        try:
+            # Create transcript API instance with http_client if cookies available
+            if self.http_client:
+                api = YouTubeTranscriptApi(http_client=self.http_client)
+            else:
+                api = YouTubeTranscriptApi()
+            
+            # Fetch transcript (returns FetchedTranscript object)
+            transcript = api.fetch(video_id, languages=languages)
+            
+            # Get raw transcript data as list
+            transcript_list = transcript.to_raw_data()
+            
+            # Build full text and keep segments
+            full_text = " ".join([entry["text"] for entry in transcript_list])
+            
+            return {
+                "video_id": video_id,
+                "text": full_text,
+                "segments": transcript_list,  # [{text, start, duration}, ...]
+                "language": transcript.language_code
+            }
+            
+        except (TranscriptsDisabled, NoTranscriptFound, IpBlocked, VideoUnavailable):
+            # Captions not available, disabled, or IP blocked
+            return None
+        except Exception as e:
+            # Catch all other errors (e.g., network issues)
+            print(f"Caption extraction error for {video_id}: {type(e).__name__}: {str(e)}")
+            return None
     
     def search_videos(
         self,
@@ -224,15 +314,18 @@ class YouTubeClient:
 _youtube_client: Optional[YouTubeClient] = None
 
 
-def get_youtube_client() -> YouTubeClient:
+def get_youtube_client(cookies_file: Optional[str] = None) -> YouTubeClient:
     """Lazily construct and reuse the YouTube client.
 
     This avoids import-time failures (e.g., missing API keys) so the rest of
     the app can show a friendly configuration error first.
+    
+    Args:
+        cookies_file: Path to YouTube cookies.txt file for caption extraction
     """
     global _youtube_client
     if _youtube_client is None:
-        _youtube_client = YouTubeClient()
+        _youtube_client = YouTubeClient(cookies_file=cookies_file)
     return _youtube_client
 
 

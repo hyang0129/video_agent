@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import json
+import wave
 import uuid
 
 from .tools.tts_tools import (
@@ -146,6 +147,8 @@ class AudioGenerationAgent:
             voice_id = get_voice_id(voice_override)
         else:
             voice_id = self.voice_id
+
+        silent_mode = str(voice_id).strip().lower() in {"silent", "none", "off"}
         
         # Generate voiceover tracks
         tracks = []
@@ -166,12 +169,20 @@ class AudioGenerationAgent:
             
             try:
                 # Generate voiceover for this scene
-                segment_path = self.audio_segments_dir / f"vo_{scene_id}.mp3"
-                audio_path, metadata = generate_voiceover(
-                    text=vo_line,
-                    voice_id=voice_id,
-                    output_path=segment_path,
-                )
+                if silent_mode:
+                    segment_path = self.audio_segments_dir / f"vo_{scene_id}.wav"
+                    audio_path, metadata = _write_silent_wav(
+                        output_path=segment_path,
+                        duration_s=scene_duration,
+                        sample_rate=AUDIO_SAMPLE_RATE,
+                    )
+                else:
+                    segment_path = self.audio_segments_dir / f"vo_{scene_id}.mp3"
+                    audio_path, metadata = generate_voiceover(
+                        text=vo_line,
+                        voice_id=voice_id,
+                        output_path=segment_path,
+                    )
                 
                 # Add track to timeline
                 tracks.append({
@@ -230,64 +241,53 @@ class AudioGenerationAgent:
             json.dump(audio_timeline, f, indent=2, ensure_ascii=False)
         
         return audio_timeline
-    
+
     def _validate_video_plan(self, video_plan: Dict[str, Any]) -> None:
         """Validate video plan structure.
-        
+
         Args:
             video_plan: VideoPlan dictionary to validate.
-        
+
         Raises:
             AudioGenerationError: If required fields are missing or invalid.
         """
         if not isinstance(video_plan, dict):
             raise AudioGenerationError("video_plan must be a dictionary")
-        
+
         if "scenes" not in video_plan:
             raise AudioGenerationError("video_plan missing 'scenes' field")
-        
+
         scenes = video_plan.get("scenes")
         if not isinstance(scenes, list):
             raise AudioGenerationError("video_plan.scenes must be a list")
-        
+
         # Validate each scene has required fields
         for i, scene in enumerate(scenes):
             if not isinstance(scene, dict):
                 raise AudioGenerationError(f"Scene {i} is not a dictionary")
-            
+
             required_fields = ["t_start_s", "t_end_s", "vo_line"]
             for field in required_fields:
                 if field not in scene:
-                    raise AudioGenerationError(
-                        f"Scene {i} missing required field: {field}"
-                    )
-    
+                    raise AudioGenerationError(f"Scene {i} missing required field: {field}")
+
     def get_audio_stats(self, audio_timeline: Dict[str, Any]) -> Dict[str, Any]:
         """Get statistics about generated audio timeline.
-        
+
         Args:
             audio_timeline: AudioTimeline dictionary.
-        
+
         Returns:
-            Dictionary with statistics:
-            {
-                "total_duration_s": 45.0,
-                "voiceover_tracks": 8,
-                "total_characters": 450,
-                "avg_chars_per_second": 10.0,
-            }
+            Dictionary with basic statistics.
         """
         tracks = audio_timeline.get("tracks", [])
         vo_tracks = [t for t in tracks if t.get("type") == "voiceover"]
-        
-        total_chars = sum(
-            t.get("metadata", {}).get("character_count", 0)
-            for t in vo_tracks
-        )
-        
+
+        total_chars = sum(t.get("metadata", {}).get("character_count", 0) for t in vo_tracks)
+
         duration = audio_timeline.get("duration_seconds", 0)
         avg_chars_per_sec = total_chars / duration if duration > 0 else 0
-        
+
         return {
             "total_duration_s": duration,
             "voiceover_tracks": len(vo_tracks),
@@ -295,6 +295,60 @@ class AudioGenerationAgent:
             "total_characters": total_chars,
             "avg_chars_per_second": round(avg_chars_per_sec, 2),
         }
+
+
+def _write_silent_wav(
+    output_path: Path,
+    duration_s: float,
+    sample_rate: int,
+    channels: int = 1,
+    sample_width_bytes: int = 2,
+) -> tuple[Path, Dict[str, Any]]:
+    """Write a silent PCM WAV file.
+
+    Args:
+        output_path: Where to write the WAV.
+        duration_s: Duration in seconds.
+        sample_rate: Sample rate (Hz).
+        channels: Number of channels.
+        sample_width_bytes: Sample width in bytes (2 == 16-bit).
+
+    Returns:
+        Tuple of (path, metadata).
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    dur = max(0.0, float(duration_s))
+    sr = max(8000, int(sample_rate))
+    ch = max(1, int(channels))
+    sw = 2 if int(sample_width_bytes) != 1 else 1
+
+    frame_count = int(round(dur * sr))
+    silence_frame = (b"\x00" * sw) * ch
+
+    with wave.open(str(output_path), "wb") as wf:
+        wf.setnchannels(ch)
+        wf.setsampwidth(sw)
+        wf.setframerate(sr)
+
+        # Write in chunks to avoid large memory allocations.
+        chunk_frames = 4096
+        remaining = frame_count
+        while remaining > 0:
+            n = min(chunk_frames, remaining)
+            wf.writeframes(silence_frame * n)
+            remaining -= n
+
+    metadata = {
+        "voice_id": "silent",
+        "character_count": 0,
+        "file_size_bytes": output_path.stat().st_size if output_path.exists() else 0,
+        "estimated_duration_s": round(dur, 2),
+        "note": "Silent placeholder audio (offline mode)",
+    }
+
+    return output_path, metadata
 
 
 def create_audio_agent(

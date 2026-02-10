@@ -297,13 +297,15 @@ def normalize_audio(
     return input_path
 
 
-# Voice presets for common use cases (updated for current ElevenLabs voices)
+# Voice presets for common use cases.
+#
+# These IDs are intentionally pinned for determinism and to match
+# the pipeline docs + tests.
 VOICE_PRESETS = {
-    "narrator": "Xb7hH8MSUJpSbSDYk0k2",  # Alice - Clear, Engaging Educator
-    "energetic": "pNInz6obpgDQGcFmaJgB",  # Adam - Dominant, Firm
-    "calm": "SAz9YHcvj6GT2YYXdXww",      # River - Relaxed, Neutral, Informative
-    "authoritative": "nPczCjzI2devNBz1zQrb",  # Brian - Deep, Resonant and Comforting
-    "professional": "EXAVITQu4vr4xnSDxMaL",  # Sarah - Mature, Reassuring, Confident
+    "narrator": "21m00Tcm4TlvDq8ikWAM",  # Rachel
+    "energetic": "pNInz6obpgDQGcFmaJgB",  # Adam
+    "calm": "EXAVITQu4vr4xnSDxMaL",  # Bella/Sarah-era calm preset
+    "authoritative": "VR6AewLTigWG4xSOukaG",  # Arnold (deep)
 }
 
 

@@ -11,16 +11,16 @@ import json
 
 
 def extract_json_object(text: str) -> Optional[str]:
-    """Extract the first top-level JSON object from text.
+    """Extract the first top-level JSON object or array from text.
 
     This is a best-effort extractor for LLM outputs that may accidentally
     include preamble/postamble text or markdown code blocks.
 
     Args:
-        text: Raw text that should contain a JSON object.
+        text: Raw text that should contain JSON.
 
     Returns:
-        A JSON string representing the first object found, or None.
+        A JSON string representing the first object/array found, or None.
     """
     if not text:
         return None
@@ -39,13 +39,25 @@ def extract_json_object(text: str) -> Optional[str]:
             if content and (content.startswith("{") or content.startswith("[")):
                 text = content
 
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
+    # Try to find JSON object
+    start_obj = text.find("{")
+    end_obj = text.rfind("}")
+    
+    # Try to find JSON array
+    start_arr = text.find("[")
+    end_arr = text.rfind("]")
+    
+    # Determine which comes first
+    if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+        if end_obj != -1 and end_obj > start_obj:
+            candidate = text[start_obj : end_obj + 1].strip()
+            return candidate or None
+    
+    if start_arr != -1 and end_arr != -1 and end_arr > start_arr:
+        candidate = text[start_arr : end_arr + 1].strip()
+        return candidate or None
 
-    candidate = text[start : end + 1].strip()
-    return candidate or None
+    return None
 
 
 def safe_json_loads(text: str) -> Any:
