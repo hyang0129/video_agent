@@ -149,30 +149,63 @@ def main():
     if script_package.get('fact_sources'):
         print(f"   Fact IDs: {', '.join(script_package['fact_sources'][:3])}...")
     
-    # Hooks
-    print("\n🎣 HOOK OPTIONS:")
-    for i, hook in enumerate(script_package.get('hook_variants', []), 1):
-        print(f"   {i}. {hook}")
-    
-    # Beats (the actual script)
-    print("\n📜 SCRIPT BEATS:")
+    # Get script section
     script = script_package.get('script', {})
-    beats = script.get('beats', [])
     
-    for i, beat in enumerate(beats, 1):
-        t_start = beat.get('t_start_s', 0)
-        t_end = beat.get('t_end_s', 0)
-        vo_line = beat.get('vo_line', '')
-        on_screen = beat.get('on_screen_text', '')
+    # Check if we have the body-based format (new format with facts)
+    has_body_format = 'body' in script and 'hook' in script
+    
+    # Hooks
+    print("\n🎣 HOOK:")
+    if has_body_format and script.get('hook'):
+        print(f"   {script['hook']}")
+    else:
+        for i, hook in enumerate(script_package.get('hook_variants', []), 1):
+            print(f"   {i}. {hook}")
+    
+    # Script content
+    if has_body_format:
+        print("\n📜 SCRIPT CONTENT (Fact-Grounded):")
+        for i, segment in enumerate(script.get('body', []), 1):
+            print(f"\n   Segment {i}:")
+            print(f"   {segment.get('content', '')}")
+            if segment.get('fact_ids'):
+                print(f"   📌 Facts: {', '.join(segment['fact_ids'])}")
         
-        print(f"\n   Beat {i} [{t_start:.1f}s - {t_end:.1f}s]")
-        print(f"   🎬 On-Screen: \"{on_screen}\"")
-        print(f"   🎙️  Voiceover: \"{vo_line}\"")
+        if script.get('call_to_action'):
+            print(f"\n   🎬 CTA: {script['call_to_action']}")
+        
+        beats = []  # No beats in this format
+    else:
+        # Original beats format
+        print("\n📜 SCRIPT BEATS:")
+        beats = script.get('beats', [])
+    
+        for i, beat in enumerate(beats, 1):
+            t_start = beat.get('t_start_s', 0)
+            t_end = beat.get('t_end_s', 0)
+            vo_line = beat.get('vo_line', '')
+            on_screen = beat.get('on_screen_text', '')
+            
+            print(f"\n   Beat {i} [{t_start:.1f}s - {t_end:.1f}s]")
+            print(f"   🎬 On-Screen: \"{on_screen}\"")
+            print(f"   🎙️  Voiceover: \"{vo_line}\"")
     
     # Full voiceover
     print("\n📝 FULL VOICEOVER SCRIPT:")
     print("   " + "-" * 76)
-    vo_text = script.get('voiceover', '')
+    
+    if has_body_format:
+        # Construct from body segments
+        vo_parts = []
+        if script.get('hook'):
+            vo_parts.append(script['hook'])
+        vo_parts.extend([seg.get('content', '') for seg in script.get('body', [])])
+        if script.get('call_to_action'):
+            vo_parts.append(script['call_to_action'])
+        vo_text = ' '.join(vo_parts)
+    else:
+        vo_text = script.get('voiceover', '')
     if vo_text:
         # Wrap text nicely
         words = vo_text.split()
@@ -209,29 +242,58 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(__file__).parent / "results" / f"star_wars_pipeline_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save script package
-    script_path = output_dir / "script_package.json"
-    with open(script_path, 'w', encoding='utf-8') as f:
-        json.dump(script_package, f, indent=2, ensure_ascii=False)
-    
-    print(f"\n✓ Script saved to: {script_path}")
-    
-    # Save readable version
-    readable_path = output_dir / "script_readable.txt"
-    with open(readable_path, 'w', encoding='utf-8') as f:
-        f.write("STAR WARS FACTS - SCRIPT\n")
+    FACT-GROUNDED SCRIPT\n")
         f.write("=" * 80 + "\n\n")
         f.write(f"Script ID: {script_package['script_package_id']}\n")
         f.write(f"Duration: {topic_brief['format']['target_duration_seconds']}s\n")
         f.write(f"Facts Used: {len(script_package.get('fact_sources', []))}\n\n")
         
-        f.write("HOOKS:\n")
-        for i, hook in enumerate(script_package.get('hook_variants', []), 1):
-            f.write(f"  {i}. {hook}\n")
-        
-        f.write("\n" + "=" * 80 + "\n")
-        f.write("FULL VOICEOVER:\n")
+        if has_body_format:
+            # Write fact-grounded format
+            f.write("=" * 80 + "\n")
+            f.write("HOOK:\n")
+            f.write("=" * 80 + "\n")
+            f.write(script.get('hook', '') + "\n\n")
+            
+            f.write("=" * 80 + "\n")
+            f.write("FACT-BASED CONTENT:\n")
+            f.write("=" * 80 + "\n\n")
+            
+            for i, segment in enumerate(script.get('body', []), 1):
+                f.write(f"Segment {i}:\n")
+                f.write(f"{segment.get('content', '')}\n")
+                if segment.get('fact_ids'):
+                    f.write(f"Facts: {', '.join(segment['fact_ids'])}\n")
+                f.write("\n")
+            
+            f.write("=" * 80 + "\n")
+            f.write("CALL TO ACTION:\n")
+            f.write("=" * 80 + "\n")
+            f.write(script.get('call_to_action', '') + "\n\n")
+            
+            f.write("=" * 80 + "\n")
+            f.write("FULL VOICEOVER:\n")
+            f.write("=" * 80 + "\n")
+            f.write(vo_text + "\n\n")
+        else:
+            # Write beat-based format
+            f.write("HOOKS:\n")
+            for i, hook in enumerate(script_package.get('hook_variants', []), 1):
+                f.write(f"  {i}. {hook}\n")
+            
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("FULL VOICEOVER:\n")
+            f.write("=" * 80 + "\n")
+            f.write(vo_text + "\n")
+            
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("BEAT-BY-BEAT BREAKDOWN:\n")
+            f.write("=" * 80 + "\n\n")
+            
+            for i, beat in enumerate(beats, 1):
+                f.write(f"Beat {i} [{beat.get('t_start_s', 0):.1f}s - {beat.get('t_end_s', 0):.1f}s]\n")
+                f.write(f"  On-Screen: {beat.get('on_screen_text', '')}\n")
+            f.write("FULL VOICEOVER:\n")
         f.write("=" * 80 + "\n")
         f.write(vo_text + "\n")
         

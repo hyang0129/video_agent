@@ -115,30 +115,53 @@ print_section("FINAL SCRIPT")
 print(f"\nScript ID: {script_package['script_package_id']}")
 print(f"Facts Used: {len(script_package.get('fact_sources', []))} facts")
 
-# Hooks
-print("\nHOOK OPTIONS:")
-for i, hook in enumerate(script_package.get('hook_variants', []), 1):
-    print(f"  {i}. {hook}")
-
-# Beats
-print("\nSCRIPT BEATS:")
 script = script_package.get('script', {})
-beats = script.get('beats', [])
+has_body_format = 'body' in script and 'hook' in script
 
-for i, beat in enumerate(beats, 1):
-    t_start = beat.get('t_start_s', 0)
-    t_end = beat.get('t_end_s', 0)
-    vo_line = beat.get('vo_line', '')
-    on_screen = beat.get('on_screen_text', '')
-    
-    print(f"\n  Beat {i} [{t_start:.1f}s - {t_end:.1f}s]")
-    print(f"  On-Screen: \"{on_screen}\"")
-    print(f"  Voiceover: \"{vo_line}\"")
+# Hooks
+print("\n🎣 HOOK:")
+if has_body_format and script.get('hook'):
+    print(f"   {script['hook'][:150]}...")
+else:
+    for i, hook in enumerate(script_package.get('hook_variants', []), 1):
+        print(f"  {i}. {hook}")
+
+# Content
+if has_body_format:
+    print(f"\n📜 FACT-BASED CONTENT: {len(script.get('body', []))} segments")
+    for i, seg in enumerate(script.get('body', [])[:3], 1):
+        print(f"\n   {i}. {seg.get('content', '')[:100]}...")
+        if seg.get('fact_ids'):
+            print(f"      Facts: {', '.join(seg['fact_ids'])}")
+    if len(script.get('body', [])) > 3:
+        print(f"\n   ... ({len(script.get('body', [])) - 3} more segments)")
+else:
+    print("\n📜 SCRIPT BEATS:")
+    beats = script.get('beats', [])
+    for i, beat in enumerate(beats, 1):
+        t_start = beat.get('t_start_s', 0)
+        t_end = beat.get('t_end_s', 0)
+        vo_line = beat.get('vo_line', '')
+        on_screen = beat.get('on_screen_text', '')
+        
+        print(f"\n  Beat {i} [{t_start:.1f}s - {t_end:.1f}s]")
+        print(f"  On-Screen: \"{on_screen}\"")
+        print(f"  Voiceover: \"{vo_line}\"")
 
 # Full voiceover
-print("\nFULL VOICEOVER:")
+print("\n📝 FULL VOICEOVER:")
 print("-" * 80)
-vo_text = script.get('voiceover', '')
+if has_body_format:
+    vo_parts = []
+    if script.get('hook'):
+        vo_parts.append(script['hook'])
+    vo_parts.extend([seg.get('content', '') for seg in script.get('body', [])])
+    if script.get('call_to_action'):
+        vo_parts.append(script['call_to_action'])
+    vo_text = ' '.join(vo_parts)
+else:
+    vo_text = script.get('voiceover', '')
+    beats = script.get('beats', [])
 if vo_text:
     words = vo_text.split()
     line = ""
@@ -171,29 +194,59 @@ with open(script_path, 'w', encoding='utf-8') as f:
 # Save readable
 readable_path = output_dir / "script_readable.txt"
 with open(readable_path, 'w', encoding='utf-8') as f:
-    f.write("STAR WARS FACTS - VERIFIED SCRIPT\n")
+    f.write("STAR WARS FACTS - FACT-GROUNDED SCRIPT\n")
     f.write("=" * 80 + "\n\n")
     f.write(f"Script ID: {script_package['script_package_id']}\n")
     f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"Facts Used: {len(script_package.get('fact_sources', []))}\n\n")
     
-    f.write("HOOKS:\n")
-    for i, hook in enumerate(script_package.get('hook_variants', []), 1):
-        f.write(f"  {i}. {hook}\n")
-    
-    f.write("\n" + "=" * 80 + "\n")
-    f.write("FULL VOICEOVER:\n")
-    f.write("=" * 80 + "\n")
-    f.write(vo_text + "\n\n")
-    
-    f.write("=" * 80 + "\n")
-    f.write("BEAT-BY-BEAT:\n")
-    f.write("=" * 80 + "\n\n")
-    
-    for i, beat in enumerate(beats, 1):
-        f.write(f"Beat {i} [{beat.get('t_start_s', 0):.1f}s - {beat.get('t_end_s', 0):.1f}s]\n")
-        f.write(f"  On-Screen: {beat.get('on_screen_text', '')}\n")
-        f.write(f"  VO: {beat.get('vo_line', '')}\n\n")
+    if has_body_format:
+        # Write fact-grounded format
+        f.write("=" * 80 + "\n")
+        f.write("HOOK:\n")
+        f.write("=" * 80 + "\n")
+        f.write(script.get('hook', '') + "\n\n")
+        
+        f.write("=" * 80 + "\n")
+        f.write("FACT-BASED CONTENT:\n")
+        f.write("=" * 80 + "\n\n")
+        
+        for i, segment in enumerate(script.get('body', []), 1):
+            f.write(f"Segment {i}:\n")
+            f.write(f"{segment.get('content', '')}\n")
+            if segment.get('fact_ids'):
+                f.write(f"Facts: {', '.join(segment['fact_ids'])}\n")
+            f.write("\n")
+        
+        f.write("=" * 80 + "\n")
+        f.write("CALL TO ACTION:\n")
+        f.write("=" * 80 + "\n")
+        f.write(script.get('call_to_action', '') + "\n\n")
+        
+        f.write("=" * 80 + "\n")
+        f.write("FULL VOICEOVER:\n")
+        f.write("=" * 80 + "\n")
+        f.write(vo_text + "\n\n")
+    else:
+        # Write beat-based format
+        beats = script.get('beats', [])
+        f.write("HOOKS:\n")
+        for i, hook in enumerate(script_package.get('hook_variants', []), 1):
+            f.write(f"  {i}. {hook}\n")
+        
+        f.write("\n" + "=" * 80 + "\n")
+        f.write("FULL VOICEOVER:\n")
+        f.write("=" * 80 + "\n")
+        f.write(vo_text + "\n\n")
+        
+        f.write("=" * 80 + "\n")
+        f.write("BEAT-BY-BEAT:\n")
+        f.write("=" * 80 + "\n\n")
+        
+        for i, beat in enumerate(beats, 1):
+            f.write(f"Beat {i} [{beat.get('t_start_s', 0):.1f}s - {beat.get('t_end_s', 0):.1f}s]\n")
+            f.write(f"  On-Screen: {beat.get('on_screen_text', '')}\n")
+            f.write(f"  VO: {beat.get('vo_line', '')}\n\n")
     
     f.write("=" * 80 + "\n")
     f.write(f"Caption: {script_package.get('caption', '')}\n")
