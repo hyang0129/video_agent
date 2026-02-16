@@ -95,11 +95,145 @@ def _coerce_float(value: Any, default: float) -> float:
         return default
 
 
+def _extract_beats_from_script_content(
+    script_package: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Extract beat candidates from top-level ``script_content`` format.
+
+    Some model responses return factual segments as:
+    ``script_content: [{segment_id, text, duration_seconds, fact_ids}, ...]``
+    instead of ``script.beats``. This helper converts those segments into beat
+    payloads so downstream timing and audio stages remain fact-grounded.
+
+    Args:
+        script_package: Raw script package emitted by LLM.
+
+    Returns:
+        List of beat dicts with ``on_screen_text`` and ``vo_line``.
+    """
+    raw_segments = script_package.get("script_content")
+    if not isinstance(raw_segments, list):
+        return []
+
+    beats: List[Dict[str, Any]] = []
+    for segment in raw_segments:
+        if not isinstance(segment, dict):
+            continue
+
+        line = str(segment.get("text") or "").strip()
+        if not line:
+            continue
+
+        segment_id = str(segment.get("segment_id") or "").strip()
+        if segment_id:
+            label = segment_id.replace("_", " ").title()
+        else:
+            label = f"Beat {len(beats) + 1}"
+
+        beats.append(
+            {
+                "on_screen_text": label,
+                "vo_line": line,
+            }
+        )
+
+    return beats
+
+
+def _is_generic_placeholder_beats(beats: List[Dict[str, Any]]) -> bool:
+    """Detect fallback/template beat content that is not fact-grounded.
+
+    Args:
+        beats: Beat list from ``script.beats``.
+
+    Returns:
+        True when beat lines match known generic placeholder patterns.
+    """
+    if not beats:
+        return True
+
+    joined = " ".join([str(beat.get("vo_line") or "").strip().lower() for beat in beats if isinstance(beat, dict)])
+    if not joined:
+        return True
+
+    markers = [
+        "quick",
+        "today: facts",
+        "core idea in plain english",
+        "why it matters",
+        "one example",
+        "the takeaway",
+        "want more quick facts like this",
+    ]
+
+    hits = sum(1 for marker in markers if marker in joined)
+    return hits >= 3
+
+
+def _build_fact_grounded_beats_from_facts(
+    facts: List[Dict[str, Any]],
+    topic_id: str,
+    subtopic_id: str,
+    target_seconds: int,
+) -> List[Dict[str, Any]]:
+    """Build a deterministic fact-grounded beat list from retrieved facts.
+
+    Args:
+        facts: Retrieved fact records from store.
+        topic_id: Current topic id.
+        subtopic_id: Current subtopic id.
+        target_seconds: Target video duration.
+
+    Returns:
+        Normalized beat list timed to target duration.
+    """
+    safe_topic = topic_id.replace("_", " ").strip() or "this"
+    safe_subtopic = subtopic_id.replace("_", " ").strip() or "facts"
+
+    if "fact" in safe_subtopic.lower():
+        hook_tail = f"Here are surprising {safe_subtopic}."
+    else:
+        hook_tail = f"Here are surprising {safe_subtopic} facts."
+
+    draft_beats: List[Dict[str, Any]] = [
+        {
+            "on_screen_text": "Hook",
+            "vo_line": f"Think you know {safe_topic}? {hook_tail}",
+        }
+    ]
+
+    for index, fact in enumerate(facts[:5], 1):
+        if not isinstance(fact, dict):
+            continue
+        fact_text = str(fact.get("fact_text") or "").strip()
+        if not fact_text:
+            continue
+        draft_beats.append(
+            {
+                "on_screen_text": f"Fact {index}",
+                "vo_line": fact_text,
+            }
+        )
+
+    draft_beats.append(
+        {
+            "on_screen_text": "Follow for more",
+            "vo_line": "Which fact surprised you most? Follow for more Star Wars facts.",
+        }
+    )
+
+    return _normalize_beats(beats=draft_beats, target_seconds=target_seconds)
+
+
 def _normalize_beats(beats: List[Dict[str, Any]], target_seconds: int) -> List[Dict[str, Any]]:
     """Ensure beats have contiguous timestamps within target duration.
-
-    If timestamps are missing or inconsistent, this function overwrites them
-    deterministically based on beat order.
+    
+    Each beat's duration is calculated based on:
+    - Word count in vo_line
+    - Speaking rate (words per minute)
+    - Complexity factors (technical terms, proper nouns, punctuation)
+    
+    Durations are then scaled proportionally to fit the target duration exactly.
     """
     if target_seconds <= 0:
         target_seconds = 45
@@ -109,19 +243,75 @@ def _normalize_beats(beats: List[Dict[str, Any]], target_seconds: int) -> List[D
         return []
 
     # Clamp beat count to a reasonable range.
-    if len(usable) < 5:
-        # If too few, keep what we have; video planner can still work.
-        pass
     if len(usable) > 12:
         usable = usable[:12]
 
-    # Compute uniform segment length.
-    seg = float(target_seconds) / float(len(usable))
+    # Constants for timing calculation
+    BASE_WPM = 170  # Words per minute for conversational VO
+    MIN_BEAT_DURATION = 2.0  # Minimum seconds per beat
+    MAX_BEAT_DURATION = 15.0  # Maximum seconds per beat
+    
+    # Calculate raw durations based on content
+    raw_durations = []
+    for beat in usable:
+        vo_line = str(beat.get("vo_line") or "").strip()
+        
+        if not vo_line:
+            # Empty beat gets minimum duration
+            raw_durations.append(MIN_BEAT_DURATION)
+            continue
+        
+        # Count words
+        word_count = len(vo_line.split())
+        
+        # Base duration from word count (convert WPM to seconds)
+        duration = (word_count / BASE_WPM) * 60.0
+        
+        # Add complexity buffer for harder-to-read content
+        complexity_score = 0.0
+        words = vo_line.split()
+        
+        for i, word in enumerate(words):
+            # Capitalized word not at start = likely proper noun (needs emphasis)
+            if i > 0 and word and word[0].isupper():
+                complexity_score += 0.3
+            # Contains digits (numbers take longer to articulate)
+            if any(c.isdigit() for c in word):
+                complexity_score += 0.2
+        
+        # Add punctuation complexity (pauses for emphasis)
+        if any(p in vo_line for p in [':', '—', '–', '(', ')', '!', '?']):
+            complexity_score += 0.5
+        
+        # Apply complexity buffer (add up to 30% more time)
+        duration *= (1.0 + min(complexity_score * 0.1, 0.3))
+        
+        # Clamp to reasonable bounds
+        duration = max(MIN_BEAT_DURATION, min(MAX_BEAT_DURATION, duration))
+        raw_durations.append(duration)
+    
+    # Calculate total and scale to fit target duration
+    total_raw = sum(raw_durations)
+    if total_raw > 0:
+        scale_factor = target_seconds / total_raw
+    else:
+        scale_factor = 1.0
+    
+    # Build normalized beats with scaled durations
     current = 0.0
     normalized: List[Dict[str, Any]] = []
-    for i, beat in enumerate(usable):
+    for i, (beat, raw_dur) in enumerate(zip(usable, raw_durations)):
         start = round(current, 2)
-        end = round(float(target_seconds) if i == len(usable) - 1 else current + seg, 2)
+        
+        # Scale duration to fit target
+        scaled_dur = raw_dur * scale_factor
+        
+        # For last beat, ensure we hit exactly target_seconds
+        if i == len(usable) - 1:
+            end = float(target_seconds)
+        else:
+            end = round(current + scaled_dur, 2)
+        
         current = end
 
         normalized.append(
@@ -137,6 +327,7 @@ def _normalize_beats(beats: List[Dict[str, Any]], target_seconds: int) -> List[D
     if normalized:
         normalized[0]["t_start_s"] = 0.0
         normalized[-1]["t_end_s"] = float(target_seconds)
+    
     return normalized
 
 
@@ -152,6 +343,15 @@ def _validate_or_fix_script_package(
     if not isinstance(script, dict):
         script = {}
         script_package["script"] = script
+
+    # Prefer model-provided factual segments when returned as top-level
+    # ``script_content`` format.
+    content_beats = _extract_beats_from_script_content(script_package=script_package)
+    if content_beats:
+        script["beats"] = _normalize_beats(beats=content_beats, target_seconds=target_seconds)
+        script["voiceover"] = " ".join(
+            [str(beat.get("vo_line") or "").strip() for beat in script["beats"] if isinstance(beat, dict)]
+        )
 
     beats_raw = script.get("beats")
     beats: List[Dict[str, Any]]
@@ -338,6 +538,33 @@ class ScriptGenerationAgent:
             topic_brief=topic_brief,
             creative_spec=creative_spec,
         )
+
+        # Hard guardrail: prevent generic placeholder scripts when fact grounding
+        # is enabled and facts are available.
+        if use_fact_grounding and facts:
+            script_obj = parsed.get("script")
+            beats_obj: List[Dict[str, Any]] = []
+            if isinstance(script_obj, dict):
+                raw_beats = script_obj.get("beats")
+                if isinstance(raw_beats, list):
+                    beats_obj = [beat for beat in raw_beats if isinstance(beat, dict)]
+
+            if _is_generic_placeholder_beats(beats_obj):
+                grounded_beats = _build_fact_grounded_beats_from_facts(
+                    facts=facts,
+                    topic_id=topic_id,
+                    subtopic_id=subtopic_id,
+                    target_seconds=target_seconds,
+                )
+                if not isinstance(script_obj, dict):
+                    script_obj = {}
+                    parsed["script"] = script_obj
+
+                script_obj["beats"] = grounded_beats
+                script_obj["voiceover"] = " ".join(
+                    [str(beat.get("vo_line") or "").strip() for beat in grounded_beats if isinstance(beat, dict)]
+                )
+
         return parsed
 
 
