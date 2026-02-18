@@ -79,6 +79,7 @@ class FfmpegRenderEngine(RenderEngine):
 
         audio_layer = _find_layer(render_spec, "audio")
         audio_tracks = audio_layer.get("tracks") if isinstance(audio_layer, dict) else []
+        text_layer = _find_layer(render_spec, "text")
 
         # Resolve inputs.
         video_inputs: List[Tuple[Path, float]] = []
@@ -133,6 +134,20 @@ class FfmpegRenderEngine(RenderEngine):
 
         filter_parts.append("".join(v_labels) + f"concat=n={len(v_labels)}:v=1:a=0[vout]")
 
+        final_video_label = "[vout]"
+
+        # Text overlays: drawtext chain from text layer elements.
+        text_filters, text_out_label = _build_drawtext_filters(
+            text_layer=text_layer,
+            in_label="vout",
+            width=width,
+            height=height,
+        )
+        if text_filters:
+            filter_parts.extend(text_filters)
+        if text_out_label:
+            final_video_label = f"[{text_out_label}]"
+
         # Audio concat if present.
         aout_label = None
         if audio_inputs:
@@ -153,7 +168,7 @@ class FfmpegRenderEngine(RenderEngine):
 
         filter_complex = ";".join(filter_parts)
         cmd.extend(["-filter_complex", filter_complex])
-        cmd.extend(["-map", "[vout]"])
+        cmd.extend(["-map", final_video_label])
         if aout_label:
             cmd.extend(["-map", aout_label])
         else:
@@ -249,9 +264,7 @@ def _render_warnings(render_spec: Dict[str, Any], engine: RenderEngine) -> List[
     layers = render_spec.get("layers")
     if isinstance(layers, list):
         has_text = any(isinstance(l, dict) and l.get("type") == "text" for l in layers)
-        if has_text and isinstance(engine, FfmpegRenderEngine):
-            warnings.append("Text layers are present but not rendered in Phase 1")
-        elif has_text and isinstance(engine, DryRunRenderEngine):
+        if has_text and isinstance(engine, DryRunRenderEngine):
             warnings.append("Dry-run engine does not render output")
     return warnings
 
@@ -264,6 +277,140 @@ def _find_layer(render_spec: Dict[str, Any], layer_type: str) -> Dict[str, Any]:
         if isinstance(layer, dict) and layer.get("type") == layer_type:
             return layer
     return {}
+
+
+def _build_drawtext_filters(
+    text_layer: Dict[str, Any],
+    in_label: str,
+    width: int,
+    height: int,
+) -> Tuple[List[str], Optional[str]]:
+    """Build FFmpeg drawtext filter chain for text elements.
+
+    Args:
+        text_layer: Render text layer dictionary.
+        in_label: Input video stream label (without brackets).
+        width: Output video width in pixels.
+        height: Output video height in pixels.
+
+    Returns:
+        Tuple of (filter_parts, final_output_label).
+    """
+    elements = text_layer.get("elements") if isinstance(text_layer, dict) else None
+    if not isinstance(elements, list) or not elements:
+        return [], None
+
+    filters: List[str] = []
+    current_label = in_label
+    drawtext_index = 0
+
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+
+        text = str(element.get("text") or "").strip()
+        if not text:
+            continue
+
+        t_start = float(element.get("t_start_s") or 0.0)
+        t_end = float(element.get("t_end_s") or 0.0)
+        if t_end <= t_start:
+            continue
+
+        style = element.get("style") if isinstance(element.get("style"), dict) else {}
+        stroke = style.get("stroke") if isinstance(style.get("stroke"), dict) else {}
+
+        font_size = int(style.get("size") or 72)
+        font_color = _hex_to_ffmpeg_color(str(style.get("color") or "#FFFFFF"), default="FFFFFF")
+        border_color = _hex_to_ffmpeg_color(str(stroke.get("color") or "#000000"), default="000000")
+        border_width = max(0, int(stroke.get("width") or 0))
+
+        x_expr, y_expr = _position_to_drawtext(
+            position=element.get("position") if isinstance(element.get("position"), dict) else {},
+            width=width,
+            height=height,
+        )
+
+        escaped_text = _escape_drawtext_text(text)
+
+        options = [
+            f"text='{escaped_text}'",
+            f"fontsize={font_size}",
+            f"fontcolor=#{font_color}",
+            f"x={x_expr}",
+            f"y={y_expr}",
+            f"enable='between(t,{t_start:.3f},{t_end:.3f})'",
+        ]
+
+        if border_width > 0:
+            options.extend([
+                f"borderw={border_width}",
+                f"bordercolor=#{border_color}",
+            ])
+
+        out_label = f"vtxt{drawtext_index}"
+        filters.append(f"[{current_label}]drawtext={':'.join(options)}[{out_label}]")
+        current_label = out_label
+        drawtext_index += 1
+
+    if not filters:
+        return [], None
+    return filters, current_label
+
+
+def _position_to_drawtext(position: Dict[str, Any], width: int, height: int) -> Tuple[str, str]:
+    """Convert text position object to drawtext x/y expressions."""
+    x_value = position.get("x", "center")
+    y_value = position.get("y", 0.75)
+
+    if isinstance(x_value, (int, float)):
+        x_expr = str(int(float(x_value) * width)) if 0.0 <= float(x_value) <= 1.0 else str(int(float(x_value)))
+    else:
+        x_value_str = str(x_value).lower().strip()
+        if x_value_str == "left":
+            x_expr = "w*0.05"
+        elif x_value_str == "right":
+            x_expr = "w-text_w-w*0.05"
+        else:
+            x_expr = "(w-text_w)/2"
+
+    if isinstance(y_value, (int, float)):
+        y_numeric = float(y_value)
+        if 0.0 <= y_numeric <= 1.0:
+            y_expr = f"h*{y_numeric:.4f}-text_h/2"
+        else:
+            y_expr = str(int(y_numeric))
+    else:
+        y_value_str = str(y_value).lower().strip()
+        if y_value_str == "top":
+            y_expr = "h*0.08"
+        elif y_value_str == "center":
+            y_expr = "(h-text_h)/2"
+        else:
+            y_expr = "h*0.75-text_h/2"
+
+    return x_expr, y_expr
+
+
+def _hex_to_ffmpeg_color(hex_color: str, default: str) -> str:
+    """Normalize a hex color string to RRGGBB for FFmpeg."""
+    value = hex_color.strip().lstrip("#")
+    if len(value) == 3 and all(c in "0123456789abcdefABCDEF" for c in value):
+        value = "".join(ch * 2 for ch in value)
+    if len(value) != 6 or not all(c in "0123456789abcdefABCDEF" for c in value):
+        return default
+    return value.upper()
+
+
+def _escape_drawtext_text(text: str) -> str:
+    """Escape text for FFmpeg drawtext option parsing."""
+    escaped = text.replace("\\", r"\\")
+    escaped = escaped.replace(":", r"\:")
+    escaped = escaped.replace("'", r"\'")
+    escaped = escaped.replace("%", r"\%")
+    escaped = escaped.replace("[", r"\[").replace("]", r"\]")
+    escaped = escaped.replace("\n", r"\n")
+    return escaped
 
 
 def create_render_agent(

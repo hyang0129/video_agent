@@ -231,16 +231,9 @@ This agent follows established patterns:
 
 ## Phase 2 Roadmap
 
-Future enhancements:
+Planning is centralized in [ROADMAP.md](../ROADMAP.md).
 
-- [ ] Audio mixing (voiceover + background music)
-- [ ] Loudness normalization (LUFS)
-- [ ] Sound effects support
-- [ ] Dynamic music selection based on mood
-- [ ] Audio transitions and fades
-- [ ] Master audio file export
-- [ ] Multiple voice support per video
-- [ ] Voice cloning integration
+Use this document for implementation details and contracts; use the roadmap for priorities and sequencing.
 
 ## Troubleshooting
 

@@ -1,6 +1,12 @@
 # Video Agent Pipeline - Development Roadmap
 
-**Last Updated:** February 3, 2026
+**Last Updated:** February 18, 2026
+
+## Planning Source of Truth
+
+This file is the canonical source for roadmap, priorities, and next steps.
+
+To reduce drift, other docs should summarize local context only and link back to this roadmap for planning decisions.
 
 ## Current Status
 
@@ -60,6 +66,7 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 
 #### 1.1 Text Overlay Rendering 🔥 CRITICAL
 - **Priority:** P0 (blocks production use)
+- **Status:** ✅ Completed (February 18, 2026)
 - **Problem:** Videos missing on-screen text captions
 - **Solution Options:**
   - **Option A (Fast):** Add FFmpeg `drawtext` filter to [render_agent.py](src/render_agent.py)
@@ -367,7 +374,7 @@ winget install ImageMagick.ImageMagick
 ## Success Criteria
 
 ### Tier 1 Complete When:
-- [ ] Videos have on-screen text overlays rendered
+- [x] Videos have on-screen text overlays rendered
 - [ ] Audio has background music mixed in
 - [ ] Voiceover is LUFS normalized (-16.0 ±1.0)
 - [ ] CI/CD runs tests on every PR

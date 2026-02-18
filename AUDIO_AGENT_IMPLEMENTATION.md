@@ -230,15 +230,9 @@ pytest tests/test_audio_agent.py -v -m integration
 
 ## Phase 2 Roadmap
 
-Future enhancements planned:
-- [ ] Audio mixing (voiceover + background music)
-- [ ] Loudness normalization (LUFS)
-- [ ] Sound effects support
-- [ ] Dynamic music selection
-- [ ] Audio transitions and fades
-- [ ] Master audio file export
-- [ ] Multiple voice support per video
-- [ ] Voice cloning integration
+Roadmap and priority sequencing are centralized in [ROADMAP.md](ROADMAP.md).
+
+Use this document for implementation details of the audio agent itself.
 
 ## Key Benefits
 

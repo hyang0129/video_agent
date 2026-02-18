@@ -165,25 +165,14 @@ test_fact_system.py             # Component tests
 
 ---
 
-## 📈 Next Steps (Future Enhancements)
+## 📈 Next Steps (Consolidated)
 
-### Phase 2: External Verification
-- [ ] Wikipedia API integration
-- [ ] Fact cross-referencing
-- [ ] Automated verification workflow
-- [ ] Confidence scoring
+Planning is now centralized in [ROADMAP.md](ROADMAP.md).
 
-### Phase 3: Script Verifier
-- [ ] Extract claims from generated scripts
-- [ ] Check against fact store
-- [ ] Flag unsupported claims
-- [ ] Suggest fact-supported alternatives
-
-### Phase 4: Advanced Features
-- [ ] Vector database for semantic search
-- [ ] Fact deduplication and merging
-- [ ] Multi-source fact aggregation
-- [ ] Trending fact detection
+For fact-grounding follow-up work, use the roadmap items related to:
+- Script verification / unsupported claim detection
+- External verification and confidence scoring
+- Semantic retrieval and fact quality improvements
 
 ---
 

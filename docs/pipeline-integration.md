@@ -404,10 +404,9 @@ pytest tests/test_pipeline_integration.py -v -m integration
 
 ## Next Steps
 
-1. **Phase 1 Complete**: Research → Script → Planning → Audio ✅
-2. **Phase 2**: Visual Agent + Compositor 🔜
-3. **Phase 3**: Orchestrator + Parallel Execution 🔜
-4. **Phase 4**: YouTube Upload Automation 🔜
+Roadmap and prioritization are consolidated in [ROADMAP.md](../ROADMAP.md).
+
+Use this guide for integration flow and contracts; use the roadmap for what to build next and in what order.
 
 ## Related Documentation
 

@@ -103,10 +103,7 @@ Generates voiceover audio using AI TTS.
 **Output:** AudioTimeline JSON + MP3 voiceover segments
 
 **Phase 2 Roadmap:**
-- Audio mixing with background music
-- Loudness normalization (LUFS)
-- Sound effects support
-- Master audio file export
+See [ROADMAP.md](ROADMAP.md) for the canonical prioritized plan.
 
 [📖 Audio Agent Documentation](docs/audio-agent.md)
 
@@ -373,14 +370,9 @@ SCORING_WEIGHTS = {
 
 ## Project Roadmap
 
-- [x] Market research agent with YouTube API
-- [ ] Video script generation agent
-- [ ] Fact checking agent (make sure script is consistent with reality)
-- [ ] Video script generation agent
-- [ ] Content scheduling system
-- [ ] Multi-platform publishing (TikTok, Instagram Reels)
-- [ ] Performance tracking and feedback loop
-- [ ] Automated A/B testing
+Roadmap and priorities are maintained in [ROADMAP.md](ROADMAP.md).
+
+Use this README for overview, setup, and usage.
 
 ## Documentation
 
@@ -583,8 +575,6 @@ Planned structure (subject to change as the project evolves):
 
 ## Next Steps
 
-- Finalize detailed requirements for each agent and pipeline stage.
-- Choose core libraries/frameworks for orchestration and API integration.
-- Implement minimal end-to-end prototype: parameterized script → simple video → evaluation → mock upload.
+Next-step planning is consolidated in [ROADMAP.md](ROADMAP.md).
 
 This README will be expanded as the architecture and implementation mature.
