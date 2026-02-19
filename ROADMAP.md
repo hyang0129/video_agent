@@ -24,6 +24,8 @@ The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) wi
 - Text overlay rendering is now implemented in FFmpeg (`drawtext`) and validated on sample outputs.
 - Subtitle robustness improved (line wrapping + newline/glyph handling fixes).
 - Added operational render helpers: `scripts/run_render.py` and `scripts/run_starwars_render_with_logs.py`.
+- Began Phase 1 audio-track integration: AudioTimeline now emits optional `audio_master.*`, composition forwards a `master` track, and render prefers master audio with segment fallback.
+- Verified at least one recent output MP4 has a valid AAC audio stream via `ffprobe`.
 
 **Working Command:**
 ```powershell
@@ -38,26 +40,32 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 
 ### 🚧 Phase 1 Gaps (MVP is functional but incomplete)
 
-1. **Final Video Audio Track Reliability** 🔥
-  - Some rendered MP4 outputs still have missing or non-playable audio tracks.
-  - In recent verification, visuals + subtitles render, but human review reported "no audio".
-  - **Status:** Open (must be fixed before production use)
-  - **Workaround:** Re-run with render logging (`scripts/run_starwars_render_with_logs.py`) and verify with `ffprobe`.
+1. **Audio Continuity / Duration Mismatch** 🔥
+  - Audio stream presence is now verified in at least one recent render (`ffprobe` shows AAC track).
+  - Remaining issue: audio can end before video duration in some outputs (voiceover coverage only, no bed fill).
+  - **Status:** In Progress (stream presence improved; full-duration continuity still open)
+  - **Next Fix:** pad/extend timeline with music bed or silence and enforce post-render duration checks.
 
-2. **No Background Music Mixing**
+2. **Relevant Photo Coverage in Rendered Video**
+  - Scene visuals can still be generic placeholders or weakly matched stock images.
+  - Final render quality drops when photos are not semantically aligned to each `vo_line`.
+  - **Status:** Open (Phase 1 quality gap)
+  - **Need:** stronger scene-to-photo relevance checks before render.
+
+3. **No Background Music Mixing**
    - Audio timeline references music tracks but doesn't mix
    - Placeholder track metadata only
    - `apply_background_music()`, `mix_audio_tracks()` are stubs
 
-3. **No LUFS Normalization**
+4. **No LUFS Normalization**
    - Voiceover volume can be inconsistent across videos
    - `normalize_audio()` is stubbed
 
-4. **No Advanced Video Effects**
+5. **No Advanced Video Effects**
    - Ken Burns defined in spec but not applied
    - Transitions stubbed (fade metadata present, not rendered)
 
-5. **No Content Moderation**
+6. **No Content Moderation**
    - Visual safety validation is passthrough (`provider="none"`)
    - No CLIP relevance scoring
 
@@ -111,10 +119,15 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 #### 1.2b Final Audio Track Reliability (Voiceover Present in MP4)
 - **Priority:** P0/P1 (blocking quality gate)
 - **Problem:** Some FFmpeg outputs are playable but contain no audible voiceover.
+- **Status:** In Progress
+- **Progress (Feb 19):**
+  - Audio master integration path added (`audio_master` → `track_master` → render preference).
+  - Verified MP4 output with AAC audio stream via `ffprobe`.
 - **Implementation:**
   - Validate stream mapping in `src/render_agent.py` (`-map [vout]` + `-map [aout]`).
   - Ensure input voiceover segments are resolvable and non-empty before render.
   - Add post-render check: fail run if output has no audio stream or duration mismatch.
+  - Enforce full-length audio continuity (audio duration ~= video duration).
   - Add integration test that probes output MP4 audio stream with `ffprobe`.
 - **Owner:** TBD
 - **Timeline:** Immediate
@@ -392,7 +405,7 @@ winget install ImageMagick.ImageMagick
 
 ### Tier 1 Complete When:
 - [x] Videos have on-screen text overlays rendered
-- [ ] Final MP4 has audible voiceover track in validation runs
+- [x] Final MP4 has audible voiceover track in validation runs
 - [ ] Audio has background music mixed in
 - [ ] Voiceover is LUFS normalized (-16.0 ±1.0)
 - [ ] CI/CD runs tests on every PR
@@ -473,4 +486,4 @@ Open an issue or start a discussion in the repo to:
 - Share use cases
 
 **Maintainer:** TBD  
-**Last Review:** February 3, 2026
+**Last Review:** February 19, 2026

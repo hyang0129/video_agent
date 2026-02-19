@@ -97,20 +97,45 @@ class FfmpegRenderEngine(RenderEngine):
             raise RenderError("No valid video clip inputs")
 
         audio_inputs: List[Path] = []
+
+        # Prefer a single integrated master track when available.
+        master_audio_path: Optional[Path] = None
         for track in audio_tracks:
-            if not isinstance(track, dict):
+            if not isinstance(track, dict) or track.get("type") != "master":
                 continue
-            if track.get("type") != "voiceover":
+            src = str(track.get("source_file") or "").strip()
+            if not src:
                 continue
-            segments = track.get("segments")
-            if not isinstance(segments, list):
-                continue
-            for seg in segments:
-                if not isinstance(seg, dict):
+            candidate = work_dir / src
+            if _is_usable_audio_file(candidate):
+                master_audio_path = candidate
+                break
+
+        if master_audio_path is not None:
+            audio_inputs.append(master_audio_path)
+        else:
+            # Fallback to segment-based voiceover concat.
+            for track in audio_tracks:
+                if not isinstance(track, dict):
                     continue
-                src = str(seg.get("source_file") or "")
-                if src:
-                    audio_inputs.append(work_dir / src)
+                if track.get("type") != "voiceover":
+                    continue
+                segments = track.get("segments")
+                if not isinstance(segments, list):
+                    continue
+
+                sorted_segments = sorted(
+                    [seg for seg in segments if isinstance(seg, dict)],
+                    key=lambda seg: float(seg.get("t_start_s") or 0.0),
+                )
+
+                for seg in sorted_segments:
+                    src = str(seg.get("source_file") or "")
+                    if not src:
+                        continue
+                    candidate = work_dir / src
+                    if _is_usable_audio_file(candidate):
+                        audio_inputs.append(candidate)
 
         # Build ffmpeg inputs.
         cmd: List[str] = [ffmpeg_path, "-y", "-hide_banner"]
@@ -535,6 +560,11 @@ def _write_drawtext_text_file(text_file: Path, text: str) -> None:
 
     with text_file.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write(cleaned)
+
+
+def _is_usable_audio_file(path: Path) -> bool:
+    """Return True when audio input exists and has content."""
+    return path.exists() and path.is_file() and path.stat().st_size > 0
 
 
 def create_render_agent(

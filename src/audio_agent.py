@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import json
+import shutil
+import subprocess
 import wave
 import uuid
 
@@ -109,7 +111,7 @@ class AudioGenerationAgent:
                 "created_at": "2026-02-01T...",
                 "audio_timeline_id": "at_...",
                 "video_plan_ref": "vp_...",
-                "audio_file_path": "results/.../audio_master.mp3",
+                "audio_file_path": "audio_master.mp3",
                 "duration_seconds": 45.0,
                 "tracks": [
                     {
@@ -219,19 +221,31 @@ class AudioGenerationAgent:
                 },
             })
         
+        master_audio_relpath: Optional[str] = None
+        master_audio_notes: List[str] = []
+        master_audio_path = self._build_master_voiceover(tracks=tracks)
+        if master_audio_path is not None:
+            master_audio_relpath = str(master_audio_path.relative_to(self.output_dir)).replace("\\", "/")
+            master_audio_notes.append("Phase 1 integration: created master voiceover track for render")
+        else:
+            master_audio_notes.append(
+                "Phase 1 integration: master voiceover export unavailable; renderer will use segment fallback"
+            )
+
         # Construct audio timeline manifest
         audio_timeline = {
             "schema_version": "1.0.0",
             "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "audio_timeline_id": timeline_id,
             "video_plan_ref": video_plan.get("video_plan_id", "unknown"),
-            "audio_file_path": None,  # Phase 1: no master file yet
+            "audio_file_path": master_audio_relpath,
             "duration_seconds": round(total_duration, 2),
             "voice_id": voice_id,
             "tracks": tracks,
             "processing_notes": [
                 "Phase 1: Individual voiceover segments generated",
                 "Phase 2 will add: audio mixing, normalization, master file export",
+                *master_audio_notes,
             ],
         }
         
@@ -295,6 +309,71 @@ class AudioGenerationAgent:
             "total_characters": total_chars,
             "avg_chars_per_second": round(avg_chars_per_sec, 2),
         }
+
+    def _build_master_voiceover(self, tracks: List[Dict[str, Any]]) -> Optional[Path]:
+        """Build a single master voiceover audio file from segment tracks.
+
+        Args:
+            tracks: AudioTimeline track entries.
+
+        Returns:
+            Path to master audio file when generated, else None.
+        """
+        voiceover_tracks = [
+            t for t in tracks if isinstance(t, dict) and t.get("type") == "voiceover" and t.get("file")
+        ]
+        if not voiceover_tracks:
+            return None
+
+        segment_paths: List[Path] = []
+        for track in sorted(voiceover_tracks, key=lambda t: float(t.get("t_start_s") or 0.0)):
+            p = self.output_dir / str(track.get("file"))
+            if p.exists() and p.stat().st_size > 0:
+                segment_paths.append(p)
+
+        if not segment_paths:
+            return None
+
+        if len(segment_paths) == 1:
+            return segment_paths[0]
+
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            return None
+
+        concat_list_path = self.output_dir / "audio_segments" / "voiceover_concat.txt"
+        concat_lines = ["file '" + str(path.resolve()).replace("'", "'\\''") + "'" for path in segment_paths]
+        concat_list_path.write_text("\n".join(concat_lines) + "\n", encoding="utf-8")
+
+        out_path = self.output_dir / "audio_master.m4a"
+        cmd = [
+            ffmpeg_path,
+            "-y",
+            "-hide_banner",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list_path),
+            "-vn",
+            "-ac",
+            "2",
+            "-ar",
+            str(AUDIO_SAMPLE_RATE),
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            str(out_path),
+        ]
+
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            return None
+        if not out_path.exists() or out_path.stat().st_size <= 0:
+            return None
+        return out_path
 
 
 def _write_silent_wav(

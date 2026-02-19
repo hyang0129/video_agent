@@ -273,6 +273,21 @@ class CompositionAgent:
         if not isinstance(tracks, list):
             return []
 
+        output_tracks: List[Dict[str, Any]] = []
+
+        audio_file_path = audio_timeline.get("audio_file_path")
+        if isinstance(audio_file_path, str) and audio_file_path.strip():
+            output_tracks.append(
+                {
+                    "track_id": "track_master",
+                    "type": "master",
+                    "source_file": audio_file_path,
+                    "t_start_s": 0.0,
+                    "t_end_s": audio_timeline.get("duration_seconds"),
+                    "volume_db": 0,
+                }
+            )
+
         voiceover_segments: List[Dict[str, Any]] = []
         for t in tracks:
             if not isinstance(t, dict) or t.get("type") != "voiceover":
@@ -288,7 +303,8 @@ class CompositionAgent:
                 }
             )
 
-        return [{"track_id": "track_vo", "type": "voiceover", "segments": voiceover_segments}]
+        output_tracks.append({"track_id": "track_vo", "type": "voiceover", "segments": voiceover_segments})
+        return output_tracks
 
     def _validate_inputs(self, video_plan: Dict[str, Any], audio_timeline: Dict[str, Any], visual_manifest: Dict[str, Any]) -> None:
         if not isinstance(video_plan, dict):
