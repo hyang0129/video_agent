@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import shutil
 import subprocess
+import textwrap
 import time
 import uuid
 
@@ -142,6 +143,7 @@ class FfmpegRenderEngine(RenderEngine):
             in_label="vout",
             width=width,
             height=height,
+            work_dir=work_dir,
         )
         if text_filters:
             filter_parts.extend(text_filters)
@@ -284,6 +286,7 @@ def _build_drawtext_filters(
     in_label: str,
     width: int,
     height: int,
+    work_dir: Path,
 ) -> Tuple[List[str], Optional[str]]:
     """Build FFmpeg drawtext filter chain for text elements.
 
@@ -299,6 +302,9 @@ def _build_drawtext_filters(
     elements = text_layer.get("elements") if isinstance(text_layer, dict) else None
     if not isinstance(elements, list) or not elements:
         return [], None
+
+    text_dir = work_dir / "_drawtext"
+    text_dir.mkdir(parents=True, exist_ok=True)
 
     filters: List[str] = []
     current_label = in_label
@@ -325,33 +331,55 @@ def _build_drawtext_filters(
         border_color = _hex_to_ffmpeg_color(str(stroke.get("color") or "#000000"), default="000000")
         border_width = max(0, int(stroke.get("width") or 0))
 
+        wrapped_text, fitted_font_size = _fit_subtitle_text(
+            text=text,
+            video_width=width,
+            preferred_font_size=font_size,
+            min_font_size=42,
+            max_lines=3,
+        )
+
         x_expr, y_expr = _position_to_drawtext(
             position=element.get("position") if isinstance(element.get("position"), dict) else {},
             width=width,
             height=height,
         )
 
-        escaped_text = _escape_drawtext_text(text)
+        lines = [line.strip() for line in wrapped_text.splitlines() if line.strip()]
+        if not lines:
+            lines = [wrapped_text.strip()]
 
-        options = [
-            f"text='{escaped_text}'",
-            f"fontsize={font_size}",
-            f"fontcolor=#{font_color}",
-            f"x={x_expr}",
-            f"y={y_expr}",
-            f"enable='between(t,{t_start:.3f},{t_end:.3f})'",
-        ]
+        for line_index, line_text in enumerate(lines):
+            text_file = text_dir / f"subtitle_{drawtext_index:03d}.txt"
+            _write_drawtext_text_file(text_file=text_file, text=line_text)
+            text_file_arg = _escape_drawtext_value(str(text_file.resolve()).replace("\\", "/"))
 
-        if border_width > 0:
-            options.extend([
-                f"borderw={border_width}",
-                f"bordercolor=#{border_color}",
-            ])
+            line_y_expr = _line_offset_y_expr(
+                base_y_expr=y_expr,
+                line_index=line_index,
+                total_lines=len(lines),
+                font_size=fitted_font_size,
+            )
 
-        out_label = f"vtxt{drawtext_index}"
-        filters.append(f"[{current_label}]drawtext={':'.join(options)}[{out_label}]")
-        current_label = out_label
-        drawtext_index += 1
+            options = [
+                f"textfile='{text_file_arg}'",
+                f"fontsize={fitted_font_size}",
+                f"fontcolor=#{font_color}",
+                f"x={x_expr}",
+                f"y={line_y_expr}",
+                f"enable='between(t,{t_start:.3f},{t_end:.3f})'",
+            ]
+
+            if border_width > 0:
+                options.extend([
+                    f"borderw={border_width}",
+                    f"bordercolor=#{border_color}",
+                ])
+
+            out_label = f"vtxt{drawtext_index}"
+            filters.append(f"[{current_label}]drawtext={':'.join(options)}[{out_label}]")
+            current_label = out_label
+            drawtext_index += 1
 
     if not filters:
         return [], None
@@ -411,6 +439,102 @@ def _escape_drawtext_text(text: str) -> str:
     escaped = escaped.replace("[", r"\[").replace("]", r"\]")
     escaped = escaped.replace("\n", r"\n")
     return escaped
+
+
+def _escape_drawtext_value(value: str) -> str:
+    """Escape drawtext option values (e.g., textfile paths)."""
+    escaped = value.replace("\\", r"\\")
+    escaped = escaped.replace(":", r"\:")
+    escaped = escaped.replace("'", r"\'")
+    return escaped
+
+
+def _fit_subtitle_text(
+    text: str,
+    video_width: int,
+    preferred_font_size: int,
+    min_font_size: int = 42,
+    max_lines: int = 3,
+) -> Tuple[str, int]:
+    """Wrap subtitle text to fit width and adjust font size if needed.
+
+    Args:
+        text: Raw subtitle text.
+        video_width: Video width in pixels.
+        preferred_font_size: Desired subtitle font size.
+        min_font_size: Minimum allowed font size.
+        max_lines: Soft cap for wrapped subtitle lines.
+
+    Returns:
+        Tuple of (wrapped_text, fitted_font_size).
+    """
+    font_size = max(min_font_size, int(preferred_font_size))
+    wrapped = _wrap_subtitle_text(text=text, video_width=video_width, font_size=font_size)
+
+    while len(wrapped.splitlines()) > max_lines and font_size > min_font_size:
+        font_size = max(min_font_size, font_size - 4)
+        wrapped = _wrap_subtitle_text(text=text, video_width=video_width, font_size=font_size)
+
+    return wrapped, font_size
+
+
+def _wrap_subtitle_text(text: str, video_width: int, font_size: int) -> str:
+    """Wrap subtitle text into multiple lines based on estimated pixel width."""
+    max_chars = _estimate_max_chars_per_line(video_width=video_width, font_size=font_size)
+    wrapped_lines: List[str] = []
+
+    for paragraph in text.splitlines() or [text]:
+        chunk = paragraph.strip()
+        if not chunk:
+            wrapped_lines.append("")
+            continue
+
+        lines = textwrap.wrap(
+            chunk,
+            width=max_chars,
+            break_long_words=True,
+            break_on_hyphens=True,
+        )
+        wrapped_lines.extend(lines or [chunk])
+
+    return "\n".join(wrapped_lines).strip()
+
+
+def _estimate_max_chars_per_line(video_width: int, font_size: int) -> int:
+    """Estimate max characters per subtitle line to avoid edge clipping."""
+    usable_width_px = max(200, int(video_width * 0.86))
+    approx_char_width_px = max(8.0, font_size * 0.56)
+    return max(12, int(usable_width_px / approx_char_width_px))
+
+
+def _line_offset_y_expr(base_y_expr: str, line_index: int, total_lines: int, font_size: int) -> str:
+    """Offset Y expression so each wrapped line is rendered as its own layer."""
+    line_spacing_px = max(18, int(font_size * 1.15))
+    center_index = (total_lines - 1) / 2.0
+    offset = int(round((line_index - center_index) * line_spacing_px))
+    if offset == 0:
+        return f"({base_y_expr})"
+    sign = "+" if offset > 0 else "-"
+    return f"({base_y_expr}){sign}{abs(offset)}"
+
+
+def _write_drawtext_text_file(text_file: Path, text: str) -> None:
+    """Write drawtext text file with normalized LF line endings.
+
+    FFmpeg `drawtext=textfile=...` can render stray box glyphs when Windows CRLF
+    (`\r\n`) is present. This function forces LF and strips control characters
+    except newline and tab.
+    """
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    cleaned_chars: List[str] = []
+    for char in normalized:
+        codepoint = ord(char)
+        if char in {"\n", "\t"} or codepoint >= 32:
+            cleaned_chars.append(char)
+    cleaned = "".join(cleaned_chars)
+
+    with text_file.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(cleaned)
 
 
 def create_render_agent(

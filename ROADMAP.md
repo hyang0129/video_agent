@@ -1,6 +1,6 @@
 # Video Agent Pipeline - Development Roadmap
 
-**Last Updated:** February 18, 2026
+**Last Updated:** February 19, 2026
 
 ## Planning Source of Truth
 
@@ -10,7 +10,7 @@ To reduce drift, other docs should summarize local context only and link back to
 
 ## Current Status
 
-### ✅ MVP Complete (Production-Ready)
+### ✅ MVP Pipeline Functional (Not Yet Fully Production-Ready)
 The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) with:
 - Market research → Topic identification
 - Script generation with timing
@@ -18,7 +18,12 @@ The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) wi
 - Audio generation (ElevenLabs TTS, 4 voice presets)
 - Visual assets (Pexels search + deterministic placeholder BMPs)
 - Composition (Ken Burns effects, text overlay specs)
-- Rendering (FFmpeg slideshow: images + voiceover)
+- Rendering (FFmpeg slideshow: images + voiceover, with caveats)
+
+### ✅ Completed Recently
+- Text overlay rendering is now implemented in FFmpeg (`drawtext`) and validated on sample outputs.
+- Subtitle robustness improved (line wrapping + newline/glyph handling fixes).
+- Added operational render helpers: `scripts/run_render.py` and `scripts/run_starwars_render_with_logs.py`.
 
 **Working Command:**
 ```powershell
@@ -33,11 +38,11 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 
 ### 🚧 Phase 1 Gaps (MVP is functional but incomplete)
 
-1. **Text Overlays Not Rendered** 🔥
-   - `RenderSpecification` includes text elements with full styling
-   - FFmpeg engine **silently skips** text rendering
-   - Videos are missing on-screen text (50% of content value)
-   - **Workaround:** None; requires implementation
+1. **Final Video Audio Track Reliability** 🔥
+  - Some rendered MP4 outputs still have missing or non-playable audio tracks.
+  - In recent verification, visuals + subtitles render, but human review reported "no audio".
+  - **Status:** Open (must be fixed before production use)
+  - **Workaround:** Re-run with render logging (`scripts/run_starwars_render_with_logs.py`) and verify with `ffprobe`.
 
 2. **No Background Music Mixing**
    - Audio timeline references music tracks but doesn't mix
@@ -102,6 +107,18 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 - **Owner:** TBD
 - **Timeline:** Week 1-2
 - **Effort:** 2-3 days
+
+#### 1.2b Final Audio Track Reliability (Voiceover Present in MP4)
+- **Priority:** P0/P1 (blocking quality gate)
+- **Problem:** Some FFmpeg outputs are playable but contain no audible voiceover.
+- **Implementation:**
+  - Validate stream mapping in `src/render_agent.py` (`-map [vout]` + `-map [aout]`).
+  - Ensure input voiceover segments are resolvable and non-empty before render.
+  - Add post-render check: fail run if output has no audio stream or duration mismatch.
+  - Add integration test that probes output MP4 audio stream with `ffprobe`.
+- **Owner:** TBD
+- **Timeline:** Immediate
+- **Effort:** 0.5-1 day
 
 #### 1.3 LUFS Audio Normalization
 - **Priority:** P1 (quality improvement)
@@ -375,6 +392,7 @@ winget install ImageMagick.ImageMagick
 
 ### Tier 1 Complete When:
 - [x] Videos have on-screen text overlays rendered
+- [ ] Final MP4 has audible voiceover track in validation runs
 - [ ] Audio has background music mixed in
 - [ ] Voiceover is LUFS normalized (-16.0 ±1.0)
 - [ ] CI/CD runs tests on every PR
