@@ -49,8 +49,8 @@ results/
 !results/.gitkeep
 
 # Test files in root (should be in tests/)
-test_*.py
-*_test.py
+/test_*.py
+/*_test.py
 
 # Assets (exclude large media files)
 assets/*.mp3
