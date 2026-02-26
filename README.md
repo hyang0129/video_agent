@@ -258,6 +258,17 @@ python main.py script results/<mr_run_id>/topicbrief_....json creative_spec.json
 
 A template is provided at `creative_spec.example.json`.
 
+### Script Image Retrieval (Artifact-Only)
+
+Generate beat-aligned image candidates (1-5 each) from a ScriptPackage:
+
+```powershell
+python main.py scriptimages results/<sg_run_id>/script_package.json
+```
+
+This writes `script_image_manifest.json` under a new `results/sim_*` run folder.
+It stores candidate URLs, attribution, and beat references only (no pipeline integration yet).
+
 ### Video Planning (Script → Video)
 
 Create a deterministic `VideoPlan` from a ScriptPackage:

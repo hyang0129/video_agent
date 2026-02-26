@@ -20,6 +20,7 @@ from src.audio_agent import create_audio_agent
 from src.visual_agent import create_visual_agent
 from src.composition_agent import create_composition_agent
 from src.render_agent import create_render_agent
+from src.script_image_agent import ScriptImageConfig, create_script_image_agent
 from src.artifacts.io import ensure_run_dir, new_run_id, write_json
 from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ELEVENLABS_API_KEY, RESULTS_DIR
 from src.creative_spec import load_creative_spec
@@ -256,6 +257,35 @@ def main():
             out_path = run_dir / "visual_manifest.json"
             write_json(out_path, visual_manifest)
             print(f"\n✅ Wrote VisualManifest: {out_path}")
+        elif mode == "scriptimages":
+            if len(sys.argv) < 3:
+                print("\n❌ Usage: python main.py scriptimages <path-to-script_package.json>")
+                sys.exit(2)
+
+            script_package_path = Path(sys.argv[2]).expanduser().resolve()
+            if not script_package_path.exists():
+                print(f"\n❌ ScriptPackage not found: {script_package_path}")
+                sys.exit(2)
+
+            script_package = json.loads(script_package_path.read_text(encoding="utf-8"))
+            run_id = new_run_id(
+                "sim",
+                f"{script_package.get('topic_id','topic')}_{script_package.get('subtopic_id','sub')}",
+            )
+            run_dir = ensure_run_dir(RESULTS_DIR, run_id)
+
+            agent = create_script_image_agent(
+                ScriptImageConfig(
+                    output_dir=run_dir,
+                    min_candidates_per_segment=1,
+                    max_candidates_per_segment=5,
+                )
+            )
+            manifest = agent.generate_script_image_manifest(script_package=script_package)
+
+            out_path = run_dir / "script_image_manifest.json"
+            write_json(out_path, manifest)
+            print(f"\n✅ Wrote ScriptImageManifest: {out_path}")
         elif mode == "audio":
             if len(sys.argv) < 3:
                 print("\n❌ Usage: python main.py audio <path-to-video_plan.json> [voice]")
@@ -476,6 +506,7 @@ def print_usage():
     print("  python main.py preflight       - Check keys + FFmpeg availability")
     print("  python main.py script <topicbrief.json> [creative_spec.json]   - Generate script")
     print("  python main.py videoplan <script_package.json> [creative_spec.json] - Create VideoPlan")
+    print("  python main.py scriptimages <script_package.json> - Create ScriptImageManifest (artifact-only)")
     print("  python main.py audio <video_plan.json> [voice] - Generate AudioTimeline + voiceover segments")
     print("  python main.py visualmanifest <video_plan.json> - Create VisualManifest")
     print("  python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json> - Create RenderSpec")
