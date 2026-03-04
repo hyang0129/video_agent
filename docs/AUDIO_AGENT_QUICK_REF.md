@@ -142,6 +142,6 @@ for v in voices:
 
 ## Full Documentation
 
-- [Audio Agent Docs](docs/audio-agent.md)
-- [Architecture Docs](docs/video-production-pipeline-architecture.md)
+- [Audio Agent Docs](audio-agent.md)
+- [Architecture Docs](video-production-pipeline-architecture.md)
 - [Implementation Summary](AUDIO_AGENT_IMPLEMENTATION.md)

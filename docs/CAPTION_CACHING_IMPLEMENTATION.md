@@ -3,7 +3,7 @@
 ## ✅ What Was Implemented
 
 ### 1. Caption Cache System
-**File**: [src/facts/caption_cache.py](src/facts/caption_cache.py)
+**File**: [src/facts/caption_cache.py](../src/facts/caption_cache.py)
 
 A file-based cache that stores extracted YouTube captions to avoid redundant API calls.
 
@@ -21,7 +21,7 @@ A file-based cache that stores extracted YouTube captions to avoid redundant API
 - Work around IP blocks by using pre-cached data
 
 ### 2. Rate Limiting
-**File**: [src/facts/fact_miner.py](src/facts/fact_miner.py#L420-422)
+**File**: [src/facts/fact_miner.py](../src/facts/fact_miner.py#L420-422)
 
 Added 3-second delays between caption extraction requests.
 
@@ -139,7 +139,7 @@ See: https://github.com/jdepoix/youtube-transcript-api#working-around-ip-bans
 ### Option 2: Increase Rate Limiting
 Change from 3 seconds to 10-30 seconds between requests.
 
-**Edit**: [src/facts/fact_miner.py](src/facts/fact_miner.py#L422)
+**Edit**: [src/facts/fact_miner.py](../src/facts/fact_miner.py#L422)
 ```python
 time.sleep(10)  # Increase from 3 to 10 seconds
 ```

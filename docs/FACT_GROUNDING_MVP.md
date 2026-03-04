@@ -30,9 +30,9 @@ The fact-grounded script generation system is now fully implemented and tested.
 - Configurable fact retrieval (min/max limits)
 
 ### 4. **Documentation & Examples**
-- Complete system documentation ([docs/fact-grounding-system.md](docs/fact-grounding-system.md))
-- Working example script ([examples/fact_mining_example.py](examples/fact_mining_example.py))
-- Component tests ([test_fact_system.py](test_fact_system.py))
+- Complete system documentation ([docs/fact-grounding-system.md](fact-grounding-system.md))
+- Working example script ([examples/fact_mining_example.py](../examples/fact_mining_example.py))
+- Component tests ([test_fact_system.py](../test_fact_system.py))
 
 ---
 
@@ -167,7 +167,7 @@ test_fact_system.py             # Component tests
 
 ## 📈 Next Steps (Consolidated)
 
-Planning is now centralized in [ROADMAP.md](ROADMAP.md).
+Planning is now centralized in [ROADMAP.md](../ROADMAP.md).
 
 For fact-grounding follow-up work, use the roadmap items related to:
 - Script verification / unsupported claim detection

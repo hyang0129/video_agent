@@ -1,6 +1,6 @@
 # Video Agent Pipeline - Development Roadmap
 
-**Last Updated:** February 19, 2026
+**Last Updated:** March 4, 2026
 
 ## Planning Source of Truth
 
@@ -51,6 +51,7 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
   - Final render quality drops when photos are not semantically aligned to each `vo_line`.
   - **Status:** Open (Phase 1 quality gap)
   - **Need:** stronger scene-to-photo relevance checks before render.
+  - **Implementation Plan:** [script-image-video-integration-plan.md](docs/script-image-video-integration-plan.md)
 
 3. **No Background Music Mixing**
    - Audio timeline references music tracks but doesn't mix
@@ -72,6 +73,65 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 ---
 
 ## Prioritized Action Items
+
+### 🧲 Tier 0: Recruiter Appeal (Immediate: next 3-7 days)
+
+**Goal:** Maximize hiring credibility with verifiable outputs, production-signal metrics, and a public proof surface.
+
+This tier is the current execution priority and supersedes older sequencing below where conflicts exist.
+
+#### 0.1 Publish on GitHub + Portfolio-Grade README 🔥 HIGHEST ROI
+- **Priority:** P0
+- **Status:** Open
+- **Deliverables:**
+  - Public GitHub repo link (or explicit reviewer access path)
+  - README quickstart (`python main.py mvp ...`) from clean setup to output
+  - Architecture diagram for the end-to-end pipeline
+  - Example output section with screenshot/GIF and artifact links
+- **Success Metric:** A reviewer can understand architecture and run first output in under 10 minutes.
+
+#### 0.2 Close Audio Continuity Gap (Full-Duration Audio-Synced Output) 🔥
+- **Priority:** P0
+- **Status:** In Progress
+- **Problem:** Some outputs have audio ending early vs video duration.
+- **Implementation:**
+  - Enforce final audio duration to match video duration (music bed or silence fill)
+  - Add hard post-render validation (`ffprobe`) for stream presence + duration parity
+  - Fail run on mismatch and write actionable error report
+- **Success Metric:** `|audio_duration - video_duration| <= 0.25s` for all validation runs.
+
+#### 0.3 Show One Real Output Example (Public Artifact)
+- **Priority:** P0
+- **Status:** Open
+- **Deliverables:**
+  - Upload at least one generated video to unlisted YouTube or GDrive
+  - Link artifact in README under "Example Output"
+- **Success Metric:** Recruiters can watch a concrete output without running code.
+
+#### 0.4 Add Lightweight Evaluation Layer
+- **Priority:** P1
+- **Status:** Open
+- **Track Per Run:**
+  - Subtitle/audio alignment drift (ms)
+  - Output duration vs target duration
+  - API usage and estimated per-run cost
+- **Implementation:** Persist `results/<run_id>/evaluation.json` and a concise `evaluation_summary.md`.
+
+#### 0.5 Add End-to-End Metrics + Evidence Counters
+- **Priority:** P1
+- **Status:** Open
+- **Track:**
+  - End-to-end pipeline runtime
+  - Stage-level runtime breakdown
+  - Total runs and successful rendered videos
+- **Deliverable:** Keep rolling summary in `results/metrics_summary.json` and surface snapshot in README (e.g., "generated 20+ test videos").
+
+#### 0.6 Async/Parallel Agent Execution (Systems Credibility Upgrade)
+- **Priority:** P2
+- **Status:** Open
+- **Scope:** Parallelize independent branches (e.g., audio generation and visual retrieval/fetch).
+- **Deliverable:** Sequential vs parallel benchmark on identical topic input.
+- **Success Metric:** Demonstrate measurable wall-clock improvement with no quality regression.
 
 ### 🎯 Tier 1: Production Readiness (1-2 weeks)
 
@@ -158,6 +218,16 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 - **Owner:** TBD
 - **Timeline:** Week 2
 - **Effort:** 1 day
+
+#### 1.5 Script Image → Video Integration
+- **Priority:** P0/P1 (visual quality gate)
+- **Status:** In Progress
+- **Goal:** Feed beat-aligned script image retrieval into rendered output scenes.
+- **Plan:** [script-image-video-integration-plan.md](docs/script-image-video-integration-plan.md)
+- **Current Focus:** Step 3 (multi-source retrieval fallback scaffold) + Step 1 bridge wiring.
+- **Owner:** TBD
+- **Timeline:** Immediate
+- **Effort:** 1-2 days for first integrated pass
 
 ---
 
@@ -403,6 +473,14 @@ winget install ImageMagick.ImageMagick
 
 ## Success Criteria
 
+### Tier 0 (Recruiter Appeal) Complete When:
+- [ ] Repo is publicly shareable with strong README (diagram + quickstart + output visuals)
+- [ ] At least one real generated video artifact link is live in README
+- [ ] Audio continuity passes duration parity checks in validation runs
+- [ ] Per-run evaluation artifacts are generated (`evaluation.json`)
+- [ ] Metrics summary exists with runtime + output-count evidence
+- [ ] Parallel execution benchmark is documented
+
 ### Tier 1 Complete When:
 - [x] Videos have on-screen text overlays rendered
 - [x] Final MP4 has audible voiceover track in validation runs
@@ -427,6 +505,11 @@ winget install ImageMagick.ImageMagick
 
 ## Metrics to Track
 
+### Recruiter Evidence
+- **Public output artifacts:** >=1 linked playable video
+- **Documented sample volume:** >=20 generated test videos (or current count)
+- **Quickstart reproducibility:** first successful run from README in <10 minutes
+
 ### Quality
 - **Text rendering accuracy:** 100% (all text visible, readable)
 - **Audio sync drift:** <50ms (imperceptible)
@@ -435,7 +518,9 @@ winget install ImageMagick.ImageMagick
 
 ### Performance
 - **Render time:** <60s for 45s video (CPU), <20s (GPU)
+- **End-to-end pipeline time:** Track p50/p95 per run
 - **API success rate:** 95%+ (YouTube, ElevenLabs, Pexels)
+- **Per-run API cost:** Track estimated dollars per pipeline run
 - **Quota usage:** <80% of daily limits
 
 ### Reliability
@@ -447,22 +532,19 @@ winget install ImageMagick.ImageMagick
 
 ## Getting Started
 
-### This Week (Feb 3-9, 2026)
-1. **Implement text rendering** ([Tier 1.1](#11-text-overlay-rendering--critical))
-   - Start with FFmpeg drawtext
-   - Test with 3 sample videos
-   - Ship if quality is acceptable
-2. **Add .gitignore** ([QW1](#qw1-add-gitignore-for-results))
-3. **Update README limitations** ([QW4](#qw4-update-readmemd-with-limitations))
+### Immediate Execution Order (March 2026)
+1. **Tier 0.1:** Publish GitHub + upgrade README with architecture diagram, quickstart, and output visuals
+2. **Tier 0.2:** Close audio continuity gap with hard duration validation gates
+3. **Tier 0.3:** Publish one real generated-video artifact and link in README
 
-### Next Week (Feb 10-16, 2026)
-1. **Background music mixing** ([Tier 1.2](#12-background-music-mixing))
-2. **LUFS normalization** ([Tier 1.3](#13-lufs-audio-normalization))
-3. **GitHub Actions** ([Tier 1.4](#14-github-actions-cicd))
+### Next Execution Window (Following 1-2 weeks)
+1. **Tier 0.4:** Add lightweight evaluation outputs (`evaluation.json`)
+2. **Tier 0.5:** Add runtime/output counters and README evidence snapshot
+3. **Tier 0.6:** Implement and benchmark parallel agent execution path
 
-### Month 2 (March 2026)
-- Complete Tier 2 items
-- Start Tier 3 content moderation
+### After Tier 0
+- Resume Tier 1 quality items not yet complete (music mixing, LUFS, CI)
+- Continue Tier 2 reliability/scalability upgrades
 
 ---
 
@@ -486,4 +568,4 @@ Open an issue or start a discussion in the repo to:
 - Share use cases
 
 **Maintainer:** TBD  
-**Last Review:** February 19, 2026
+**Last Review:** March 4, 2026

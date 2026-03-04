@@ -4,8 +4,8 @@
 
 ### 1. Cookie-Based Authentication
 **Files Modified**: 
-- [src/tools/youtube_tools.py](src/tools/youtube_tools.py)
-- [src/facts/fact_miner.py](src/facts/fact_miner.py)
+- [src/tools/youtube_tools.py](../src/tools/youtube_tools.py)
+- [src/facts/fact_miner.py](../src/facts/fact_miner.py)
 
 **Features**:
 - YouTubeClient accepts `cookies_file` parameter
@@ -25,7 +25,7 @@ miner = FactMiner(cookies_file="path/to/cookies.txt")
 ### 2. Increased Rate Limiting
 **Changed**: 3 seconds → 10 seconds between caption requests
 
-**Location**: [src/facts/fact_miner.py:422](src/facts/fact_miner.py#L422)
+**Location**: [src/facts/fact_miner.py:422](../src/facts/fact_miner.py#L422)
 
 **Impact**:
 - More conservative rate limiting

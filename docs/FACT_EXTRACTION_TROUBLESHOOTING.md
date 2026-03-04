@@ -30,7 +30,7 @@ This is most likely caused by:
 ## Solutions Implemented
 
 ### 1. Caption Caching System
-**New**: Implemented file-based caption cache in [caption_cache.py](src/facts/caption_cache.py)
+**New**: Implemented file-based caption cache in [caption_cache.py](../src/facts/caption_cache.py)
 - **Stores extracted captions** in `results/captions/` directory
 - **Reuses cached captions** on subsequent fact mining runs
 - **Avoids redundant API calls** that trigger IP blocks
@@ -61,7 +61,7 @@ print(f"Cached videos: {stats['cached_videos']}")
 - Only delays between NEW extractions (skips delay for cached)
 - Configurable delay in future versions
 
-**Implementation**: See [fact_miner.py:420-422](src/facts/fact_miner.py#L420-L422)
+**Implementation**: See [fact_miner.py:420-422](../src/facts/fact_miner.py#L420-L422)
 
 ### 3. Improved Fact Extraction Prompt
 Enhanced `FACT_EXTRACTION_PROMPT` in [fact_miner.py](../src/facts/fact_miner.py):
@@ -140,7 +140,7 @@ This will:
 
 ## Files Modified
 
-- **[src/facts/caption_cache.py](src/facts/caption_cache.py)** ← NEW
+- **[src/facts/caption_cache.py](../src/facts/caption_cache.py)** ← NEW
   - File-based cache for YouTube captions
   - get(), set(), has(), delete(), clear() operations
   - Cache statistics and management

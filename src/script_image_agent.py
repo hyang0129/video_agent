@@ -7,6 +7,10 @@ fits in the script timeline.
 Current provider support:
 - Pexels image search (metadata only; no image download)
 
+Provider architecture:
+- Ordered `image_sources` fallback chain
+- Non-fatal unsupported-provider handling for future source expansion
+
 This module intentionally does not integrate with the render pipeline yet.
 """
 
@@ -273,7 +277,7 @@ class ScriptImageConfig:
 
     Attributes:
         output_dir: Destination directory for image artifacts.
-        image_sources: Enabled image providers.
+        image_sources: Enabled image providers in fallback order.
         min_candidates_per_segment: Minimum number of candidates per beat.
         max_candidates_per_segment: Maximum number of candidates per beat.
         max_queries_per_segment: Maximum queries generated per beat.
@@ -300,6 +304,57 @@ class ScriptImageRetrievalAgent:
         self.config = config or ScriptImageConfig()
         self.output_dir = self.config.output_dir or (RESULTS_DIR / f"sim_{uuid.uuid4().hex[:8]}")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.image_sources = self._normalize_image_sources(self.config.image_sources)
+
+    def _normalize_image_sources(self, image_sources: Sequence[str]) -> List[str]:
+        """Normalize provider list to an ordered unique source chain.
+
+        Args:
+            image_sources: Raw provider names from config.
+
+        Returns:
+            Lower-cased unique provider list. Defaults to ``["pexels"]``.
+        """
+        normalized: List[str] = []
+        for source in image_sources:
+            name = str(source or "").strip().lower()
+            if not name:
+                continue
+            if name not in normalized:
+                normalized.append(name)
+
+        if not normalized:
+            normalized.append("pexels")
+
+        return normalized
+
+    def _search_source(
+        self,
+        source_name: str,
+        query: str,
+        per_page: int,
+    ) -> List[Dict[str, Any]]:
+        """Dispatch search call to a provider implementation.
+
+        Args:
+            source_name: Provider name.
+            query: Search query.
+            per_page: Desired max result count.
+
+        Returns:
+            Provider-normalized candidate dicts.
+
+        Raises:
+            ImageSearchError: If provider is unavailable or not implemented.
+        """
+        if source_name == "pexels":
+            return search_pexels_images(
+                query=query,
+                per_page=max(1, int(per_page)),
+                orientation=self.config.orientation,
+            )
+
+        raise ImageSearchError(f"Image source '{source_name}' is not implemented")
 
     def generate_script_image_manifest(self, script_package: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a beat-referenced image candidate manifest.
@@ -388,25 +443,32 @@ class ScriptImageRetrievalAgent:
         seen_urls: set[str] = set()
         sources_attempted: List[str] = []
         provider_errors: List[str] = []
+        configured_sources = list(self.image_sources)
+        max_candidates = max(1, int(self.config.max_candidates_per_segment))
 
         for query in queries:
-            if len(candidates) >= int(self.config.max_candidates_per_segment):
+            if len(candidates) >= max_candidates:
                 break
 
-            if "pexels" in self.config.image_sources:
-                sources_attempted.append("pexels")
+            for source_name in configured_sources:
+                if len(candidates) >= max_candidates:
+                    break
+
+                sources_attempted.append(source_name)
+                remaining = max(1, max_candidates - len(candidates))
+
                 try:
-                    results = search_pexels_images(
+                    results = self._search_source(
+                        source_name=source_name,
                         query=query,
-                        per_page=int(self.config.max_candidates_per_segment),
-                        orientation=self.config.orientation,
+                        per_page=remaining,
                     )
                 except ImageSearchError as exc:
-                    provider_errors.append(str(exc))
-                    results = []
+                    provider_errors.append(f"{source_name}: {exc}")
+                    continue
 
                 for item in results:
-                    if len(candidates) >= int(self.config.max_candidates_per_segment):
+                    if len(candidates) >= max_candidates:
                         break
 
                     url = str(item.get("url") or "").strip()
@@ -417,7 +479,7 @@ class ScriptImageRetrievalAgent:
                     candidates.append(
                         {
                             "candidate_id": f"cand_{uuid.uuid4().hex[:8]}",
-                            "source": str(item.get("source") or "pexels"),
+                            "source": str(item.get("source") or source_name),
                             "url": url,
                             "resolution": item.get("resolution") or [0, 0],
                             "attribution": item.get("attribution") or {},
@@ -429,7 +491,6 @@ class ScriptImageRetrievalAgent:
                     )
 
         min_candidates = max(0, int(self.config.min_candidates_per_segment))
-        max_candidates = max(1, int(self.config.max_candidates_per_segment))
         object_terms = _extract_focus_terms(
             text=f"{str(beat.get('vo_line') or '')} {segment_context}",
             max_terms=5,
@@ -443,6 +504,17 @@ class ScriptImageRetrievalAgent:
             object_terms=object_terms,
         )
         candidates = candidates[:max_candidates]
+        candidate_sources = sorted(
+            {
+                str(candidate.get("source") or "").strip().lower()
+                for candidate in candidates
+                if str(candidate.get("source") or "").strip()
+            }
+        )
+        source_fallback_used = bool(candidate_sources) and (
+            bool(configured_sources)
+            and any(source != configured_sources[0] for source in candidate_sources)
+        )
 
         return {
             "segment_id": beat_id,
@@ -460,8 +532,12 @@ class ScriptImageRetrievalAgent:
             "candidates": candidates,
             "status": "ok" if len(candidates) >= min_candidates else "insufficient_candidates",
             "retrieval_notes": {
+                "configured_sources": configured_sources,
                 "sources_attempted": list(dict.fromkeys(sources_attempted)),
+                "candidate_sources": candidate_sources,
                 "provider_errors": provider_errors,
+                "source_fallback_strategy": "ordered_provider_chain",
+                "source_fallback_used": source_fallback_used,
                 "segment_context": segment_context,
                 "reranked_by_alt_relevance": True,
             },

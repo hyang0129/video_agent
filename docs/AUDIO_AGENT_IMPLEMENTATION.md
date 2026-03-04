@@ -55,19 +55,19 @@ AUDIO_BITRATE = "192k"
 
 ### 5. Documentation
 ✅ **Created:**
-- [`docs/audio-agent.md`](docs/audio-agent.md) - Complete agent documentation
-- Updated [`docs/video-production-pipeline-architecture.md`](docs/video-production-pipeline-architecture.md)
+- [`audio-agent.md`](audio-agent.md) - Complete agent documentation
+- Updated [`video-production-pipeline-architecture.md`](video-production-pipeline-architecture.md)
   - Detailed Audio Agent implementation section
   - Comprehensive multi-agent best practices guide
-- Updated main [`README.md`](README.md)
+- Updated main [`README.md`](../README.md)
   - Implementation status section
   - Project structure updates
   - API keys setup
 
 ### 6. Examples & Tests
 ✅ **Created:**
-- [`examples/audio_agent_example.py`](examples/audio_agent_example.py) - Working example
-- [`tests/test_audio_agent.py`](tests/test_audio_agent.py) - Comprehensive unit tests
+- [`examples/audio_agent_example.py`](../examples/audio_agent_example.py) - Working example
+- [`tests/test_audio_agent.py`](../tests/test_audio_agent.py) - Comprehensive unit tests
   - Input validation tests
   - TTS generation mocking
   - Error handling tests
@@ -230,7 +230,7 @@ pytest tests/test_audio_agent.py -v -m integration
 
 ## Phase 2 Roadmap
 
-Roadmap and priority sequencing are centralized in [ROADMAP.md](ROADMAP.md).
+Roadmap and priority sequencing are centralized in [ROADMAP.md](../ROADMAP.md).
 
 Use this document for implementation details of the audio agent itself.
 

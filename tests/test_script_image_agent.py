@@ -207,3 +207,49 @@ def test_candidates_reranked_by_alt_relevance(
     assert segment["candidates"][0]["url"] == "https://images.example/strong.jpg"
     assert "relevance" in segment["candidates"][0]["metadata"]
     assert segment["retrieval_notes"]["reranked_by_alt_relevance"] is True
+
+
+def test_multi_source_fallback_uses_next_provider_when_first_is_unavailable(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_search(query: str, per_page: int, orientation: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                "source": "pexels",
+                "url": "https://images.example/fallback.jpg",
+                "resolution": [1200, 1800],
+                "attribution": {
+                    "required": True,
+                    "text": "Photo by Example",
+                    "license": "Pexels License",
+                },
+                "metadata": {"search_query": query, "alt": "A sci-fi robot in a workshop"},
+            }
+        ]
+
+    monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(
+            output_dir=tmp_path,
+            image_sources=("future_source", "pexels"),
+            min_candidates_per_segment=1,
+            max_candidates_per_segment=3,
+            max_queries_per_segment=1,
+        )
+    )
+
+    manifest = agent.generate_script_image_manifest(sample_script_package)
+    first_segment = manifest["segments"][0]
+
+    assert first_segment["candidate_count"] >= 1
+    notes = first_segment["retrieval_notes"]
+    assert notes["configured_sources"] == ["future_source", "pexels"]
+    assert "future_source" in notes["sources_attempted"]
+    assert "pexels" in notes["sources_attempted"]
+    assert notes["candidate_sources"] == ["pexels"]
+    assert notes["source_fallback_strategy"] == "ordered_provider_chain"
+    assert notes["source_fallback_used"] is True
+    assert any("future_source" in error and "not implemented" in error for error in notes["provider_errors"])
