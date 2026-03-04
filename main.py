@@ -489,6 +489,35 @@ def main():
             out_path = run_dir / "final_video.json"
             write_json(out_path, final_video)
             print(f"\n✅ Wrote FinalVideo: {out_path}")
+        elif mode == "scriptimages":
+            if len(sys.argv) < 3:
+                print("\n❌ Usage: python main.py scriptimages <path-to-script_package.json>")
+                sys.exit(2)
+
+            script_package_path = Path(sys.argv[2]).expanduser().resolve()
+            if not script_package_path.exists():
+                print(f"\n❌ ScriptPackage not found: {script_package_path}")
+                sys.exit(2)
+
+            script_package = json.loads(script_package_path.read_text(encoding="utf-8"))
+            run_id = new_run_id(
+                "sim",
+                f"{script_package.get('topic_id','topic')}_{script_package.get('subtopic_id','sub')}",
+            )
+            run_dir = ensure_run_dir(RESULTS_DIR, run_id)
+
+            agent = create_script_image_agent(
+                ScriptImageConfig(
+                    output_dir=run_dir,
+                    min_candidates_per_segment=1,
+                    max_candidates_per_segment=5,
+                )
+            )
+            manifest = agent.generate_script_image_manifest(script_package=script_package)
+
+            out_path = run_dir / "script_image_manifest.json"
+            write_json(out_path, manifest)
+            print(f"\n✅ Wrote ScriptImageManifest: {out_path}")
         else:
             print(f"\n❌ Unknown mode: {mode}")
             print_usage()
@@ -511,6 +540,7 @@ def print_usage():
     print("  python main.py visualmanifest <video_plan.json> - Create VisualManifest")
     print("  python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json> - Create RenderSpec")
     print("  python main.py render <render_spec.json> [ffmpeg|dry_run] - Render final video")
+    print("  python main.py scriptimages <script_package.json> - Create ScriptImageManifest (artifact-only)")
     print("  python main.py mvp <topicbrief.json> [creative_spec.json] [ffmpeg|dry_run] - End-to-end MVP")
     print("  python main.py mvp_offline <topicbrief.json> [creative_spec.json] [ffmpeg|dry_run] - End-to-end offline MVP")
     print("\nOr import and use programmatically:")
