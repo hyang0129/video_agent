@@ -150,3 +150,60 @@ def test_world_war_tanks_fixture_queries_are_tank_focused(
     assert manifest["total_segments"] == 7
     assert all(segment["candidate_count"] >= 1 for segment in manifest["segments"])
     assert all("tank" in (segment["queries"][0].lower()) for segment in manifest["segments"])
+
+
+def test_candidates_reranked_by_alt_relevance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script_package = {
+        "script_package_id": "sg_rank_test",
+        "topic_id": "world_war_1_tanks",
+        "subtopic_id": "facts",
+        "script": {
+            "beats": [
+                {
+                    "t_start_s": 0.0,
+                    "t_end_s": 4.0,
+                    "on_screen_text": "Fact 1",
+                    "vo_line": "The British Mark I was one of the first combat tanks.",
+                }
+            ]
+        },
+    }
+
+    def _fake_search(query: str, per_page: int, orientation: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                "source": "pexels",
+                "url": "https://images.example/weak.jpg",
+                "resolution": [4000, 5000],
+                "attribution": {"required": True, "text": "weak", "license": "Pexels License"},
+                "metadata": {"search_query": query, "alt": "Unknown soldier grave marker from World War I"},
+            },
+            {
+                "source": "pexels",
+                "url": "https://images.example/strong.jpg",
+                "resolution": [1000, 1200],
+                "attribution": {"required": True, "text": "strong", "license": "Pexels License"},
+                "metadata": {"search_query": query, "alt": "Vintage British Mark I tank in military museum"},
+            },
+        ]
+
+    monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(
+            output_dir=tmp_path,
+            min_candidates_per_segment=1,
+            max_candidates_per_segment=5,
+            max_queries_per_segment=1,
+        )
+    )
+
+    manifest = agent.generate_script_image_manifest(script_package)
+    segment = manifest["segments"][0]
+
+    assert segment["candidates"][0]["url"] == "https://images.example/strong.jpg"
+    assert "relevance" in segment["candidates"][0]["metadata"]
+    assert segment["retrieval_notes"]["reranked_by_alt_relevance"] is True

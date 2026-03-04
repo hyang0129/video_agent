@@ -232,7 +232,9 @@ class CompositionAgent:
             if not scene_id:
                 continue
 
-            text = str(scene.get("on_screen_text") or "").strip()
+            text = str(scene.get("vo_line") or "").strip()
+            if not text:
+                text = str(scene.get("on_screen_text") or "").strip()
             if not text:
                 continue
 
@@ -240,9 +242,8 @@ class CompositionAgent:
             if t_end <= t_start:
                 continue
 
-            # Give a small lead-in/out for readability.
-            start = min(t_end, t_start + 0.5)
-            end = max(start, t_end - 0.25)
+            start = t_start
+            end = t_end
 
             elements.append(
                 {

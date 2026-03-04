@@ -24,6 +24,41 @@ from .config import RESULTS_DIR
 from .tools.image_search_tools import ImageSearchError, search_pexels_images
 
 
+_RELEVANCE_STOPWORDS = {
+    "the",
+    "and",
+    "with",
+    "that",
+    "this",
+    "from",
+    "have",
+    "were",
+    "when",
+    "where",
+    "what",
+    "which",
+    "into",
+    "about",
+    "your",
+    "their",
+    "they",
+    "them",
+    "there",
+    "here",
+    "would",
+    "could",
+    "should",
+    "might",
+    "fact",
+    "facts",
+    "hook",
+    "follow",
+    "more",
+    "know",
+    "think",
+}
+
+
 def _utc_now_iso() -> str:
     """Return current UTC timestamp in ISO-8601 `Z` format."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -73,6 +108,19 @@ def _topic_anchor(topic_hint: str) -> str:
     anchor = re.sub(r"\b(fact|facts|did you know|shorts?)\b", "", anchor, flags=re.IGNORECASE)
     anchor = re.sub(r"\s+", " ", anchor).strip()
     return anchor
+
+
+def _tokenize_relevance(text: str) -> List[str]:
+    """Tokenize text for lightweight relevance scoring.
+
+    Args:
+        text: Input text.
+
+    Returns:
+        Normalized keyword token list.
+    """
+    tokens = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    return [token for token in tokens if len(token) > 2 and token not in _RELEVANCE_STOPWORDS]
 
 
 def _extract_focus_terms(text: str, max_terms: int = 3) -> List[str]:
@@ -382,6 +430,18 @@ class ScriptImageRetrievalAgent:
 
         min_candidates = max(0, int(self.config.min_candidates_per_segment))
         max_candidates = max(1, int(self.config.max_candidates_per_segment))
+        object_terms = _extract_focus_terms(
+            text=f"{str(beat.get('vo_line') or '')} {segment_context}",
+            max_terms=5,
+        )
+        candidates = self._rerank_candidates(
+            candidates=candidates,
+            beat=beat,
+            queries=queries,
+            topic_hint=topic_hint,
+            segment_context=segment_context,
+            object_terms=object_terms,
+        )
         candidates = candidates[:max_candidates]
 
         return {
@@ -403,8 +463,163 @@ class ScriptImageRetrievalAgent:
                 "sources_attempted": list(dict.fromkeys(sources_attempted)),
                 "provider_errors": provider_errors,
                 "segment_context": segment_context,
+                "reranked_by_alt_relevance": True,
             },
         }
+
+    def _rerank_candidates(
+        self,
+        candidates: List[Dict[str, Any]],
+        beat: Dict[str, Any],
+        queries: List[str],
+        topic_hint: str,
+        segment_context: str,
+        object_terms: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Rerank candidates using alt text relevance to script context.
+
+        Args:
+            candidates: Raw candidate list.
+            beat: Current script beat.
+            queries: Search queries used for retrieval.
+            topic_hint: Topic-level hint.
+            segment_context: Optional segment context.
+            object_terms: Focus terms extracted from beat and context.
+
+        Returns:
+            Reranked candidate list (highest relevance first).
+        """
+        if not candidates:
+            return []
+
+        beat_text = _normalize_phrase(
+            f"{str(beat.get('on_screen_text') or '')} {str(beat.get('vo_line') or '')}"
+        )
+        topic_anchor = _topic_anchor(topic_hint)
+
+        scored: List[Dict[str, Any]] = []
+        for index, candidate in enumerate(candidates):
+            score_payload = self._score_candidate_alt_relevance(
+                candidate=candidate,
+                beat_text=beat_text,
+                queries=queries,
+                topic_anchor=topic_anchor,
+                segment_context=segment_context,
+                object_terms=object_terms,
+            )
+
+            updated = dict(candidate)
+            metadata = dict(updated.get("metadata") or {})
+            metadata["relevance"] = score_payload
+            updated["metadata"] = metadata
+
+            # preserve deterministic fallback order on ties by original index
+            updated["_rank_score"] = float(score_payload.get("score", 0.0))
+            updated["_rank_index"] = index
+            scored.append(updated)
+
+        scored.sort(
+            key=lambda item: (
+                float(item.get("_rank_score", 0.0)),
+                self._candidate_resolution_area(item),
+                -int(item.get("_rank_index", 0)),
+            ),
+            reverse=True,
+        )
+
+        cleaned: List[Dict[str, Any]] = []
+        for item in scored:
+            item.pop("_rank_score", None)
+            item.pop("_rank_index", None)
+            cleaned.append(item)
+
+        return cleaned
+
+    def _score_candidate_alt_relevance(
+        self,
+        candidate: Dict[str, Any],
+        beat_text: str,
+        queries: List[str],
+        topic_anchor: str,
+        segment_context: str,
+        object_terms: List[str],
+    ) -> Dict[str, Any]:
+        """Score one candidate using its alt text against script/query context.
+
+        Args:
+            candidate: Candidate entry.
+            beat_text: Current beat text content.
+            queries: Search queries used.
+            topic_anchor: Topic anchor phrase.
+            segment_context: Segment detail text.
+            object_terms: Focus terms for entities/objects.
+
+        Returns:
+            Relevance metadata including score, matches, and penalties.
+        """
+        metadata = candidate.get("metadata") or {}
+        alt_raw = _normalize_phrase(str(metadata.get("alt") or ""))
+        alt_lower = alt_raw.lower()
+
+        baseline_tokens = set(
+            _tokenize_relevance(
+                f"{beat_text} {' '.join(queries)} {topic_anchor} {segment_context}"
+            )
+        )
+        alt_tokens = set(_tokenize_relevance(alt_raw))
+
+        overlap = sorted(token for token in baseline_tokens.intersection(alt_tokens))
+        score = float(len(overlap)) * 1.5
+        script_lower = f"{beat_text} {segment_context} {topic_anchor}".lower()
+
+        bonuses: List[str] = []
+        if "tank" in script_lower and "tank" in alt_lower:
+            score += 3.0
+            bonuses.append("primary_object_tank_matched")
+
+        phrase_matches: List[str] = []
+        generic_phrases = {"world", "war", "tank", "tanks", "fact", "facts"}
+        for phrase in object_terms:
+            clean_phrase = _normalize_phrase(phrase).lower()
+            if not clean_phrase or clean_phrase in generic_phrases:
+                continue
+            if clean_phrase in alt_lower:
+                score += 2.5
+                phrase_matches.append(clean_phrase)
+
+        penalties: List[str] = []
+        if "world war 1" in script_lower and ("world war ii" in alt_lower or "wwii" in alt_lower):
+            score -= 4.0
+            penalties.append("era_conflict_ww1_vs_ww2")
+
+        if "tank" in script_lower and "tank" not in alt_lower:
+            score -= 1.5
+            penalties.append("missing_primary_object_tank")
+
+        return {
+            "score": round(score, 3),
+            "alt_text": alt_raw,
+            "token_overlap": overlap,
+            "phrase_matches": phrase_matches,
+            "bonuses": bonuses,
+            "penalties": penalties,
+        }
+
+    def _candidate_resolution_area(self, candidate: Dict[str, Any]) -> int:
+        """Get candidate pixel area for deterministic tie-breaking.
+
+        Args:
+            candidate: Candidate dictionary.
+
+        Returns:
+            Resolution area (width * height), or 0.
+        """
+        resolution = candidate.get("resolution")
+        if not isinstance(resolution, list) or len(resolution) != 2:
+            return 0
+        width = int(resolution[0]) if isinstance(resolution[0], int) else 0
+        height = int(resolution[1]) if isinstance(resolution[1], int) else 0
+        return max(0, width * height)
 
     def _segment_context_for_beat(self, script: Dict[str, Any], beat: Dict[str, Any]) -> str:
         """Derive optional segment context for a beat.
