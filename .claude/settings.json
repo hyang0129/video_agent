@@ -14,7 +14,12 @@
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
-      "Bash(git add*)"
+      "Bash(git add*)",
+      "Bash(find*)",
+      "Bash(grep*)",
+      "Bash(rm*)",
+      "Bash(pytest*)",
+      "Bash(venv/Scripts/pytest*)"
     ]
   }
 }
