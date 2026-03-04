@@ -195,6 +195,10 @@ def _build_fact_grounded_beats_from_facts(
     else:
         hook_tail = f"Here are surprising {safe_subtopic} facts."
 
+    cta_subject = safe_subtopic if "fact" in safe_subtopic.lower() else f"{safe_subtopic} facts"
+    if cta_subject.strip().lower() == "facts":
+        cta_subject = f"{safe_topic} facts"
+
     draft_beats: List[Dict[str, Any]] = [
         {
             "on_screen_text": "Hook",
@@ -218,7 +222,7 @@ def _build_fact_grounded_beats_from_facts(
     draft_beats.append(
         {
             "on_screen_text": "Follow for more",
-            "vo_line": "Which fact surprised you most? Follow for more Star Wars facts.",
+            "vo_line": f"Which fact surprised you most? Follow for more {cta_subject}.",
         }
     )
 

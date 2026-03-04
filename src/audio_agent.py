@@ -45,6 +45,72 @@ class AudioGenerationError(Exception):
     pass
 
 
+def _probe_audio_duration_seconds(audio_path: Path) -> Optional[float]:
+    """Probe audio file duration with ffprobe when available.
+
+    Args:
+        audio_path: Path to an audio file.
+
+    Returns:
+        Duration in seconds when detectable, else None.
+    """
+    path = Path(audio_path)
+    if not path.exists() or path.stat().st_size <= 0:
+        return None
+
+    ffprobe_path = shutil.which("ffprobe")
+    if not ffprobe_path:
+        return None
+
+    cmd = [
+        ffprobe_path,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+
+    raw = (proc.stdout or "").strip()
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+
+    if value <= 0:
+        return None
+    return value
+
+
+def _resolve_segment_duration_seconds(
+    audio_path: Path,
+    metadata: Dict[str, Any],
+    fallback_duration_s: float,
+) -> float:
+    """Resolve best-available segment duration for timeline alignment.
+
+    Priority:
+    1) ffprobe measured duration
+    2) metadata.estimated_duration_s
+    3) fallback planned scene duration
+    """
+    probed = _probe_audio_duration_seconds(audio_path=audio_path)
+    if isinstance(probed, (int, float)) and float(probed) > 0:
+        return float(probed)
+
+    estimated = metadata.get("estimated_duration_s") if isinstance(metadata, dict) else None
+    if isinstance(estimated, (int, float)) and float(estimated) > 0:
+        return float(estimated)
+
+    return max(0.0, float(fallback_duration_s))
+
+
 class AudioGenerationAgent:
     """Agent for generating audio timeline from video plan.
     
@@ -154,7 +220,7 @@ class AudioGenerationAgent:
         
         # Generate voiceover tracks
         tracks = []
-        total_duration = 0.0
+        current_time_s = 0.0
         
         for scene in scenes:
             vo_line = scene.get("vo_line", "").strip()
@@ -162,9 +228,9 @@ class AudioGenerationAgent:
                 continue
             
             scene_id = scene.get("scene_id", "unknown")
-            t_start = float(scene.get("t_start_s", 0))
-            t_end = float(scene.get("t_end_s", 0))
-            scene_duration = t_end - t_start
+            planned_start = float(scene.get("t_start_s", 0))
+            planned_end = float(scene.get("t_end_s", 0))
+            scene_duration = planned_end - planned_start
             
             if scene_duration <= 0:
                 continue
@@ -185,19 +251,30 @@ class AudioGenerationAgent:
                         voice_id=voice_id,
                         output_path=segment_path,
                     )
+
+                actual_duration_s = _resolve_segment_duration_seconds(
+                    audio_path=audio_path,
+                    metadata=metadata,
+                    fallback_duration_s=scene_duration,
+                )
+                track_start_s = round(current_time_s, 3)
+                track_end_s = round(current_time_s + actual_duration_s, 3)
                 
                 # Add track to timeline
                 tracks.append({
                     "type": "voiceover",
                     "file": str(audio_path.relative_to(self.output_dir)),
                     "scene_id": scene_id,
-                    "t_start_s": t_start,
-                    "t_end_s": t_end,
+                    "t_start_s": track_start_s,
+                    "t_end_s": track_end_s,
                     "volume_db": 0,
-                    "metadata": metadata,
+                    "metadata": {
+                        **metadata,
+                        "planned_scene_duration_s": round(scene_duration, 3),
+                        "timeline_duration_s": round(actual_duration_s, 3),
+                    },
                 })
-                
-                total_duration = max(total_duration, t_end)
+                current_time_s = track_end_s
             
             except TTSError as e:
                 raise AudioGenerationError(
@@ -213,7 +290,7 @@ class AudioGenerationAgent:
                 "type": "music",
                 "file": str(DEFAULT_MUSIC_PATH.relative_to(RESULTS_DIR.parent)),
                 "t_start_s": 0.0,
-                "t_end_s": total_duration,
+                "t_end_s": round(current_time_s, 3),
                 "volume_db": self.music_volume_db,
                 "metadata": {
                     "comment": "Placeholder track: Creative Commons licensed",
@@ -239,7 +316,7 @@ class AudioGenerationAgent:
             "audio_timeline_id": timeline_id,
             "video_plan_ref": video_plan.get("video_plan_id", "unknown"),
             "audio_file_path": master_audio_relpath,
-            "duration_seconds": round(total_duration, 2),
+            "duration_seconds": round(current_time_s, 2),
             "voice_id": voice_id,
             "tracks": tracks,
             "processing_notes": [

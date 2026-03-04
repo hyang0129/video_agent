@@ -1,0 +1,115 @@
+{
+  "script": {
+    "segments": [
+      {
+        "segment_id": 1,
+        "visual_description": "A vintage black and white clip of a British Mark I tank rolling across a field.",
+        "audio_narration": "Did you know that the British Mark I, introduced in 1916, is widely regarded as the world's very first combat tank?",
+        "fact_ids": [
+          "fact_74bc350120f9"
+        ],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 2,
+        "visual_description": "Close up of tank tracks crushing barbed wire and moving over a wide trench.",
+        "audio_narration": "These early tanks were specifically designed to cross trenches and crush the barbed wire that had stalled infantry assaults for years.",
+        "fact_ids": [
+          "fact_b08382ccb3ce"
+        ],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 3,
+        "visual_description": "Illustration or archival footage showing smoke and cramped conditions inside a steel hull.",
+        "audio_narration": "But it was a nightmare inside. Crews struggled with constant mechanical failures, blistering heat, and even toxic fumes.",
+        "fact_ids": [
+          "fact_820e92b1b215"
+        ],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 4,
+        "visual_description": "A wide shot of multiple tanks advancing across a battlefield during the Battle of Cambrai.",
+        "audio_narration": "At the Battle of Cambrai in 1917, large-scale tank use finally demonstrated the power of armored breakthrough tactics.",
+        "fact_ids": [
+          "fact_2d3d2b07c672"
+        ],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 5,
+        "visual_description": "A French Renault FT tank showcasing its rotating turret, transitioning to a modern tank silhouette.",
+        "audio_narration": "Finally, the French Renault FT revolutionized design by popularizing the rotating-turret layout used in almost every tank since!",
+        "fact_ids": [
+          "fact_b7f7a2fc89e7"
+        ],
+        "duration_seconds": 7
+      }
+    ],
+    "beats": [
+      {
+        "t_start_s": 0.0,
+        "t_end_s": 4.32,
+        "on_screen_text": "Hook",
+        "vo_line": "Think you know world war 1 tanks? Here are surprising facts."
+      },
+      {
+        "t_start_s": 4.32,
+        "t_end_s": 9.31,
+        "on_screen_text": "Fact 1",
+        "vo_line": "Early tanks were designed to cross trenches and barbed wire that stalled infantry assaults."
+      },
+      {
+        "t_start_s": 9.31,
+        "t_end_s": 14.4,
+        "on_screen_text": "Fact 2",
+        "vo_line": "WW1 tanks often struggled with mechanical reliability, heat, and toxic fumes inside the hull."
+      },
+      {
+        "t_start_s": 14.4,
+        "t_end_s": 18.9,
+        "on_screen_text": "Fact 3",
+        "vo_line": "At Cambrai in 1917, large-scale tank use helped demonstrate armored breakthrough tactics."
+      },
+      {
+        "t_start_s": 18.9,
+        "t_end_s": 23.96,
+        "on_screen_text": "Fact 4",
+        "vo_line": "The French Renault FT popularized the rotating-turret layout seen in many later tanks."
+      },
+      {
+        "t_start_s": 23.96,
+        "t_end_s": 29.9,
+        "on_screen_text": "Fact 5",
+        "vo_line": "The British Mark I, introduced in 1916, is widely regarded as the first combat tank."
+      },
+      {
+        "t_start_s": 29.9,
+        "t_end_s": 35.0,
+        "on_screen_text": "Follow for more",
+        "vo_line": "Which fact surprised you most? Follow for more world war 1 tanks facts."
+      }
+    ],
+    "voiceover": "Think you know world war 1 tanks? Here are surprising facts. Early tanks were designed to cross trenches and barbed wire that stalled infantry assaults. WW1 tanks often struggled with mechanical reliability, heat, and toxic fumes inside the hull. At Cambrai in 1917, large-scale tank use helped demonstrate armored breakthrough tactics. The French Renault FT popularized the rotating-turret layout seen in many later tanks. The British Mark I, introduced in 1916, is widely regarded as the first combat tank. Which fact surprised you most? Follow for more world war 1 tanks facts."
+  },
+  "metadata": {
+    "topic_id": "world_war_1_tanks",
+    "subtopic_id": "facts",
+    "total_duration_seconds": 35,
+    "tone": "energetic, authoritative",
+    "format": "Did You Know"
+  },
+  "script_package_id": "sg_c2a1f65b8e4743d08485300fc94200bd",
+  "schema_version": "1.0.0",
+  "created_at": "2026-02-26T17:50:13.440033Z",
+  "topic_id": "world_war_1_tanks",
+  "subtopic_id": "facts",
+  "fact_sources": [
+    "fact_b08382ccb3ce",
+    "fact_820e92b1b215",
+    "fact_2d3d2b07c672",
+    "fact_b7f7a2fc89e7",
+    "fact_74bc350120f9"
+  ]
+}
