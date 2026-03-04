@@ -58,6 +58,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 - Use ElevenLabs TTS for voiceover; respect free-tier limits (10k chars/month).
 - Use Pexels for image retrieval; placeholder BMPs when Pexels is unavailable.
 - Follow the Human Review Protocol for every change that affects media output — see below.
+- Follow the Integration Testing Guide when writing or running tests — see `docs/integration-testing.md`.
 
 ### Don't
 - Don't use cloud rendering services (Shotstack, etc.) — avoids cost and vendor lock-in.
@@ -99,6 +100,22 @@ Target format: faceless, caption-first, voiceover-narrated, 9:16 vertical, 15–
 | `results/metrics_summary.json` | Rolling pipeline metrics (output count, runtimes) |
 | `ROADMAP.md` | Canonical priority and task tracking — check before starting any work |
 | `docs/` | Architecture and design documentation |
+
+---
+
+## Integration Testing
+
+The pipeline has 9 independently-testable stages. See **[docs/integration-testing.md](docs/integration-testing.md)** for the full guide including:
+- Which test command to run for each changed component
+- API key requirements per stage
+- Fixture files and when to update them
+- Test isolation guarantees
+
+**Key rules:**
+- Run only the stage(s) affected by your change, not the full suite (unless the full suite is warranted).
+- Stages 4–9 can run offline using cached fixtures in `tests/fixtures/`.
+- Canonical test fixture: WW2 Tanks setting (`tests/fixtures/script_package_ww2_tanks.json`).
+- Output lands in `results/test/stages/<stage>_<timestamp>/` for human review.
 
 ---
 

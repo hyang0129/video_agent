@@ -1,0 +1,21 @@
+{
+  "topic_id": "world_war_2_tanks",
+  "subtopic_id": "facts",
+  "topic": {
+    "name": "World War 2 Tanks",
+    "positioning": "Surprising facts about iconic WW2 armored vehicles"
+  },
+  "subtopic": {
+    "name": "WW2 Tank Facts",
+    "query": "world war 2 tanks facts",
+    "angle": "Shocking engineering decisions and battlefield realities"
+  },
+  "format": {
+    "primary": "Did You Know",
+    "target_duration_seconds": 35
+  },
+  "script_constraints": {
+    "tone": "energetic, authoritative",
+    "claims_policy": "Use only verified facts from database"
+  }
+}

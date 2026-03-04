@@ -527,6 +527,7 @@ winget install ImageMagick.ImageMagick
 - **Render success rate:** 95%+ first attempt
 - **Uptime:** 99.9% (no blocking bugs)
 - **Test coverage:** 80%+ (pytest)
+- **Integration tests:** follow [docs/integration-testing.md](docs/integration-testing.md) — run only the affected stage(s), not the full suite, unless a cross-stage change warrants it
 
 ---
 
@@ -550,6 +551,7 @@ winget install ImageMagick.ImageMagick
 
 ## References
 
+- [integration-testing.md](docs/integration-testing.md) - **Integration testing guide** — which tests to run per changed component, fixture management, API key requirements
 - [visual-composition-agents.md](docs/visual-composition-agents.md) - Detailed agent specs
 - [audio-agent.md](docs/audio-agent.md) - Audio pipeline architecture
 - [pipeline-integration.md](docs/pipeline-integration.md) - End-to-end flow

@@ -1,0 +1,105 @@
+{
+  "script": {
+    "segments": [
+      {
+        "segment_id": 1,
+        "visual_description": "Archival footage of a German Tiger I tank advancing through a European battlefield.",
+        "audio_narration": "Did you know Allied soldiers called any enemy tank a Tiger — regardless of its actual type — because the Tiger I was so feared?",
+        "fact_ids": ["fact_ww2t_001"],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 2,
+        "visual_description": "Wide shot of Sherman tanks rolling off an American factory assembly line.",
+        "audio_narration": "The American M4 Sherman was produced over 49,000 times — winning through sheer quantity over German armor quality.",
+        "fact_ids": ["fact_ww2t_002"],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 3,
+        "visual_description": "Soviet T-34 tanks charging across open steppe terrain in a massive formation.",
+        "audio_narration": "The Soviet T-34 shocked German engineers so much they considered copying its sloped armor for their own future tank designs.",
+        "fact_ids": ["fact_ww2t_003"],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 4,
+        "visual_description": "The massive Panzer VIII Maus prototype in a museum, dwarfing nearby vehicles.",
+        "audio_narration": "Germany's Panzer VIII Maus weighed 188 tonnes — so heavy it could only cross rivers by driving along the submerged riverbed.",
+        "fact_ids": ["fact_ww2t_004"],
+        "duration_seconds": 7
+      },
+      {
+        "segment_id": 5,
+        "visual_description": "British Churchill tank variants equipped with flails and bridging attachments.",
+        "audio_narration": "Britain's Hobart's Funnies were Churchill variants that could flail mines, bridge gaps, and lay roads — revolutionizing assault engineering.",
+        "fact_ids": ["fact_ww2t_005"],
+        "duration_seconds": 7
+      }
+    ],
+    "beats": [
+      {
+        "t_start_s": 0.0,
+        "t_end_s": 4.32,
+        "on_screen_text": "Hook",
+        "vo_line": "Think you know WW2 tanks? These facts will surprise you."
+      },
+      {
+        "t_start_s": 4.32,
+        "t_end_s": 9.31,
+        "on_screen_text": "Fact 1",
+        "vo_line": "Allied soldiers called any enemy tank a Tiger — it was that feared."
+      },
+      {
+        "t_start_s": 9.31,
+        "t_end_s": 14.4,
+        "on_screen_text": "Fact 2",
+        "vo_line": "The Sherman was built 49,000 times — winning through quantity, not quality."
+      },
+      {
+        "t_start_s": 14.4,
+        "t_end_s": 18.9,
+        "on_screen_text": "Fact 3",
+        "vo_line": "The T-34's sloped armor stunned German engineers who wanted to copy it."
+      },
+      {
+        "t_start_s": 18.9,
+        "t_end_s": 23.96,
+        "on_screen_text": "Fact 4",
+        "vo_line": "The Maus weighed 188 tonnes and crossed rivers by driving underwater."
+      },
+      {
+        "t_start_s": 23.96,
+        "t_end_s": 29.9,
+        "on_screen_text": "Fact 5",
+        "vo_line": "Hobart's Funnies could flail mines, bridge gaps, and lay roads."
+      },
+      {
+        "t_start_s": 29.9,
+        "t_end_s": 35.0,
+        "on_screen_text": "Follow for more",
+        "vo_line": "Which fact surprised you most? Follow for more WW2 tank facts."
+      }
+    ],
+    "voiceover": "Think you know WW2 tanks? These facts will surprise you. Allied soldiers called any enemy tank a Tiger — it was that feared. The Sherman was built 49,000 times — winning through quantity, not quality. The T-34's sloped armor stunned German engineers who wanted to copy it. The Maus weighed 188 tonnes and crossed rivers by driving underwater. Hobart's Funnies could flail mines, bridge gaps, and lay roads. Which fact surprised you most? Follow for more WW2 tank facts."
+  },
+  "metadata": {
+    "topic_id": "world_war_2_tanks",
+    "subtopic_id": "facts",
+    "total_duration_seconds": 35,
+    "tone": "energetic, authoritative",
+    "format": "Did You Know"
+  },
+  "script_package_id": "sg_fixture_ww2_tanks",
+  "schema_version": "1.0.0",
+  "created_at": "2026-03-04T00:00:00.000000Z",
+  "topic_id": "world_war_2_tanks",
+  "subtopic_id": "facts",
+  "fact_sources": [
+    "fact_ww2t_001",
+    "fact_ww2t_002",
+    "fact_ww2t_003",
+    "fact_ww2t_004",
+    "fact_ww2t_005"
+  ]
+}
