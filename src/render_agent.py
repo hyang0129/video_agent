@@ -137,6 +137,21 @@ class FfmpegRenderEngine(RenderEngine):
                     if _is_usable_audio_file(candidate):
                         audio_inputs.append(candidate)
 
+        # Resolve music track (shared asset, path may be absolute).
+        music_path: Optional[Path] = None
+        music_volume_db: float = -18.0
+        for track in audio_tracks:
+            if not isinstance(track, dict) or track.get("type") != "music":
+                continue
+            src = str(track.get("source_file") or "").strip()
+            if not src:
+                continue
+            candidate = Path(src) if Path(src).is_absolute() else work_dir / src
+            if _is_usable_audio_file(candidate):
+                music_path = candidate
+                music_volume_db = float(track.get("volume_db") or -18.0)
+                break
+
         # Build ffmpeg inputs.
         cmd: List[str] = [ffmpeg_path, "-y", "-hide_banner"]
 
@@ -145,6 +160,10 @@ class FfmpegRenderEngine(RenderEngine):
 
         for a in audio_inputs:
             cmd.extend(["-i", str(a)])
+
+        if music_path is not None:
+            # -stream_loop -1 loops the music indefinitely; duration capped by amix later.
+            cmd.extend(["-stream_loop", "-1", "-i", str(music_path)])
 
         filter_parts: List[str] = []
 
@@ -192,6 +211,18 @@ class FfmpegRenderEngine(RenderEngine):
 
             filter_parts.append("".join(a_labels) + f"concat=n={len(a_labels)}:v=0:a=1[aout]")
             aout_label = "[aout]"
+
+        # Mix background music into voiceover if a music track is present.
+        if music_path is not None and aout_label:
+            music_idx = len(video_inputs) + len(audio_inputs)
+            vol_linear = 10 ** (music_volume_db / 20.0)
+            filter_parts.append(
+                f"[{music_idx}:a]aresample=44100,"
+                f"aformat=sample_fmts=s16:channel_layouts=stereo,"
+                f"volume={vol_linear:.4f}[amusic]"
+            )
+            filter_parts.append(f"[aout][amusic]amix=inputs=2:duration=first:normalize=0[amixed]")
+            aout_label = "[amixed]"
 
         filter_complex = ";".join(filter_parts)
         cmd.extend(["-filter_complex", filter_complex])

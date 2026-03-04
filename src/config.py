@@ -55,7 +55,7 @@ SCORING_WEIGHTS = {
 }
 
 # Video Production Settings
-DEFAULT_MUSIC_PATH = ASSETS_DIR / "default_music.mp3"
+DEFAULT_MUSIC_PATH = ASSETS_DIR / "music" / "default_music.mp3"
 VIDEO_FORMAT = "9:16"  # Instagram/TikTok vertical format
 VIDEO_RESOLUTION = (1080, 1920)  # Width x Height
 TARGET_DURATION_SECONDS = 45  # Default video length

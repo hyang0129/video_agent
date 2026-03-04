@@ -20,6 +20,7 @@ from src.audio_agent import create_audio_agent
 from src.visual_agent import create_visual_agent
 from src.composition_agent import create_composition_agent
 from src.render_agent import create_render_agent
+from src.music_agent import create_music_agent
 from src.script_image_agent import ScriptImageConfig, create_script_image_agent
 from src.artifacts.io import ensure_run_dir, new_run_id, write_json
 from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ELEVENLABS_API_KEY, RESULTS_DIR
@@ -355,29 +356,35 @@ def main():
             audio_timeline = audio_agent.generate_audio_timeline(video_plan)
             write_json(run_dir / "audio_timeline.json", audio_timeline)
 
-            # 4) Visual manifest + assets (uses placeholders if Pexels not configured)
+            # 4) Music selection
+            music_agent = create_music_agent()
+            music_selection = music_agent.select_music(audio_timeline)
+            write_json(run_dir / "music_selection.json", music_selection)
+
+            # 5) Visual manifest + assets (uses placeholders if Pexels not configured)
             visual_agent = create_visual_agent(output_dir=run_dir)
             visual_manifest = visual_agent.generate_visual_manifest(video_plan)
             write_json(run_dir / "visual_manifest.json", visual_manifest)
 
-            # 5) Render spec
+            # 6) Render spec
             comp_agent = create_composition_agent(output_dir=run_dir)
-            render_spec = comp_agent.create_render_specification(video_plan, audio_timeline, visual_manifest)
+            render_spec = comp_agent.create_render_specification(video_plan, audio_timeline, visual_manifest, music_selection)
             write_json(run_dir / "render_spec.json", render_spec)
 
-            # 6) Render
+            # 7) Render
             render_agent = create_render_agent(output_dir=run_dir, engine=engine)
             final_video = render_agent.render(render_spec)
             write_json(run_dir / "final_video.json", final_video)
 
             print(f"\n✅ MVP run complete: {run_dir}")
-            print(f"   - ScriptPackage: {run_dir / 'script_package.json'}")
-            print(f"   - VideoPlan: {run_dir / 'video_plan.json'}")
-            print(f"   - AudioTimeline: {run_dir / 'audio_timeline.json'}")
-            print(f"   - VisualManifest: {run_dir / 'visual_manifest.json'}")
-            print(f"   - RenderSpec: {run_dir / 'render_spec.json'}")
-            print(f"   - FinalVideo: {run_dir / 'final_video.json'}")
-            print(f"   - MP4: {run_dir / 'final_video.mp4'}")
+            print(f"   - ScriptPackage:   {run_dir / 'script_package.json'}")
+            print(f"   - VideoPlan:       {run_dir / 'video_plan.json'}")
+            print(f"   - AudioTimeline:   {run_dir / 'audio_timeline.json'}")
+            print(f"   - MusicSelection:  {run_dir / 'music_selection.json'}")
+            print(f"   - VisualManifest:  {run_dir / 'visual_manifest.json'}")
+            print(f"   - RenderSpec:      {run_dir / 'render_spec.json'}")
+            print(f"   - FinalVideo:      {run_dir / 'final_video.json'}")
+            print(f"   - MP4:             {run_dir / 'final_video.mp4'}")
         elif mode == "mvp_offline":
             if len(sys.argv) < 3:
                 print("\n❌ Usage: python main.py mvp_offline <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]")
@@ -418,17 +425,22 @@ def main():
             audio_timeline = audio_agent.generate_audio_timeline(video_plan)
             write_json(run_dir / "audio_timeline.json", audio_timeline)
 
-            # 4) Visual manifest + assets
+            # 4) Music selection
+            music_agent = create_music_agent()
+            music_selection = music_agent.select_music(audio_timeline)
+            write_json(run_dir / "music_selection.json", music_selection)
+
+            # 5) Visual manifest + assets
             visual_agent = create_visual_agent(output_dir=run_dir)
             visual_manifest = visual_agent.generate_visual_manifest(video_plan)
             write_json(run_dir / "visual_manifest.json", visual_manifest)
 
-            # 5) Render spec
+            # 6) Render spec
             comp_agent = create_composition_agent(output_dir=run_dir)
-            render_spec = comp_agent.create_render_specification(video_plan, audio_timeline, visual_manifest)
+            render_spec = comp_agent.create_render_specification(video_plan, audio_timeline, visual_manifest, music_selection)
             write_json(run_dir / "render_spec.json", render_spec)
 
-            # 6) Render
+            # 7) Render
             render_agent = create_render_agent(output_dir=run_dir, engine=engine)
             final_video = render_agent.render(render_spec)
             write_json(run_dir / "final_video.json", final_video)
@@ -436,6 +448,31 @@ def main():
             print(f"\n✅ Offline MVP run complete: {run_dir}")
             print(f"   - RenderSpec: {run_dir / 'render_spec.json'}")
             print(f"   - MP4: {run_dir / 'final_video.mp4'}")
+        elif mode == "music":
+            if len(sys.argv) < 3:
+                print("\n❌ Usage: python main.py music <path-to-audio_timeline.json>")
+                sys.exit(2)
+
+            audio_timeline_path = Path(sys.argv[2]).expanduser().resolve()
+            if not audio_timeline_path.exists():
+                print(f"\n❌ AudioTimeline not found: {audio_timeline_path}")
+                sys.exit(2)
+
+            audio_timeline = json.loads(audio_timeline_path.read_text(encoding="utf-8"))
+            out_dir = audio_timeline_path.parent
+
+            agent = create_music_agent()
+            music_selection = agent.select_music(audio_timeline)
+
+            out_path = out_dir / "music_selection.json"
+            write_json(out_path, music_selection)
+            print(f"\nWrote MusicSelection: {out_path}")
+            print(f"   Music file: {music_selection['music_file_path']}")
+            print(f"   Duration:   {music_selection.get('source_duration_s')}s source / {music_selection.get('target_duration_s')}s target")
+            print(f"\n--- Human Review: Default Music ---")
+            print(f"Listen to the default music track and confirm it is suitable:")
+            print(f"  {music_selection['music_file_path']}")
+            print(f"Replace assets/music/default_music.mp3 if a different track is preferred.")
         elif mode == "renderspec":
             if len(sys.argv) < 5:
                 print("\n❌ Usage: python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json>")
@@ -537,6 +574,7 @@ def print_usage():
     print("  python main.py videoplan <script_package.json> [creative_spec.json] - Create VideoPlan")
     print("  python main.py scriptimages <script_package.json> - Create ScriptImageManifest (artifact-only)")
     print("  python main.py audio <video_plan.json> [voice] - Generate AudioTimeline + voiceover segments")
+    print("  python main.py music <audio_timeline.json>      - Select background music (MusicSelection artifact)")
     print("  python main.py visualmanifest <video_plan.json> - Create VisualManifest")
     print("  python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json> - Create RenderSpec")
     print("  python main.py render <render_spec.json> [ffmpeg|dry_run] - Render final video")

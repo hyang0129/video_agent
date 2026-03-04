@@ -69,6 +69,7 @@ class CompositionAgent:
         video_plan: Dict[str, Any],
         audio_timeline: Dict[str, Any],
         visual_manifest: Dict[str, Any],
+        music_selection: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a RenderSpecification.
 
@@ -84,6 +85,8 @@ class CompositionAgent:
             CompositionError: If inputs are incompatible.
         """
         self._validate_inputs(video_plan=video_plan, audio_timeline=audio_timeline, visual_manifest=visual_manifest)
+        if music_selection is not None and not isinstance(music_selection, dict):
+            raise CompositionError("music_selection must be a dict or None")
 
         render_spec_id = f"rs_{uuid.uuid4().hex[:8]}"
 
@@ -128,7 +131,10 @@ class CompositionAgent:
                     "layer_id": "layer_audio",
                     "type": "audio",
                     "z_index": -1,
-                    "tracks": self._audio_tracks_from_timeline(audio_timeline=audio_timeline),
+                    "tracks": self._audio_tracks_from_timeline(
+                        audio_timeline=audio_timeline,
+                        music_selection=music_selection,
+                    ),
                 },
             ],
         }
@@ -269,7 +275,11 @@ class CompositionAgent:
 
         return elements
 
-    def _audio_tracks_from_timeline(self, audio_timeline: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _audio_tracks_from_timeline(
+        self,
+        audio_timeline: Dict[str, Any],
+        music_selection: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
         tracks = audio_timeline.get("tracks")
         if not isinstance(tracks, list):
             return []
@@ -305,6 +315,21 @@ class CompositionAgent:
             )
 
         output_tracks.append({"track_id": "track_vo", "type": "voiceover", "segments": voiceover_segments})
+
+        if isinstance(music_selection, dict):
+            music_file = str(music_selection.get("music_file_path") or "").strip()
+            if music_file:
+                output_tracks.append({
+                    "track_id": "track_music",
+                    "type": "music",
+                    "source_file": music_file,
+                    "volume_db": float(music_selection.get("volume_db") or -18.0),
+                    "loop": bool(music_selection.get("loop", True)),
+                    "t_start_s": 0.0,
+                    "t_end_s": float(audio_timeline.get("duration_seconds") or 0.0),
+                    "music_selection_id": music_selection.get("music_selection_id"),
+                })
+
         return output_tracks
 
     def _validate_inputs(self, video_plan: Dict[str, Any], audio_timeline: Dict[str, Any], visual_manifest: Dict[str, Any]) -> None:

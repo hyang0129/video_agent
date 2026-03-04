@@ -57,6 +57,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 - Choose the best LLM for each task at implementation time; no project-wide LLM preference.
 - Use ElevenLabs TTS for voiceover; respect free-tier limits (10k chars/month).
 - Use Pexels for image retrieval; placeholder BMPs when Pexels is unavailable.
+- Follow the Human Review Protocol for every change that affects media output — see below.
 
 ### Don't
 - Don't use cloud rendering services (Shotstack, etc.) — avoids cost and vendor lock-in.
@@ -66,6 +67,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 - Don't add docstrings, comments, or type annotations to code you didn't change.
 - Don't add features or refactor code beyond what is directly requested.
 - Don't introduce error handling for scenarios that can't happen; validate at system boundaries only.
+- Don't merge a media-affecting change without human sign-off on the relevant artifact.
 
 ---
 
@@ -97,6 +99,25 @@ Target format: faceless, caption-first, voiceover-narrated, 9:16 vertical, 15–
 | `results/metrics_summary.json` | Rolling pipeline metrics (output count, runtimes) |
 | `ROADMAP.md` | Canonical priority and task tracking — check before starting any work |
 | `docs/` | Architecture and design documentation |
+
+---
+
+## Human Review Protocol
+
+Human review is a **pre-merge gate**, not a step after every edit. Review the artifact
+closest to what changed — not the final video unless the final video stage itself changed:
+
+| Changed component | Artifact to review |
+|-------------------|--------------------|
+| Image fetching | fetched images |
+| Audio/TTS | MP3 segments |
+| Compositor / render | final video |
+
+When a change is ready for review:
+1. **Provide a single test command** scoped to the affected stage (not the full pipeline).
+2. **Preserve the previous output** in `results/baseline/` before regenerating, so old and new exist side by side. If none exists, note it.
+3. **Narrate the diff** — which files changed and what to look/listen for.
+4. **Wait for explicit sign-off** before marking done.
 
 ---
 
