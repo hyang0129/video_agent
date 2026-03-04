@@ -3,195 +3,75 @@
 \usepackage{hyperref}
 \usepackage{enumitem}
 
-\setlist[itemize]{leftmargin=*, itemsep=2pt, topsep=2pt}
+\setlist[itemize]{leftmargin=*, itemsep=3pt, topsep=3pt}
 
-\title{Unified Content Template: Experience \& Projects}
-\author{Template for Human/AI Content Drafting}
-\date{Last Updated: 2026-02-18}
+\title{Video Agent Repository: Multi-Agent Project Experience Summary}
+\author{Portfolio Narrative for Resume and Interviews}
+\date{Last Updated: 2026-03-04}
 
 \begin{document}
 
 \maketitle
 
-\section{Purpose}
-This single file is the canonical template for drafting detailed source content entries used to generate tailored resumes and cover letters.
-
-Use this template to write:\
-(1) work experience entries and\
-(2) project entries.\
-The output should be truthful, specific, and quantifiable.
-
-\section{How to Use This Template}
+\section{Project Snapshot}
 \begin{itemize}
-    \item Copy this file, rename it to match the target entry, and fill in placeholders in brackets.
-    \item Keep claims accurate and consistent with known background materials.
-    \item Prefer measurable impact (time saved, metric lift, error reduction, cost reduction, ranking, etc.).
-    \item For ML entries, use investigation-first narrative where possible: \textbf{Problem complexity $\rightarrow$ Investigation/Hypothesis $\rightarrow$ Experiment/Decision $\rightarrow$ Impact}.
-    \item Mention constraints explicitly (data scarcity, class imbalance, domain shift, latency/cost limits).
-    \item Hardware wording: use \textbf{A100 GPUs} by default; mention TPU only for Kaggle competition projects where TPU was actually used.
+    \item \textbf{Project:} Vibe Insta / Video Agent (Python, LangChain, Gemini, YouTube Data API, ElevenLabs, FFmpeg).
+    \item \textbf{Objective:} Build an end-to-end AI pipeline that discovers YouTube content opportunities and generates short-form vertical videos.
+    \item \textbf{Format target:} 9:16 videos, typically 30--60 seconds, with voiceover, subtitles, and scene visuals.
+    \item \textbf{Current maturity:} Functional MVP with documented production-readiness gaps and a prioritized roadmap.
 \end{itemize}
 
-\section{Expected Input Format (for AI filling this template)}
-Provide structured input before drafting content. Recommended fields:
-
-\subsection*{Global Metadata}
+\section{Multi-Agent Architecture Implemented}
 \begin{itemize}
-    \item \textbf{Name of entry:} [Required]
-    \item \textbf{Entry type:} [experience | project]
-    \item \textbf{One-line summary:} [Required]
-    \item \textbf{Priority for resume use:} [high | medium | low]
+    \item \textbf{MarketResearchAgent} (\texttt{src/agent.py}) analyzes long-form vs short-form demand/competition and exports structured \texttt{TopicBrief} artifacts.
+    \item \textbf{ScriptGenerationAgent} (\texttt{src/script\_agent.py}) generates fact-grounded scripts with beat-level timing and JSON validation/repair.
+    \item \textbf{VideoGenerationAgent} + planner (\texttt{src/video\_agent.py}, \texttt{src/video\_planner.py}) convert scripts into deterministic \texttt{VideoPlan} scene graphs.
+    \item \textbf{AudioGenerationAgent} (\texttt{src/audio\_agent.py}) produces scene-level TTS segments and \texttt{AudioTimeline} manifests, with master-track fallback logic.
+    \item \textbf{VisualAssetAgent} (\texttt{src/visual\_agent.py}) fetches/validates visuals and falls back to deterministic placeholders for offline-safe execution.
+    \item \textbf{CompositionAgent} (\texttt{src/composition\_agent.py}) synchronizes audio + visual layers and emits a renderer-agnostic \texttt{RenderSpecification}.
+    \item \textbf{RenderAgent} (\texttt{src/render\_agent.py}) executes FFmpeg or dry-run rendering and outputs final MP4 + metadata.
 \end{itemize}
 
-\subsection*{Evidence and Constraints}
+\section{Evidence of Multi-Agent Engineering Skills}
 \begin{itemize}
-    \item \textbf{Known facts:} [bullet list of verifiable facts]
-    \item \textbf{Unknowns/placeholders:} [items requiring follow-up]
-    \item \textbf{Numbers and metrics available:} [list all quantitative evidence]
-    \item \textbf{No-claim zones:} [areas where details are uncertain and must not be overstated]
+    \item \textbf{Contract-first orchestration:} Established explicit artifact handoffs (\texttt{TopicBrief} $\rightarrow$ \texttt{ScriptPackage} $\rightarrow$ \texttt{VideoPlan} $\rightarrow$ \texttt{AudioTimeline} $\rightarrow$ \texttt{VisualManifest} $\rightarrow$ \texttt{RenderSpecification} $\rightarrow$ \texttt{FinalVideo}).
+    \item \textbf{Determinism and recovery:} Added deterministic ID/path generation, structured validation, and fallback modes (offline script generation, silent audio, placeholder visuals) to keep the pipeline runnable under partial outages.
+    \item \textbf{Tool-augmented agents:} Combined LLM reasoning with external tools/services (YouTube API search, transcript extraction with cookie support, TTS generation, FFmpeg rendering) instead of pure prompt chaining.
+    \item \textbf{Stateful data grounding:} Integrated SQLite-backed \texttt{FactStore} + caption mining/cache so script generation can enforce fact-grounding constraints and avoid unsupported claims.
+    \item \textbf{Operational interfaces:} Built modular CLI entry points in \texttt{main.py} for stage-wise execution and full pipeline runs (\texttt{mvp}, \texttt{mvp\_offline}) to support debugging and staged deployment.
+    \item \textbf{Quality discipline:} Added targeted tests for core pipeline contracts (audio timeline generation, composition synchronization) and maintained roadmap-based gap tracking.
 \end{itemize}
 
-\section{Experience Entry Template}
-
-\subsection{Header}
+\section{Roadmap-Aligned Delivery and Technical Judgment}
+\subsection*{Completed / Validated}
 \begin{itemize}
-    \item \textbf{Company:} [Company Name]
-    \item \textbf{Title:} [Role Title]
-    \item \textbf{Dates:} [Month Year -- Month Year]
-    \item \textbf{Location:} [City/Remote]
-    \item \textbf{Team/Org:} [Team details, if known]
-    \item \textbf{Domain:} [e.g., CV inspection, NLP, BI]
+    \item Implemented text overlay rendering in FFmpeg via \texttt{drawtext} and validated on sample outputs.
+    \item Added audio master handoff path (\texttt{audio\_master} $\rightarrow$ composition master track $\rightarrow$ render preference).
+    \item Verified at least one generated MP4 includes a valid AAC audio stream using \texttt{ffprobe}.
 \end{itemize}
 
-\subsection{Company/Org Context}
-[2--4 sentences: What company does, what team mission was, why this work mattered.]
-
-\subsection{Role Scope and Ownership}
+\subsection*{Known Gaps (Explicitly Tracked)}
 \begin{itemize}
-    \item [What you owned end-to-end]
-    \item [Who you collaborated with]
-    \item [Decision scope: model/data/evaluation/deployment]
+    \item Full-duration audio continuity can still mismatch video length in some runs.
+    \item Background music mixing and LUFS normalization remain planned but incomplete.
+    \item Scene-to-image semantic relevance and advanced visual effects are still limited in Phase 1.
 \end{itemize}
 
-\subsection{Key Initiative 1: [Initiative Name]}
-\subsubsection*{Problem Statement}
-[Describe baseline state, pain point, target users, and success criteria.]
-
-\subsubsection*{Investigation and Hypothesis}
+\section{Resume-Ready Project Bullets (Multi-Agent Focus)}
 \begin{itemize}
-    \item [Failure analysis performed]
-    \item [Alternative approaches considered]
-    \item [Why selected direction was chosen]
+    \item Designed and implemented a 7-stage multi-agent video generation pipeline with contract-based JSON artifact handoffs from market research through final rendering.
+    \item Engineered deterministic, fault-tolerant orchestration with offline-safe fallbacks (silent TTS, placeholder visuals, dry-run rendering) to preserve end-to-end runnability.
+    \item Built fact-grounded script generation by integrating transcript mining, SQLite fact storage, and schema validation/repair logic for beat-level video scripts.
+    \item Developed an FFmpeg-backed rendering path that composes timed visuals, subtitles, and audio tracks into vertical short-form MP4 outputs.
+    \item Operationalized the system through modular CLI workflows for both stage-level execution and single-command MVP runs.
+    \item Managed delivery using a production-oriented roadmap that distinguishes validated capabilities from known quality and reliability gaps.
 \end{itemize}
 
-\subsubsection*{Technical Design}
+\section{Keyword Coverage for Applications}
 \begin{itemize}
-    \item \textbf{Task framing:} [classification/detection/ranking/etc.]
-    \item \textbf{Modeling approach:} [models, training strategy]
-    \item \textbf{Data strategy:} [labeling, sampling, augmentation, splits]
-    \item \textbf{Evaluation design:} [primary metrics and why]
-    \item \textbf{Infra/tools:} [PyTorch/TensorFlow, tracking, compute]
-\end{itemize}
-
-\subsubsection*{Results and Impact}
-\begin{itemize}
-    \item \textbf{Performance outcome:} [metric before $\rightarrow$ after]
-    \item \textbf{Business/operational impact:} [time/cost/quality impact]
-    \item \textbf{Deployment status:} [prototype | production | sunset + reason]
-\end{itemize}
-
-\subsubsection*{Challenges and Tradeoffs}
-\begin{itemize}
-    \item [Constraint + mitigation]
-    \item [Tradeoff accepted and rationale]
-\end{itemize}
-
-\subsection{Key Initiative 2: [Initiative Name] (Optional)}
-[Repeat the same structure as Initiative 1.]
-
-\subsection{Additional Contributions (Optional)}
-\begin{itemize}
-    \item [Mentorship, hiring, code quality, process improvements]
-    \item [Cross-functional influence or internal standards]
-\end{itemize}
-
-\subsection{Experience Summary for Resume Selection}
-\begin{itemize}
-    \item \textbf{Best bullets to extract:} [3--6 concise bullets]
-    \item \textbf{Best-fit role types:} [MLE, applied scientist, research engineer, etc.]
-    \item \textbf{When to de-prioritize:} [conditions where this entry is less relevant]
-\end{itemize}
-
-\section{Project Entry Template}
-
-\subsection{Header}
-\begin{itemize}
-    \item \textbf{Project name:} [Project/Competition Name]
-    \item \textbf{Type:} [Kaggle | research | side project | production prototype]
-    \item \textbf{Timeline:} [Month Year -- Month Year]
-    \item \textbf{Team setup:} [individual/team size]
-    \item \textbf{Link(s):} [repo, paper, competition URL]
-\end{itemize}
-
-\subsection{Problem and Scope}
-\begin{itemize}
-    \item \textbf{Objective:} [What the system must do]
-    \item \textbf{Scale:} [data size, classes, throughput, users]
-    \item \textbf{Main constraints:} [compute/data/latency/fairness/etc.]
-\end{itemize}
-
-\subsection{Approach}
-\begin{itemize}
-    \item \textbf{Baselines:} [what was tried first]
-    \item \textbf{Core method:} [final architecture + training approach]
-    \item \textbf{Data/evaluation strategy:} [splits, metrics, ablations]
-    \item \textbf{System implementation:} [pipeline, serving, optimization]
-\end{itemize}
-
-\subsection{Results}
-\begin{itemize}
-    \item \textbf{Primary outcomes:} [rank/metric/throughput gains]
-    \item \textbf{Comparative improvement:} [baseline $\rightarrow$ final]
-    \item \textbf{What did not work:} [failed ideas and lessons]
-\end{itemize}
-
-\subsection{Technical Stack}
-\begin{itemize}
-    \item \textbf{Languages:} [Python/SQL/etc.]
-    \item \textbf{Frameworks:} [PyTorch/TensorFlow/etc.]
-    \item \textbf{Infra:} [A100/cloud/local; TPU only if true for this project]
-    \item \textbf{Tooling:} [tracking/versioning/experiment management]
-\end{itemize}
-
-\subsection{Project Summary for Resume Selection}
-\begin{itemize}
-    \item \textbf{Top resume bullets:} [2--4 bullets]
-    \item \textbf{Role alignment:} [which job types this project supports]
-    \item \textbf{Key keyword coverage:} [CV/NLP/OOD/fairness/scaling/etc.]
-\end{itemize}
-
-\section{Writing Quality Checklist}
-Before finalizing, verify:
-\begin{itemize}
-    \item Every major claim has supporting evidence.
-    \item Numbers are concrete and internally consistent.
-    \item No over-claiming; uncertainty is marked explicitly.
-    \item Problem-method-impact flow is clear.
-    \item Content is reusable for selective resume extraction.
-\end{itemize}
-
-\section{Minimal Example Snippet (Format Reference)}
-\subsection*{Experience Initiative Example (short)}
-\begin{itemize}
-    \item \textbf{Problem:} Manual review volume was 500K images/season; baseline detector produced 60\% FPR@95.
-    \item \textbf{Investigation:} Error analysis showed localization quality was not the business bottleneck; false alarms were.
-    \item \textbf{Decision:} Reframed task to image-level classification, optimized for FPR@95, used CLIP fine-tuning with class-imbalance augmentation.
-    \item \textbf{Impact:} Reduced FPR@95 to 20\%, enabling 80\% auto-rejection of negatives and major review-time savings.
-\end{itemize}
-
-\subsection*{Project Result Example (short)}
-\begin{itemize}
-    \item \textbf{Outcome:} Ranked 30/542 in large-scale image retrieval challenge.
-    \item \textbf{System note:} Built scalable training pipeline for 100GB+ data with efficient mixed-precision training and retrieval indexing.
+    \item \textbf{Core:} Multi-agent systems, agent orchestration, LLM tool use, pipeline design, artifact contracts.
+    \item \textbf{ML/LLM:} LangChain, Gemini, prompt design, fact grounding, structured output validation.
+    \item \textbf{Systems:} Python, API integration, caching, SQLite, FFmpeg, reliability engineering, fallback design.
 \end{itemize}
 
 \end{document}
