@@ -409,6 +409,25 @@ See `docs/` folder for detailed documentation:
 - Try using gemini-1.5-flash instead of gemini-1.5-pro
 - Check you're within free tier limits
 
+## Coding Conventions
+
+**ASCII-only in print/logging output.** Emoji and non-ASCII characters cause
+`UnicodeEncodeError` on Windows terminals (CP1252 encoding). All `print()` and
+`logging` calls must use ASCII-only text. Use bracketed tags for status:
+
+| Situation | Tag |
+|-----------|-----|
+| Success | `[OK]` |
+| Error / failure | `[ERROR]` |
+| Warning / fallback | `[WARN]` |
+| Informational | `[INFO]` |
+| Skipped / not viable | `[SKIP]` |
+| Rate-limit wait | `[WAIT]` |
+| LLM call | `[LLM]` |
+| Debug output | `[debug]` |
+
+Non-ASCII is fine in comments, docstrings, and data strings (e.g., voiceover text).
+
 ## Contributing
 
 This is a personal project, but suggestions are welcome!

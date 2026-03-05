@@ -53,10 +53,10 @@ def test_image_retrieval_produces_visual_manifest(tmp_path: Path) -> None:
     )
     visual_manifest = visual_agent.generate_visual_manifest(video_plan=video_plan)
 
-    scenes = visual_manifest.get("scenes", [])
+    scenes = visual_manifest.get("assets", [])
     assert scenes, "No scenes in VisualManifest"
     for i, scene in enumerate(scenes):
-        assert scene.get("asset_path"), f"Scene {i} has no asset_path"
+        assert scene.get("file_path"), f"Scene {i} has no file_path"
 
     write_json(tmp_path / "visual_manifest.json", visual_manifest)
     review = copy_to_review(tmp_path, "06_image_retrieval")

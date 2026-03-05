@@ -39,7 +39,7 @@ def check_api_keys():
         missing.append("GOOGLE_API_KEY")
 
     if missing:
-        print("❌ Missing required API keys:")
+        print("[ERROR] Missing required API keys:")
         for key in missing:
             print(f"   - {key}")
         print("\nPlease:")
@@ -50,16 +50,16 @@ def check_api_keys():
         print("   Google (alternative): https://aistudio.google.com/app/apikey (FREE!)")
         sys.exit(1)
 
-    print(f"✅ API keys configured (LLM provider: {LLM_PROVIDER})")
+    print(f"[OK] API keys configured (LLM provider: {LLM_PROVIDER})")
 
 
 def check_tts_key():
     """Verify TTS API key is configured for audio generation."""
     if ELEVENLABS_API_KEY:
-        print("✅ ELEVENLABS_API_KEY configured")
+        print("[OK] ELEVENLABS_API_KEY configured")
         return
 
-    print("❌ Missing required API key: ELEVENLABS_API_KEY")
+    print("[ERROR] Missing required API key: ELEVENLABS_API_KEY")
     print("\nPlease:")
     print("1. Copy .env.example to .env")
     print("2. Add ELEVENLABS_API_KEY to .env")
@@ -93,7 +93,7 @@ def example_research_category():
     agent = create_agent()
 
     exported = agent.research_category_artifacts("science fiction")
-    print(f"\n✅ Exported artifacts to: {exported['run_dir']}")
+    print(f"\n[OK] Exported artifacts to: {exported['run_dir']}")
     print(f"Report: {exported['report_path']}")
     if exported.get("topic_brief_paths"):
         print("Topic briefs:")
@@ -143,7 +143,7 @@ def interactive_mode():
     
     while True:
         try:
-            query = input("\n🔍 Your query: ").strip()
+            query = input("\n[search] Your query: ").strip()
             
             if query.lower() in ['quit', 'exit', 'q']:
                 print("\nGoodbye!")
@@ -152,7 +152,7 @@ def interactive_mode():
             if not query:
                 continue
             
-            print("\n🤖 Agent working...\n")
+            print("\n[LLM] Agent working...\n")
             result = agent.chat(query)
             print(result)
             
@@ -160,7 +160,7 @@ def interactive_mode():
             print("\n\nGoodbye!")
             break
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            print(f"\n[ERROR] Error: {e}")
 
 
 def main():
@@ -193,12 +193,12 @@ def main():
             preflight()
         elif mode == "script":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py script <path-to-topicbrief.json>")
+                print("\n[ERROR] Usage: python main.py script <path-to-topicbrief.json>")
                 sys.exit(2)
 
             topic_brief_path = Path(sys.argv[2]).expanduser().resolve()
             if not topic_brief_path.exists():
-                print(f"\n❌ TopicBrief not found: {topic_brief_path}")
+                print(f"\n[ERROR] TopicBrief not found: {topic_brief_path}")
                 sys.exit(2)
 
             creative_spec_path = None
@@ -217,15 +217,15 @@ def main():
             run_dir = ensure_run_dir(RESULTS_DIR, run_id)
             out_path = run_dir / "script_package.json"
             write_json(out_path, script_package)
-            print(f"\n✅ Wrote ScriptPackage: {out_path}")
+            print(f"\n[OK] Wrote ScriptPackage: {out_path}")
         elif mode == "videoplan":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py videoplan <path-to-script_package.json>")
+                print("\n[ERROR] Usage: python main.py videoplan <path-to-script_package.json>")
                 sys.exit(2)
 
             script_package_path = Path(sys.argv[2]).expanduser().resolve()
             if not script_package_path.exists():
-                print(f"\n❌ ScriptPackage not found: {script_package_path}")
+                print(f"\n[ERROR] ScriptPackage not found: {script_package_path}")
                 sys.exit(2)
 
             creative_spec_path = None
@@ -241,15 +241,15 @@ def main():
             run_dir = ensure_run_dir(RESULTS_DIR, run_id)
             out_path = run_dir / "video_plan.json"
             write_json(out_path, video_plan)
-            print(f"\n✅ Wrote VideoPlan: {out_path}")
+            print(f"\n[OK] Wrote VideoPlan: {out_path}")
         elif mode == "visualmanifest":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py visualmanifest <path-to-video_plan.json>")
+                print("\n[ERROR] Usage: python main.py visualmanifest <path-to-video_plan.json>")
                 sys.exit(2)
 
             video_plan_path = Path(sys.argv[2]).expanduser().resolve()
             if not video_plan_path.exists():
-                print(f"\n❌ VideoPlan not found: {video_plan_path}")
+                print(f"\n[ERROR] VideoPlan not found: {video_plan_path}")
                 sys.exit(2)
 
             video_plan = json.loads(video_plan_path.read_text(encoding="utf-8"))
@@ -260,15 +260,15 @@ def main():
             visual_manifest = agent.generate_visual_manifest(video_plan)
             out_path = run_dir / "visual_manifest.json"
             write_json(out_path, visual_manifest)
-            print(f"\n✅ Wrote VisualManifest: {out_path}")
+            print(f"\n[OK] Wrote VisualManifest: {out_path}")
         elif mode == "scriptimages":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py scriptimages <path-to-script_package.json>")
+                print("\n[ERROR] Usage: python main.py scriptimages <path-to-script_package.json>")
                 sys.exit(2)
 
             script_package_path = Path(sys.argv[2]).expanduser().resolve()
             if not script_package_path.exists():
-                print(f"\n❌ ScriptPackage not found: {script_package_path}")
+                print(f"\n[ERROR] ScriptPackage not found: {script_package_path}")
                 sys.exit(2)
 
             script_package = json.loads(script_package_path.read_text(encoding="utf-8"))
@@ -289,15 +289,15 @@ def main():
 
             out_path = run_dir / "script_image_manifest.json"
             write_json(out_path, manifest)
-            print(f"\n✅ Wrote ScriptImageManifest: {out_path}")
+            print(f"\n[OK] Wrote ScriptImageManifest: {out_path}")
         elif mode == "audio":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py audio <path-to-video_plan.json> [voice]")
+                print("\n[ERROR] Usage: python main.py audio <path-to-video_plan.json> [voice]")
                 sys.exit(2)
 
             video_plan_path = Path(sys.argv[2]).expanduser().resolve()
             if not video_plan_path.exists():
-                print(f"\n❌ VideoPlan not found: {video_plan_path}")
+                print(f"\n[ERROR] VideoPlan not found: {video_plan_path}")
                 sys.exit(2)
 
             voice = "narrator"
@@ -316,16 +316,16 @@ def main():
 
             out_path = out_dir / "audio_timeline.json"
             write_json(out_path, audio_timeline)
-            print(f"\n✅ Wrote AudioTimeline: {out_path}")
+            print(f"\n[OK] Wrote AudioTimeline: {out_path}")
             print(f"   Segments: {out_dir / 'audio_segments'}")
         elif mode == "mvp":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py mvp <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]")
+                print("\n[ERROR] Usage: python main.py mvp <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]")
                 sys.exit(2)
 
             topic_brief_path = Path(sys.argv[2]).expanduser().resolve()
             if not topic_brief_path.exists():
-                print(f"\n❌ TopicBrief not found: {topic_brief_path}")
+                print(f"\n[ERROR] TopicBrief not found: {topic_brief_path}")
                 sys.exit(2)
 
             creative_spec_path = None
@@ -379,7 +379,7 @@ def main():
             final_video = render_agent.render(render_spec)
             write_json(run_dir / "final_video.json", final_video)
 
-            print(f"\n✅ MVP run complete: {run_dir}")
+            print(f"\n[OK] MVP run complete: {run_dir}")
             print(f"   - ScriptPackage:   {run_dir / 'script_package.json'}")
             print(f"   - VideoPlan:       {run_dir / 'video_plan.json'}")
             print(f"   - AudioTimeline:   {run_dir / 'audio_timeline.json'}")
@@ -390,12 +390,12 @@ def main():
             print(f"   - MP4:             {run_dir / 'final_video.mp4'}")
         elif mode == "mvp_offline":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py mvp_offline <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]")
+                print("\n[ERROR] Usage: python main.py mvp_offline <path-to-topicbrief.json> [creative_spec.json] [ffmpeg|dry_run]")
                 sys.exit(2)
 
             topic_brief_path = Path(sys.argv[2]).expanduser().resolve()
             if not topic_brief_path.exists():
-                print(f"\n❌ TopicBrief not found: {topic_brief_path}")
+                print(f"\n[ERROR] TopicBrief not found: {topic_brief_path}")
                 sys.exit(2)
 
             creative_spec_path = None
@@ -448,17 +448,17 @@ def main():
             final_video = render_agent.render(render_spec)
             write_json(run_dir / "final_video.json", final_video)
 
-            print(f"\n✅ Offline MVP run complete: {run_dir}")
+            print(f"\n[OK] Offline MVP run complete: {run_dir}")
             print(f"   - RenderSpec: {run_dir / 'render_spec.json'}")
             print(f"   - MP4: {run_dir / 'final_video.mp4'}")
         elif mode == "music":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py music <path-to-audio_timeline.json>")
+                print("\n[ERROR] Usage: python main.py music <path-to-audio_timeline.json>")
                 sys.exit(2)
 
             audio_timeline_path = Path(sys.argv[2]).expanduser().resolve()
             if not audio_timeline_path.exists():
-                print(f"\n❌ AudioTimeline not found: {audio_timeline_path}")
+                print(f"\n[ERROR] AudioTimeline not found: {audio_timeline_path}")
                 sys.exit(2)
 
             audio_timeline = json.loads(audio_timeline_path.read_text(encoding="utf-8"))
@@ -478,7 +478,7 @@ def main():
             print(f"Replace assets/music/default_music.mp3 if a different track is preferred.")
         elif mode == "renderspec":
             if len(sys.argv) < 5:
-                print("\n❌ Usage: python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json>")
+                print("\n[ERROR] Usage: python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json>")
                 sys.exit(2)
 
             video_plan_path = Path(sys.argv[2]).expanduser().resolve()
@@ -491,7 +491,7 @@ def main():
                 (visual_manifest_path, "VisualManifest"),
             ]:
                 if not p.exists():
-                    print(f"\n❌ {name} not found: {p}")
+                    print(f"\n[ERROR] {name} not found: {p}")
                     sys.exit(2)
 
             video_plan = json.loads(video_plan_path.read_text(encoding="utf-8"))
@@ -505,15 +505,15 @@ def main():
             render_spec = agent.create_render_specification(video_plan, audio_timeline, visual_manifest)
             out_path = run_dir / "render_spec.json"
             write_json(out_path, render_spec)
-            print(f"\n✅ Wrote RenderSpecification: {out_path}")
+            print(f"\n[OK] Wrote RenderSpecification: {out_path}")
         elif mode == "render":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py render <path-to-render_spec.json> [ffmpeg|dry_run]")
+                print("\n[ERROR] Usage: python main.py render <path-to-render_spec.json> [ffmpeg|dry_run]")
                 sys.exit(2)
 
             render_spec_path = Path(sys.argv[2]).expanduser().resolve()
             if not render_spec_path.exists():
-                print(f"\n❌ RenderSpecification not found: {render_spec_path}")
+                print(f"\n[ERROR] RenderSpecification not found: {render_spec_path}")
                 sys.exit(2)
 
             engine = "dry_run"
@@ -528,15 +528,15 @@ def main():
 
             out_path = run_dir / "final_video.json"
             write_json(out_path, final_video)
-            print(f"\n✅ Wrote FinalVideo: {out_path}")
+            print(f"\n[OK] Wrote FinalVideo: {out_path}")
         elif mode == "scriptimages":
             if len(sys.argv) < 3:
-                print("\n❌ Usage: python main.py scriptimages <path-to-script_package.json>")
+                print("\n[ERROR] Usage: python main.py scriptimages <path-to-script_package.json>")
                 sys.exit(2)
 
             script_package_path = Path(sys.argv[2]).expanduser().resolve()
             if not script_package_path.exists():
-                print(f"\n❌ ScriptPackage not found: {script_package_path}")
+                print(f"\n[ERROR] ScriptPackage not found: {script_package_path}")
                 sys.exit(2)
 
             script_package = json.loads(script_package_path.read_text(encoding="utf-8"))
@@ -557,9 +557,9 @@ def main():
 
             out_path = run_dir / "script_image_manifest.json"
             write_json(out_path, manifest)
-            print(f"\n✅ Wrote ScriptImageManifest: {out_path}")
+            print(f"\n[OK] Wrote ScriptImageManifest: {out_path}")
         else:
-            print(f"\n❌ Unknown mode: {mode}")
+            print(f"\n[ERROR] Unknown mode: {mode}")
             print_usage()
     else:
         print_usage()

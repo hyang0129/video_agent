@@ -177,7 +177,7 @@ class FactMiner:
         # Check cache first
         caption_data = self.caption_cache.get(video_id)
         if caption_data:
-            print(f"  ✓ Using cached captions")
+            print(f"  [OK] Using cached captions")
         else:
             # Get captions from YouTube
             caption_data = self.youtube_client.get_video_captions(video_id)
@@ -185,10 +185,10 @@ class FactMiner:
             # Cache successful extractions
             if caption_data:
                 self.caption_cache.set(video_id, caption_data)
-                print(f"  ✓ Captions extracted and cached")
+                print(f"  [OK] Captions extracted and cached")
 
         if not caption_data:
-            print(f"  ✗ Captions unavailable (disabled, IP blocked, or no captions)")
+            print(f"  [SKIP] Captions unavailable (disabled, IP blocked, or no captions)")
             return {
                 "video_id": video_id,
                 "success": False,
@@ -415,7 +415,7 @@ class FactMiner:
                 # Rate limiting: wait 10 seconds between requests to avoid IP blocking
                 # (skip delay after last video)
                 if idx < len(videos) - 1:
-                    print(f"  ⏱ Rate limiting: waiting 10 seconds...")
+                    print(f"  [WAIT] Rate limiting: waiting 10 seconds...")
                     time.sleep(10)
 
         # DISABLED: Title mining produces meta-facts, not actual facts

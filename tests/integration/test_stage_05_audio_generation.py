@@ -54,9 +54,9 @@ def test_audio_generation_produces_timeline_and_segments(tmp_path: Path) -> None
     audio_agent = create_audio_agent(output_dir=tmp_path, voice=voice)
     audio_timeline = audio_agent.generate_audio_timeline(video_plan=video_plan)
 
-    segments = audio_timeline.get("segments", [])
+    segments = [t for t in audio_timeline.get("tracks", []) if t.get("type") == "voiceover"]
     assert segments, "No audio segments in timeline"
-    assert audio_timeline.get("total_duration_s", 0) > 0, "Zero total duration"
+    assert audio_timeline.get("duration_seconds", 0) > 0, "Zero total duration"
 
     write_json(tmp_path / "audio_timeline.json", audio_timeline)
     review = copy_to_review(tmp_path, "05_audio_generation")
@@ -66,7 +66,7 @@ def test_audio_generation_produces_timeline_and_segments(tmp_path: Path) -> None
     print(f"Real TTS: {using_real}")
     print(f"Voice: {voice}")
     print(f"Segments: {len(segments)}")
-    print(f"Total duration: {audio_timeline.get('total_duration_s', 0):.1f}s")
+    print(f"Total duration: {audio_timeline.get('duration_seconds', 0):.1f}s")
     print(f"Review dir: {review}")
     if use_real_tts:
         print(f"Listen: audio_segments/*.mp3")

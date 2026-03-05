@@ -61,13 +61,13 @@ class YouTubeClient:
                     # Create requests session with cookies
                     self.http_client = requests.Session()
                     self.http_client.cookies = self.cookies
-                    print(f"✓ Loaded {len(self.cookies)} cookies from {cookies_file}")
+                    print(f"[OK] Loaded {len(self.cookies)} cookies from {cookies_file}")
                 except Exception as e:
-                    print(f"✗ Failed to load cookies: {e}")
+                    print(f"[FAIL] Failed to load cookies: {e}")
                     self.cookies = None
                     self.http_client = None
             else:
-                print(f"✗ Cookie file not found: {cookies_file}")
+                print(f"[FAIL] Cookie file not found: {cookies_file}")
         
         # Try default cookie location if not provided
         if not self.cookies:
@@ -80,7 +80,7 @@ class YouTubeClient:
                     # Create requests session with cookies
                     self.http_client = requests.Session()
                     self.http_client.cookies = self.cookies
-                    print(f"✓ Loaded {len(self.cookies)} cookies from default location")
+                    print(f"[OK] Loaded {len(self.cookies)} cookies from default location")
                 except:
                     self.cookies = None
                     self.http_client = None
@@ -683,10 +683,10 @@ OPPORTUNITY SCORE: {scores['opportunity']:.1f}/10
 RECOMMENDATION: """
 
     if scores["opportunity"] >= 7:
-        result += "🟢 HIGH OPPORTUNITY - Strong demand with low short-form competition"
+        result += "[HIGH] HIGH OPPORTUNITY - Strong demand with low short-form competition"
     elif scores["opportunity"] >= 5:
-        result += "🟡 MEDIUM OPPORTUNITY - Moderate potential, research sub-topics"
+        result += "[MED] MEDIUM OPPORTUNITY - Moderate potential, research sub-topics"
     else:
-        result += "🔴 LOW OPPORTUNITY - Either low demand or high competition"
+        result += "[LOW] LOW OPPORTUNITY - Either low demand or high competition"
 
     return result

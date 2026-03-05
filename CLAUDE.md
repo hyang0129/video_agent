@@ -69,6 +69,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 - Don't add features or refactor code beyond what is directly requested.
 - Don't introduce error handling for scenarios that can't happen; validate at system boundaries only.
 - Don't merge a media-affecting change without human sign-off on the relevant artifact.
+- **Don't use emoji or non-ASCII characters in `print()` or `logging` calls.** Use ASCII tags instead: `[OK]`, `[ERROR]`, `[WARN]`, `[INFO]`, `[SKIP]`, `[WAIT]`, `[LLM]`, `[debug]`. This prevents `UnicodeEncodeError` on Windows (CP1252 terminals). Non-ASCII is fine in comments, docstrings, and data strings (e.g., voiceover content).
 
 ---
 

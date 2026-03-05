@@ -313,21 +313,21 @@ Be efficient - focus on high-potential areas."""
             ),
         ]
 
-        print("\n🤖 Asking LLM to propose topic opportunities...")
+        print("\n[LLM] Asking LLM to propose topic opportunities...")
         response = self.llm.invoke(messages)
         raw_response = str(response.content)
         
         # Save raw response for debugging
         debug_path = run_dir / "llm_proposal_raw.txt"
         write_text(debug_path, raw_response)
-        print(f"📝 Saved raw LLM response to: {debug_path}")
+        print(f"[debug] Saved raw LLM response to: {debug_path}")
         
         try:
             proposal = safe_json_loads(raw_response)
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"⚠️  LLM response parsing failed: {e}")
-            print(f"⚠️  Response preview: {raw_response[:500]}...")
-            print("⚠️  Falling back to heuristic topic extraction...")
+            print(f"[WARN] LLM response parsing failed: {e}")
+            print(f"[WARN] Response preview: {raw_response[:500]}...")
+            print("[WARN] Falling back to heuristic topic extraction...")
             proposal = None
 
         opportunities_in: List[Dict[str, Any]] = []
@@ -336,7 +336,7 @@ Be efficient - focus on high-potential areas."""
         
         # Fallback: if LLM didn't return valid opportunities, create a basic one from the category
         if not opportunities_in:
-            print("⚠️  Creating fallback opportunity from category...")
+            print("[WARN] Creating fallback opportunity from category...")
             opportunities_in = [
                 {
                     "topic_name": f"{category.title()} Facts",
@@ -359,7 +359,7 @@ Be efficient - focus on high-potential areas."""
 
         # Score topics with deterministic metrics.
         scored: List[Dict[str, Any]] = []
-        print(f"\n📊 Scoring {len(opportunities_in)} proposed opportunities...")
+        print(f"\n[info] Scoring {len(opportunities_in)} proposed opportunities...")
         for item in opportunities_in:
             if not isinstance(item, dict):
                 continue
@@ -373,16 +373,16 @@ Be efficient - focus on high-potential areas."""
             print(f"   Scoring: {topic_query}")
             metrics = compute_content_gap_metrics(topic=topic_query, max_results=50)
             if not metrics.get("viable", False):
-                print(f"   ❌ Not viable (insufficient content)")
+                print(f"   [SKIP] Not viable (insufficient content)")
                 continue
             score = float(metrics["scores"]["opportunity"])
-            print(f"   ✅ Score: {score:.1f}/10")
+            print(f"   [OK] Score: {score:.1f}/10")
             scored.append({"proposal": item, "metrics": metrics})
 
         scored.sort(key=lambda x: float(x["metrics"]["scores"]["opportunity"]), reverse=True)
         
         if not scored:
-            print("\n❌ No viable opportunities found. Try a different category or check API connectivity.")
+            print("\n[ERROR] No viable opportunities found. Try a different category or check API connectivity.")
             return {
                 "run_id": run_id,
                 "run_dir": str(run_dir),
@@ -394,7 +394,7 @@ Be efficient - focus on high-potential areas."""
         youtube_client = get_youtube_client()
         created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         
-        print(f"\n✅ Found {len(scored)} viable opportunities. Creating topic briefs...")
+        print(f"\n[OK] Found {len(scored)} viable opportunities. Creating topic briefs...")
 
         report: Dict[str, Any] = {
             "schema_version": "1.0.0",

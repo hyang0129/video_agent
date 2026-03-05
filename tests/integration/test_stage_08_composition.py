@@ -67,10 +67,11 @@ def test_composition_produces_render_spec(tmp_path: Path) -> None:
         music_selection=music_selection,
     )
 
-    scenes = render_spec.get("scenes", [])
+    video_layer = next((l for l in render_spec.get("layers", []) if l.get("type") == "video"), {})
+    scenes = video_layer.get("clips", [])
     assert scenes, "No scenes in RenderSpecification"
     for i, scene in enumerate(scenes):
-        assert scene.get("image_path"), f"Scene {i} missing image_path"
+        assert scene.get("source_file"), f"Scene {i} missing source_file"
         assert scene.get("t_start_s") is not None, f"Scene {i} missing t_start_s"
 
     write_json(tmp_path / "render_spec.json", render_spec)
