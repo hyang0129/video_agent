@@ -14,10 +14,9 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from ..config import GOOGLE_API_KEY, GOOGLE_MODEL
+from ..config import make_llm
 from ..tools.youtube_tools import get_youtube_client
 from ..utils.json_utils import safe_json_loads
 from .fact_store import FactStore
@@ -93,11 +92,7 @@ class FactMiner:
         """
         self.fact_store = fact_store or FactStore()
         self.caption_cache = caption_cache or CaptionCache()
-        self.llm = ChatGoogleGenerativeAI(
-            model=GOOGLE_MODEL,
-            temperature=0.3,  # Lower temp for fact extraction
-            google_api_key=GOOGLE_API_KEY,
-        )
+        self.llm = make_llm(temperature=0.3)
         self.youtube_client = get_youtube_client(cookies_file=cookies_file)
 
     def extract_facts_from_text(

@@ -23,7 +23,7 @@ from src.render_agent import create_render_agent
 from src.music_agent import create_music_agent
 from src.script_image_agent import ScriptImageConfig, create_script_image_agent
 from src.artifacts.io import ensure_run_dir, new_run_id, write_json
-from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ELEVENLABS_API_KEY, RESULTS_DIR
+from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER, ELEVENLABS_API_KEY, RESULTS_DIR
 from src.creative_spec import load_creative_spec
 
 
@@ -33,9 +33,11 @@ def check_api_keys():
     
     if not YOUTUBE_API_KEY:
         missing.append("YOUTUBE_API_KEY")
-    if not GOOGLE_API_KEY:
+    if LLM_PROVIDER == "claude" and not ANTHROPIC_API_KEY:
+        missing.append("ANTHROPIC_API_KEY")
+    elif LLM_PROVIDER == "google" and not GOOGLE_API_KEY:
         missing.append("GOOGLE_API_KEY")
-    
+
     if missing:
         print("❌ Missing required API keys:")
         for key in missing:
@@ -44,10 +46,11 @@ def check_api_keys():
         print("1. Copy .env.example to .env")
         print("2. Add your API keys to .env")
         print("3. Get YouTube API key: https://console.cloud.google.com/apis/credentials")
-        print("4. Get Google AI Studio key: https://aistudio.google.com/app/apikey (FREE!)")
+        print("4. Claude (default): https://console.anthropic.com/settings/keys")
+        print("   Google (alternative): https://aistudio.google.com/app/apikey (FREE!)")
         sys.exit(1)
-    
-    print("✅ API keys configured")
+
+    print(f"✅ API keys configured (LLM provider: {LLM_PROVIDER})")
 
 
 def check_tts_key():

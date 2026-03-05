@@ -62,7 +62,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 
 ### Don't
 - Don't use cloud rendering services (Shotstack, etc.) — avoids cost and vendor lock-in.
-- Don't upgrade LangChain beyond `0.1.x` without a dedicated migration branch (Tier 2 item).
+- Don't upgrade LangChain beyond `0.3.x` without a dedicated migration branch (already done for 0.3.x; next major bump is a Tier 2 item).
 - Don't commit `results/` directory contents (generated artifacts are gitignored).
 - Don't over-engineer for hypothetical future requirements — minimum viable for current task.
 - Don't add docstrings, comments, or type annotations to code you didn't change.
@@ -130,11 +130,15 @@ closest to what changed — not the final video unless the final video stage its
 | Audio/TTS | MP3 segments |
 | Compositor / render | final video |
 
+**API keys are available in the environment.** The agent must run integration tests
+autonomously using the existing keys — do not ask the human to run tests. The human's
+role is to review the generated artifacts (images, audio, video), not to trigger runs.
+
 When a change is ready for review:
-1. **Provide a single test command** scoped to the affected stage (not the full pipeline).
+1. **Run the test** scoped to the affected stage (not the full pipeline) using the available API keys.
 2. **Preserve the previous output** in `results/baseline/` before regenerating, so old and new exist side by side. If none exists, note it.
-3. **Narrate the diff** — which files changed and what to look/listen for.
-4. **Wait for explicit sign-off** before marking done.
+3. **Narrate the diff** — which files changed and what to look/listen for in the output artifacts.
+4. **Wait for explicit sign-off** on the artifact before marking done.
 
 ---
 

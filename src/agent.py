@@ -11,9 +11,8 @@ import json
 from typing import Any, Dict, List
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from .tools.youtube_tools import (
     search_longform_content,
@@ -25,8 +24,7 @@ from .tools.youtube_tools import (
     get_youtube_client,
 )
 from .config import (
-    GOOGLE_API_KEY,
-    GOOGLE_MODEL,
+    make_llm,
     MIN_ENGAGEMENT_RATE,
     MIN_VIEWS_LONGFORM,
     RESULTS_DIR,
@@ -111,12 +109,8 @@ Rules:
 class MarketResearchAgent:
     """Agent for conducting market research on YouTube content opportunities."""
     
-    def __init__(self, model: str = GOOGLE_MODEL):
-        self.llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0.2,  # Lower temperature for more focused analysis
-            google_api_key=GOOGLE_API_KEY,
-        )
+    def __init__(self):
+        self.llm = make_llm(temperature=0.2)
         
         # Define tools
         self.tools = [
@@ -369,9 +363,13 @@ Be efficient - focus on high-potential areas."""
         for item in opportunities_in:
             if not isinstance(item, dict):
                 continue
-            topic_query = str(item.get("topic_query") or "").strip()
+            topic_query = str(item.get("topic_query") or item.get("topic_name") or item.get("opportunity") or item.get("title") or "").strip()
             if not topic_query:
                 continue
+            # If no explicit topic_query in schema, the LLM gave a theme title — prefix with
+            # the category so YouTube search finds relevant longform content.
+            if "topic_query" not in item and category.lower() not in topic_query.lower():
+                topic_query = f"{category} {topic_query}"
             print(f"   Scoring: {topic_query}")
             metrics = compute_content_gap_metrics(topic=topic_query, max_results=50)
             if not metrics.get("viable", False):

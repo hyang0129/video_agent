@@ -11,7 +11,7 @@ import requests
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import requests_cache
-from langchain.tools import tool
+from langchain_core.tools import tool
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,

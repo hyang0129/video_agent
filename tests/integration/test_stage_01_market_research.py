@@ -18,7 +18,7 @@ Run:
 
 Requires:
     YOUTUBE_API_KEY    for video search and engagement metrics
-    GOOGLE_API_KEY     for LLM-based topic scoring and angle generation
+    ANTHROPIC_API_KEY or GOOGLE_API_KEY     for LLM-based topic scoring and angle generation
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ CATEGORY = "world war 2 tanks"
 def test_market_research_produces_topic_briefs(tmp_path: Path) -> None:
     if not os.getenv("YOUTUBE_API_KEY"):
         pytest.skip("Missing YOUTUBE_API_KEY")
-    if not os.getenv("GOOGLE_API_KEY"):
-        pytest.skip("Missing GOOGLE_API_KEY")
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        pytest.skip("Missing ANTHROPIC_API_KEY or GOOGLE_API_KEY")
 
     agent = create_agent()
     result = agent.research_category_artifacts(CATEGORY)
