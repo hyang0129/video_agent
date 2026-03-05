@@ -201,6 +201,13 @@ pytest tests/integration/test_stage_01_market_research.py -v -s -m integration
 ```
 Human review: topic briefs — relevance, scoring, angle quality.
 
+> **Note — stale cookies:** Stages 1 and 2 use `youtube-transcript-api` for caption
+> fetching. If `youtube_cookies.txt` is missing or expired you may see `IpBlocked`
+> errors on transcript calls. The test does not fail hard on these (transcripts are
+> best-effort), but fact quality will drop. To refresh: export a fresh Netscape-format
+> cookie file from your browser while logged into YouTube and save it as
+> `youtube_cookies.txt` in the project root. Never commit this file.
+
 ---
 
 ## Updating Fixtures

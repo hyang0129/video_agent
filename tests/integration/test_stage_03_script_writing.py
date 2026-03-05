@@ -20,7 +20,7 @@ Run:
     pytest tests/integration/test_stage_03_script_writing.py -v -s -m integration
 
 Requires:
-    GOOGLE_API_KEY    for LLM script generation
+    ANTHROPIC_API_KEY or GOOGLE_API_KEY    for LLM script generation
 
 Input fixture:
     tests/fixtures/topic_brief_ww2_tanks.json  (defines topic + constraints)
@@ -53,8 +53,8 @@ SEEDED_FACTS: List[str] = [
 
 @pytest.mark.integration
 def test_script_writing_produces_grounded_script(tmp_path: Path) -> None:
-    if not os.getenv("GOOGLE_API_KEY"):
-        pytest.skip("Missing GOOGLE_API_KEY")
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        pytest.skip("Missing ANTHROPIC_API_KEY or GOOGLE_API_KEY")
 
     topic_brief = load_fixture("topic_brief_ww2_tanks.json")
     topic_id = topic_brief["topic_id"]

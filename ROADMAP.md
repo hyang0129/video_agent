@@ -235,27 +235,19 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 **Goal:** Improve stability, maintainability, and performance
 
-#### 2.1 Upgrade LangChain to 0.3.x
+#### 2.1 Upgrade LangChain to 1.x (current stable)
 - **Priority:** P2 (technical debt + security)
-- **Current:** `langchain==0.1.20` (released ~2024)
-- **Target:** `langchain>=0.3.0`
-- **Risks:**
-  - Breaking changes in `create_tool_calling_agent()` API
-  - Tool decorator signatures changed
-  - Callback handling modified
-- **Implementation:**
-  1. Create feature branch
-  2. Update requirements.txt
-  3. Run tests, fix breakages
-  4. Update [agent.py](src/agent.py) API calls
-  5. Validate all market research modes still work
-- **Benefits:**
-  - Security patches
-  - Access to newer Gemini models (2.0-flash-exp)
-  - Better streaming support
-- **Owner:** TBD
-- **Timeline:** Week 3
-- **Effort:** 2-3 days
+- **Status:** ✅ Completed (March 2026) on branch `feat/langchain-upgrade`
+- **Was:** `langchain==0.1.20`
+- **Now:** `langchain>=0.3.0,<2.0` (1.x stable series)
+- **Plan:** [docs/langchain-upgrade-plan.md](docs/langchain-upgrade-plan.md)
+- **Changes made:**
+  - `langchain.prompts` → `langchain_core.prompts` in [agent.py](src/agent.py)
+  - `langchain.schema` → `langchain_core.messages` in [agent.py](src/agent.py), [script_agent.py](src/script_agent.py), [fact_miner.py](src/facts/fact_miner.py)
+  - `langchain.tools` → `langchain_core.tools` in [youtube_tools.py](src/tools/youtube_tools.py)
+  - `langchain-google-genai` bumped to `>=2.0.0`
+  - `langchain-anthropic` bumped to `>=0.3.0`
+- **Human review gate:** Run Stage 1-3 integration tests and sign off before merging
 
 #### 2.2 Results Directory Cleanup Job
 - **Priority:** P2 (maintenance)
@@ -490,7 +482,7 @@ winget install ImageMagick.ImageMagick
 - [ ] No P0/P1 bugs in issue tracker
 
 ### Tier 2 Complete When:
-- [ ] LangChain upgraded to 0.3.x
+- [ ] LangChain upgraded to 1.x (branch ready, pending human review + merge)
 - [ ] Results cleanup job runs weekly
 - [ ] YouTube quota never exceeds limit
 - [ ] 95%+ render success rate (no crashes)

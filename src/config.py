@@ -10,6 +10,7 @@ load_dotenv()
 # API Keys
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Video Production API Keys
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
@@ -17,6 +18,33 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
 # Model configuration
 GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-flash-latest")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+
+# LLM provider: "claude" or "google". Auto-detected from available API keys.
+# Explicit ANTHROPIC_API_KEY takes priority over GOOGLE_API_KEY.
+LLM_PROVIDER = os.getenv(
+    "LLM_PROVIDER",
+    "claude" if os.getenv("ANTHROPIC_API_KEY") else "google",
+)
+
+
+def make_llm(temperature: float = 0.5):
+    """Return a LangChain chat model for the configured provider."""
+    if LLM_PROVIDER == "claude":
+        from langchain_anthropic import ChatAnthropic  # lazy import
+        return ChatAnthropic(
+            model=CLAUDE_MODEL,
+            temperature=temperature,
+            anthropic_api_key=ANTHROPIC_API_KEY,
+            max_tokens=4096,
+        )
+    else:
+        from langchain_google_genai import ChatGoogleGenerativeAI  # lazy import
+        return ChatGoogleGenerativeAI(
+            model=GOOGLE_MODEL,
+            temperature=temperature,
+            google_api_key=GOOGLE_API_KEY,
+        )
 
 # Cache settings
 ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"

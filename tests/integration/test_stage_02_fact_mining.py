@@ -21,7 +21,7 @@ Run:
 
 Requires:
     YOUTUBE_API_KEY    for video search and caption download
-    GOOGLE_API_KEY     for LLM fact extraction from transcripts
+    ANTHROPIC_API_KEY or GOOGLE_API_KEY     for LLM fact extraction from transcripts
 
 Input fixture:
     tests/fixtures/topic_brief_ww2_tanks.json
@@ -48,8 +48,8 @@ MIN_FACTS_EXPECTED = 3
 def test_fact_mining_extracts_facts_from_youtube(tmp_path: Path) -> None:
     if not os.getenv("YOUTUBE_API_KEY"):
         pytest.skip("Missing YOUTUBE_API_KEY")
-    if not os.getenv("GOOGLE_API_KEY"):
-        pytest.skip("Missing GOOGLE_API_KEY")
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        pytest.skip("Missing ANTHROPIC_API_KEY or GOOGLE_API_KEY")
 
     topic_brief = load_fixture("topic_brief_ww2_tanks.json")
     topic_id = topic_brief["topic_id"]

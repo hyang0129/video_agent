@@ -10,10 +10,9 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from .config import GOOGLE_API_KEY, GOOGLE_MODEL
+from .config import make_llm
 from .utils.json_utils import safe_json_loads
 from .facts.fact_store import FactStore
 
@@ -428,12 +427,8 @@ def _validate_or_fix_script_package(
 class ScriptGenerationAgent:
     """Generate short-form scripts from Topic Brief artifacts."""
 
-    def __init__(self, model: str = GOOGLE_MODEL, fact_store: Optional[FactStore] = None):
-        self.llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0.7,
-            google_api_key=GOOGLE_API_KEY,
-        )
+    def __init__(self, fact_store: Optional[FactStore] = None):
+        self.llm = make_llm(temperature=0.7)
         self.fact_store = fact_store or FactStore()
 
     def generate_script_package(
