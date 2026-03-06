@@ -25,7 +25,7 @@ import uuid
 
 from .artifacts.io import write_json
 from .config import RESULTS_DIR
-from .tools.image_search_tools import ImageSearchError, search_pexels_images
+from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
 
 
 _RELEVANCE_STOPWORDS = {
@@ -285,7 +285,7 @@ class ScriptImageConfig:
     """
 
     output_dir: Optional[Path] = None
-    image_sources: Sequence[str] = ("pexels",)
+    image_sources: Sequence[str] = ("wikimedia", "pexels")
     min_candidates_per_segment: int = 1
     max_candidates_per_segment: int = 5
     max_queries_per_segment: int = 3
@@ -349,6 +349,13 @@ class ScriptImageRetrievalAgent:
         """
         if source_name == "pexels":
             return search_pexels_images(
+                query=query,
+                per_page=max(1, int(per_page)),
+                orientation=self.config.orientation,
+            )
+
+        if source_name == "wikimedia":
+            return search_wikimedia_images(
                 query=query,
                 per_page=max(1, int(per_page)),
                 orientation=self.config.orientation,

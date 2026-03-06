@@ -20,14 +20,18 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+import logging
+import time
 import uuid
+
+_log = logging.getLogger(__name__)
 
 import requests
 
-from .config import RESULTS_DIR, VIDEO_RESOLUTION
+from .config import CACHE_DIR, RESULTS_DIR, VIDEO_RESOLUTION
 from .artifacts.io import write_json
 from .tools.content_validation_tools import validate_image_safety
-from .tools.image_search_tools import ImageSearchError, search_pexels_images
+from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
 
 
 class VisualAssetError(Exception):
@@ -144,6 +148,171 @@ class VisualAssetAgent:
         self.min_safety_score = float(min_safety_score)
         self.min_resolution = (int(min_resolution[0]), int(min_resolution[1]))
 
+    def _extract_image_query(self, vo_line: str, topic_context: str) -> str:
+        """Use LLM to extract a short image search query from a script line.
+
+        Results are cached in .cache/image_query_cache.json to avoid burning
+        free-tier quota on repeated runs. Falls back to vo_line on any error.
+        """
+        if not vo_line:
+            return topic_context or "generic background"
+
+        cache_key = sha256(f"{topic_context}|{vo_line}".encode()).hexdigest()[:16]
+        cache_file = CACHE_DIR / "image_query_cache.json"
+        cache: Dict[str, str] = {}
+        if cache_file.exists():
+            try:
+                import json
+                cache = json.loads(cache_file.read_text(encoding="utf-8"))
+            except Exception:
+                cache = {}
+        if cache_key in cache:
+            return cache[cache_key]
+
+        try:
+            from .config import make_llm
+            llm = make_llm(temperature=0.0)
+            prompt = (
+                "You are generating a Wikimedia Commons or stock photo search query for a video scene.\n\n"
+                f"VIDEO TOPIC: {topic_context}\n"
+                f"SCENE NARRATION: {vo_line}\n\n"
+                "Rules:\n"
+                "- Return ONLY the search query, no explanation or punctuation.\n"
+                "- Use 3-6 precise, unambiguous keywords that describe the VISUAL subject.\n"
+                "- Avoid words with multiple meanings. Use the domain-specific term instead:\n"
+                "  - Use 'armored vehicle' or 'tank vehicle' not 'tank' (could match water tank, fish tank)\n"
+                "  - Use 'landmine' or 'anti-tank mine' not 'mine' (could match mining/excavation)\n"
+                "  - Use 'WW2' or 'World War II' to anchor historical context\n"
+                "- Prefer terms that appear in encyclopedia article titles or image captions.\n\n"
+                "Search query:"
+            )
+            result = llm.invoke(prompt)
+            query = str(result.content).strip().strip('"').strip("'")
+            if not query:
+                return vo_line
+            cache[cache_key] = query
+            try:
+                import json
+                cache_file.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+            return query
+        except Exception as exc:
+            _log.warning("[WARN] LLM query extraction failed, using raw vo_line: %s", exc)
+            return vo_line
+
+    def _llm_select_best_candidate(
+        self,
+        candidates: List[VisualAssetCandidate],
+        vo_line: str,
+        topic_context: str,
+    ) -> Optional[VisualAssetCandidate]:
+        """Use LLM to pick the best candidate from a list based on metadata.
+
+        Each candidate's alt text and title are presented as a numbered list.
+        The LLM returns the 1-based index of the best match for the narration.
+        Falls back to the first candidate on any error.
+        """
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        try:
+            from .config import make_llm
+            llm = make_llm(temperature=0.0)
+            lines = []
+            for i, c in enumerate(candidates, 1):
+                alt = c.metadata.get("alt") or c.metadata.get("title") or ""
+                src = c.source
+                lines.append(f"{i}. [{src}] {alt[:200]}")
+            candidates_text = "\n".join(lines)
+            prompt = (
+                "You are selecting the best image for a video scene.\n\n"
+                f"VIDEO TOPIC: {topic_context}\n"
+                f"SCENE NARRATION: {vo_line}\n\n"
+                "CANDIDATE IMAGES (by description):\n"
+                f"{candidates_text}\n\n"
+                "Rules:\n"
+                "- Return ONLY the number of the best matching image.\n"
+                "- Choose the image whose description is most visually relevant to the narration.\n"
+                "- Prefer historically accurate images over generic ones.\n"
+                "- If multiple are equally relevant, prefer the one from a historical archive.\n\n"
+                "Best image number:"
+            )
+            result = llm.invoke(prompt)
+            raw = str(result.content).strip()
+            idx = int("".join(filter(str.isdigit, raw.split()[0]))) - 1
+            if 0 <= idx < len(candidates):
+                return candidates[idx]
+        except Exception as exc:
+            _log.warning("[WARN] LLM candidate selection failed, using first: %s", exc)
+        return candidates[0]
+
+    def _llm_is_relevant(
+        self,
+        candidate: VisualAssetCandidate,
+        vo_line: str,
+        topic_context: str,
+    ) -> bool:
+        """Ask the LLM whether a candidate image is relevant enough to use.
+
+        Returns True if the LLM says YES, False otherwise. Defaults to True
+        on any error so the loop can terminate rather than spin indefinitely.
+        """
+        alt = candidate.metadata.get("alt") or candidate.metadata.get("title") or ""
+        try:
+            from .config import make_llm
+            llm = make_llm(temperature=0.0)
+            prompt = (
+                "You are reviewing whether an image is suitable for a video scene.\n\n"
+                f"VIDEO TOPIC: {topic_context}\n"
+                f"SCENE NARRATION: {vo_line}\n\n"
+                f"IMAGE DESCRIPTION: {alt[:400]}\n\n"
+                "Is this image visually relevant to the scene narration? "
+                "Answer YES if it shows something clearly related to the topic. "
+                "Answer NO if it is a completely unrelated subject (e.g. an animal when the topic is a military vehicle).\n\n"
+                "Answer (YES or NO):"
+            )
+            result = llm.invoke(prompt)
+            answer = str(result.content).strip().upper()
+            return answer.startswith("YES")
+        except Exception as exc:
+            _log.warning("[WARN] LLM relevance check failed, accepting candidate: %s", exc)
+            return True
+
+    def _llm_broaden_query(
+        self,
+        query: str,
+        vo_line: str,
+        topic_context: str,
+        tried_queries: List[str],
+    ) -> Optional[str]:
+        """Ask the LLM to produce a simpler, broader search query.
+
+        Returns a new query string, or None if the LLM can't generate one distinct
+        from what has already been tried.
+        """
+        tried_text = ", ".join(f'"{q}"' for q in tried_queries)
+        try:
+            from .config import make_llm
+            llm = make_llm(temperature=0.0)
+            prompt = (
+                "A Wikimedia Commons image search returned irrelevant results.\n\n"
+                f"VIDEO TOPIC: {topic_context}\n"
+                f"SCENE NARRATION: {vo_line}\n\n"
+                f"Queries already tried (all returned irrelevant images): {tried_text}\n\n"
+                "Generate a shorter, more general search query by removing the most specific terms. "
+                "Keep only the core subject (e.g. vehicle type or historical era). "
+                "Return ONLY the new query, no explanation."
+            )
+            result = llm.invoke(prompt)
+            new_query = str(result.content).strip().strip('"').strip("'")
+            if new_query and new_query not in tried_queries:
+                return new_query
+        except Exception as exc:
+            _log.warning("[WARN] LLM query broadening failed: %s", exc)
+        return None
+
     def generate_visual_manifest(self, video_plan: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a complete VisualManifest from a VideoPlan.
 
@@ -162,7 +331,12 @@ class VisualAssetAgent:
         assert isinstance(scenes, list)
 
         manifest_id = f"vm_{uuid.uuid4().hex[:8]}"
+        topic_context = " ".join(filter(None, [
+            str(video_plan.get("topic_id") or ""),
+            str(video_plan.get("subtopic_id") or ""),
+        ])).strip()
 
+        used_urls: set = set()
         assets: List[Dict[str, Any]] = []
         for scene in scenes:
             if not isinstance(scene, dict):
@@ -172,22 +346,19 @@ class VisualAssetAgent:
             if not scene_id:
                 continue
 
-            prompts = scene.get("asset_prompts")
-            prompt_list: List[str] = []
-            if isinstance(prompts, list):
-                prompt_list = [str(p).strip() for p in prompts if str(p).strip()]
-            if not prompt_list:
-                fallback = str(scene.get("on_screen_text") or "").strip()
-                if fallback:
-                    prompt_list = [fallback]
-
-            query = prompt_list[0] if prompt_list else "generic background"
+            vo_line = str(scene.get("vo_line") or "").strip()
+            query = self._extract_image_query(vo_line=vo_line, topic_context=topic_context)
 
             asset = self._select_and_prepare_asset(
                 scene_id=scene_id,
                 query=query,
-                text_context=str(scene.get("vo_line") or "").strip(),
+                text_context=vo_line,
+                topic_context=topic_context,
+                used_urls=used_urls,
             )
+            chosen_url = asset.get("url")
+            if chosen_url:
+                used_urls.add(chosen_url)
             assets.append(asset)
 
         visual_manifest = {
@@ -219,26 +390,48 @@ class VisualAssetAgent:
 
         candidates: List[VisualAssetCandidate] = []
 
-        if "pexels" in self.image_sources:
-            results = search_pexels_images(query=query, per_page=limit, orientation="portrait")
+        def _append_results(results: list) -> None:
             for item in results:
+                if len(candidates) >= limit:
+                    break
+                url = str(item.get("url") or "")
+                if not url:
+                    continue
                 res = item.get("resolution")
                 if not isinstance(res, list) or len(res) != 2:
                     res_t = (0, 0)
                 else:
                     res_t = (int(res[0]), int(res[1]))
-
                 candidates.append(
                     VisualAssetCandidate(
-                        source=str(item.get("source") or "pexels"),
-                        url=str(item.get("url") or ""),
+                        source=str(item.get("source") or "unknown"),
+                        url=url,
                         resolution=res_t,
                         attribution=item.get("attribution") or {},
                         metadata=item.get("metadata") or {},
                     )
                 )
 
-        return [c for c in candidates if c.url][:limit]
+        for source in self.image_sources:
+            if len(candidates) >= limit:
+                break
+            remaining = limit - len(candidates)
+            before = len(candidates)
+            try:
+                if source == "wikimedia":
+                    _append_results(search_wikimedia_images(query=query, per_page=remaining, orientation="portrait"))
+                    # If Wikimedia returned nothing, retry with a shorter query (first 3 tokens).
+                    if len(candidates) == before:
+                        short_query = " ".join(query.split()[:3])
+                        if short_query and short_query != query:
+                            _log.warning("[INFO] Wikimedia: 0 results for %r, retrying with %r", query, short_query)
+                            _append_results(search_wikimedia_images(query=short_query, per_page=remaining, orientation="portrait"))
+                elif source == "pexels":
+                    _append_results(search_pexels_images(query=query, per_page=remaining, orientation="portrait"))
+            except ImageSearchError:
+                continue
+
+        return candidates[:limit]
 
     def validate_content(self, asset_url: str) -> Dict[str, Any]:
         """Validate asset content safety."""
@@ -258,7 +451,11 @@ class VisualAssetAgent:
         file_name = f"{scene_id}.jpg"
         out = self.assets_dir / file_name
 
-        resp = requests.get(asset_url, stream=True, timeout=60)
+        headers = {}
+        if "wikimedia.org" in asset_url or "wikipedia.org" in asset_url:
+            headers["User-Agent"] = "Mozilla/5.0 (compatible; VideoAgent/1.0)"
+            time.sleep(1.0)
+        resp = requests.get(asset_url, headers=headers, stream=True, timeout=60)
         resp.raise_for_status()
 
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -269,30 +466,98 @@ class VisualAssetAgent:
 
         return out
 
-    def _select_and_prepare_asset(self, scene_id: str, query: str, text_context: str) -> Dict[str, Any]:
-        """Select one valid asset for a scene, with placeholder fallback."""
-        candidates: List[VisualAssetCandidate] = []
-        try:
-            candidates = self.search_assets(query=query, limit=10)
-        except ImageSearchError:
-            candidates = []
+    def _select_and_prepare_asset(
+        self,
+        scene_id: str,
+        query: str,
+        text_context: str,
+        topic_context: str = "",
+        used_urls: Optional[set] = None,
+        _max_query_attempts: int = 3,
+    ) -> Dict[str, Any]:
+        """Select one valid asset for a scene using a specific-to-general query loop.
 
-        # Prefer higher-res candidates first.
-        candidates = sorted(
-            candidates,
-            key=lambda c: (c.resolution[0] * c.resolution[1]),
-            reverse=True,
-        )
-
+        Each iteration:
+          1. Search with the current query (10 candidates per source).
+          2. LLM selects the best candidate from the validated pool.
+          3. LLM checks whether the chosen image is relevant to the narration.
+          4. If relevant, accept it. If not, ask the LLM for a broader query and retry.
+        Up to _max_query_attempts iterations (default 3). All tried queries are
+        recorded in the manifest metadata.
+        """
+        tried_queries: List[str] = []
         chosen: Optional[VisualAssetCandidate] = None
         chosen_validation: Optional[Dict[str, Any]] = None
+        valid_candidates: List[VisualAssetCandidate] = []
+        current_query = query
 
-        for cand in candidates:
-            validation = self.validate_content(cand.url)
-            if validation.get("validated") is True:
-                chosen = cand
-                chosen_validation = validation
-                break
+        for _attempt in range(_max_query_attempts):
+            tried_queries.append(current_query)
+
+            raw_candidates: List[VisualAssetCandidate] = []
+            try:
+                raw_candidates = self.search_assets(query=current_query, limit=10)
+            except ImageSearchError:
+                pass
+
+            # Skip URLs already used in other scenes.
+            if used_urls:
+                raw_candidates = [c for c in raw_candidates if c.url not in used_urls]
+
+            # Validate all candidates; keep the ones that pass safety.
+            round_valid: List[VisualAssetCandidate] = [
+                c for c in raw_candidates
+                if self.validate_content(c.url).get("validated") is True
+            ]
+            # Accumulate across rounds so later rounds can't duplicate earlier picks.
+            seen_urls = {c.url for c in valid_candidates}
+            for c in round_valid:
+                if c.url not in seen_urls:
+                    valid_candidates.append(c)
+                    seen_urls.add(c.url)
+
+            # Pick the best from this round's fresh candidates only.
+            round_chosen = self._llm_select_best_candidate(
+                candidates=round_valid,
+                vo_line=text_context,
+                topic_context=topic_context,
+            )
+
+            if round_chosen is None:
+                # No candidates at all — try broadening immediately.
+                _log.warning("[INFO] No candidates for query %r (attempt %d/%d)", current_query, _attempt + 1, _max_query_attempts)
+            else:
+                # Ask the LLM: is this good enough?
+                if self._llm_is_relevant(round_chosen, text_context, topic_context):
+                    chosen = round_chosen
+                    chosen_validation = self.validate_content(chosen.url)
+                    _log.warning("[INFO] Accepted image on attempt %d: %s", _attempt + 1, round_chosen.metadata.get("alt", "")[:80])
+                    break
+                _log.warning("[INFO] Rejected image on attempt %d, broadening query: %s", _attempt + 1, round_chosen.metadata.get("alt", "")[:80])
+
+            # Need a broader query — ask the LLM.
+            if _attempt < _max_query_attempts - 1:
+                new_query = self._llm_broaden_query(
+                    query=current_query,
+                    vo_line=text_context,
+                    topic_context=topic_context,
+                    tried_queries=tried_queries,
+                )
+                if new_query:
+                    current_query = new_query
+                else:
+                    break  # LLM couldn't suggest anything new
+
+        # If the loop exhausted without acceptance, fall back to best available.
+        if chosen is None and valid_candidates:
+            chosen = self._llm_select_best_candidate(
+                candidates=valid_candidates,
+                vo_line=text_context,
+                topic_context=topic_context,
+            )
+            if chosen is not None:
+                chosen_validation = self.validate_content(chosen.url)
+                _log.warning("[INFO] Using best-available fallback after %d attempts", len(tried_queries))
 
         # If none pass (or no providers configured), create a deterministic placeholder.
         if chosen is None:
@@ -327,10 +592,11 @@ class VisualAssetAgent:
                     "score": 1.0,
                 },
                 "metadata": {
-                    "search_query": query,
-                    "alternatives_considered": len(candidates),
+                    "search_query": tried_queries[-1] if tried_queries else query,
+                    "queries_tried": tried_queries,
+                    "alternatives_considered": len(valid_candidates),
                     "selection_reason": "No valid external assets found; using deterministic placeholder",
-                    "text_context": text_context,
+                    "script_line": text_context,
                 },
             }
 
@@ -343,11 +609,40 @@ class VisualAssetAgent:
                 "score": 0.0,
             }
 
-        try:
-            downloaded = self.download_asset(asset_url=chosen.url, scene_id=scene_id)
-            rel_path = str(downloaded.relative_to(self.output_dir)).replace("\\", "/")
-        except Exception as exc:
-            raise VisualAssetError(f"Failed to download asset for scene {scene_id}: {exc}")
+        downloaded = None
+        for cand_attempt in ([chosen] + [c for c in valid_candidates if c is not chosen]):
+            try:
+                downloaded = self.download_asset(asset_url=cand_attempt.url, scene_id=scene_id)
+                chosen = cand_attempt
+                break
+            except Exception:
+                continue
+
+        if downloaded is None:
+            width, height = self.min_resolution
+            palette = [
+                (18, 18, 18),
+                (30, 58, 138),
+                (10, 92, 58),
+                (120, 60, 18),
+            ]
+            rgb = palette[_stable_choice_index(scene_id, len(palette))]
+            file_path = self.assets_dir / f"{scene_id}_placeholder.bmp"
+            _write_solid_bmp(path=file_path, width=width, height=height, rgb=rgb)
+            return {
+                "asset_id": f"asset_{scene_id}",
+                "scene_id": scene_id,
+                "type": "image",
+                "source": "placeholder",
+                "file_path": str(file_path.relative_to(self.output_dir)).replace("\\", "/"),
+                "url": None,
+                "resolution": [width, height],
+                "attribution": {"required": False, "text": "Generated placeholder", "license": "internal"},
+                "content_safety": {"validated": True, "service": "none", "flags": ["placeholder_download_fallback"], "score": 1.0},
+                "metadata": {"search_query": query, "alternatives_considered": len(candidates), "selection_reason": "Download failed for all candidates; using placeholder", "text_context": text_context},
+            }
+
+        rel_path = str(downloaded.relative_to(self.output_dir)).replace("\\", "/")
 
         return {
             "asset_id": f"asset_{scene_id}",
@@ -361,8 +656,10 @@ class VisualAssetAgent:
             "content_safety": chosen_validation,
             "metadata": {
                 **chosen.metadata,
-                "alternatives_considered": len(candidates),
-                "selection_reason": "First candidate passing safety threshold",
+                "queries_tried": tried_queries,
+                "alternatives_considered": len(valid_candidates),
+                "selection_reason": "LLM-selected from validated candidates",
+                "script_line": text_context,
             },
         }
 

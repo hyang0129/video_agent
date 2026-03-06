@@ -171,7 +171,7 @@ class FullPipelineRunner:
 
         visual_agent = create_visual_agent(
             output_dir=run_dir,
-            image_sources=(),
+            image_sources=("pexels",),
             content_validator="none",
         )
         visual_manifest = visual_agent.generate_visual_manifest(video_plan=video_plan)

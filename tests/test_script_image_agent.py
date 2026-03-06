@@ -99,6 +99,7 @@ def test_insufficient_candidates_status_when_provider_returns_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("src.script_image_agent.search_pexels_images", lambda query, per_page, orientation: [])
+    monkeypatch.setattr("src.script_image_agent.search_wikimedia_images", lambda query, per_page, orientation: [])
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(
@@ -191,6 +192,7 @@ def test_candidates_reranked_by_alt_relevance(
         ]
 
     monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
+    monkeypatch.setattr("src.script_image_agent.search_wikimedia_images", lambda query, per_page, orientation: [])
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(

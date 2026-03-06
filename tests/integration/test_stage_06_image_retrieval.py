@@ -44,7 +44,8 @@ def test_image_retrieval_produces_visual_manifest(tmp_path: Path) -> None:
     video_plan = script_package_to_video_plan(script_package=script_package)
 
     pexels_available = bool(os.getenv("PEXELS_API_KEY"))
-    image_sources = ("pexels",) if pexels_available else ()
+    # Wikimedia Commons is always available (no key required); Pexels as fallback.
+    image_sources = ("wikimedia", "pexels") if pexels_available else ("wikimedia",)
 
     visual_agent = create_visual_agent(
         output_dir=tmp_path,
@@ -61,14 +62,12 @@ def test_image_retrieval_produces_visual_manifest(tmp_path: Path) -> None:
     write_json(tmp_path / "visual_manifest.json", visual_manifest)
     review = copy_to_review(tmp_path, "06_image_retrieval")
 
-    using_real = "YES (Pexels)" if pexels_available else "NO (placeholder BMPs — set PEXELS_API_KEY for real review)"
+    sources_used = sorted({s.get("source", "unknown") for s in scenes})
     print(f"\n--- Human Review: Image Retrieval ---")
-    print(f"Real images: {using_real}")
+    print(f"Image sources: {image_sources}")
+    print(f"Sources used in manifest: {sources_used}")
     print(f"Scenes with assets: {len(scenes)}")
     print(f"Review dir: {review}")
-    if pexels_available:
-        print(f"Check: open each image in visual_manifest.json — is it relevant to its scene?")
-        print(f"Check: no anachronistic images (e.g. modern equipment for historical topics)")
-        print(f"Check: image orientation suitable for 9:16 vertical video")
-    else:
-        print(f"Re-run with PEXELS_API_KEY set for image relevance review")
+    print(f"Check: open each image in visual_manifest.json -- is it relevant to its scene?")
+    print(f"Check: no anachronistic images (e.g. modern equipment for historical topics)")
+    print(f"Check: image orientation suitable for 9:16 vertical video")

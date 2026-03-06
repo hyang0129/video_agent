@@ -245,10 +245,11 @@ def test_setting_full_pipeline_to_mp4(setting_name: str, tmp_path: Path) -> None
     audio_timeline = audio_agent.generate_audio_timeline(video_plan=video_plan)
     write_json(run_dir / "audio_timeline.json", audio_timeline)
 
-    # 5) Visual manifest (placeholder images; no Pexels required)
+    # 5) Visual manifest (real images if PEXELS_API_KEY is set, placeholders otherwise)
+    pexels_available = bool(os.getenv("PEXELS_API_KEY"))
     visual_agent = create_visual_agent(
         output_dir=run_dir,
-        image_sources=(),
+        image_sources=("pexels",) if pexels_available else (),
         content_validator="none",
     )
     visual_manifest = visual_agent.generate_visual_manifest(video_plan=video_plan)

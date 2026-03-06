@@ -28,11 +28,21 @@ LLM_PROVIDER = os.getenv(
 )
 
 
+_llm_cache: dict = {}
+
+
 def make_llm(temperature: float = 0.5):
-    """Return a LangChain chat model for the configured provider."""
+    """Return a cached LangChain chat model for the configured provider.
+
+    The same instance is returned for the same temperature value, so callers
+    don't need their own caching wrappers.
+    """
+    key = (LLM_PROVIDER, temperature)
+    if key in _llm_cache:
+        return _llm_cache[key]
     if LLM_PROVIDER == "claude":
         from langchain_anthropic import ChatAnthropic  # lazy import
-        return ChatAnthropic(
+        llm = ChatAnthropic(
             model=CLAUDE_MODEL,
             temperature=temperature,
             anthropic_api_key=ANTHROPIC_API_KEY,
@@ -40,11 +50,13 @@ def make_llm(temperature: float = 0.5):
         )
     else:
         from langchain_google_genai import ChatGoogleGenerativeAI  # lazy import
-        return ChatGoogleGenerativeAI(
+        llm = ChatGoogleGenerativeAI(
             model=GOOGLE_MODEL,
             temperature=temperature,
             google_api_key=GOOGLE_API_KEY,
         )
+    _llm_cache[key] = llm
+    return llm
 
 # Cache settings
 ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"

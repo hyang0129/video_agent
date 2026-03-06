@@ -85,6 +85,28 @@ Target format: faceless, caption-first, voiceover-narrated, 9:16 vertical, 15–
 
 ---
 
+## Development Environment
+
+**Python:** 3.10.11 — venv is at `venv/` in the project root.
+
+Activate (Windows CMD): `venv\Scripts\activate`
+Activate (bash/Git Bash): `source venv/Scripts/activate`
+Run without activating: `venv/Scripts/python.exe main.py ...`
+
+**Installed LangChain versions (as of 2026-03-06):**
+
+| Package | Version |
+|---------|---------|
+| `langchain` | 0.3.27 |
+| `langchain-core` | 0.3.83 |
+| `langchain-community` | 0.3.31 |
+| `langchain-anthropic` | 0.3.22 |
+| `langchain-google-genai` | 2.1.12 |
+
+Install / sync dependencies: `venv/Scripts/python.exe -m pip install -r requirements.txt --upgrade`
+
+---
+
 ## Key File Locations
 
 | File | Purpose |
