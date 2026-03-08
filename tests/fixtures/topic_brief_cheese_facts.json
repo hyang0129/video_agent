@@ -1,0 +1,21 @@
+{
+  "topic_id": "cheese_facts",
+  "subtopic_id": "surprising",
+  "topic": {
+    "name": "Cheese Facts",
+    "positioning": "Surprising and bizarre facts about cheese from around the world"
+  },
+  "subtopic": {
+    "name": "Weird Cheese Facts",
+    "query": "surprising cheese facts",
+    "angle": "Mind-blowing trivia about the world's most beloved dairy product"
+  },
+  "format": {
+    "primary": "Did You Know",
+    "target_duration_seconds": 35
+  },
+  "script_constraints": {
+    "tone": "enthusiastic, fun",
+    "claims_policy": "Use only verified facts"
+  }
+}

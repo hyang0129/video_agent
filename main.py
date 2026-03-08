@@ -27,6 +27,32 @@ from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, LLM_P
 from src.creative_spec import load_creative_spec
 
 
+def validate_final_video(mp4_path) -> bool:
+    """Run ffprobe to confirm the MP4 is playable (has video stream, non-zero duration)."""
+    import subprocess
+    mp4_path = Path(mp4_path)
+    if not mp4_path.exists() or mp4_path.stat().st_size == 0:
+        print(f"[ERROR] Post-render validation FAILED: {mp4_path} missing or empty")
+        return False
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_type,duration",
+            "-of", "csv=p=0",
+            str(mp4_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        print(f"[ERROR] Post-render validation FAILED: no readable video stream in {mp4_path.name}")
+        print(f"        ffprobe: {result.stderr.strip()}")
+        return False
+    print(f"[OK] Post-render validation passed: {mp4_path.name} is playable")
+    return True
+
+
 def check_api_keys():
     """Verify that required API keys are configured."""
     missing = []
@@ -328,14 +354,17 @@ def main():
                 print(f"\n[ERROR] TopicBrief not found: {topic_brief_path}")
                 sys.exit(2)
 
+            _engine_names = {"ffmpeg", "dry_run"}
             creative_spec_path = None
-            if len(sys.argv) >= 4:
+            if len(sys.argv) >= 4 and sys.argv[3].strip().lower() not in _engine_names:
                 creative_spec_path = Path(sys.argv[3])
             creative_spec = load_creative_spec(creative_spec_path)
 
             engine = "dry_run"
-            if len(sys.argv) >= 5:
-                engine = str(sys.argv[4]).strip().lower() or "dry_run"
+            for _arg in sys.argv[3:]:
+                if _arg.strip().lower() in _engine_names:
+                    engine = _arg.strip().lower()
+                    break
 
             topic_brief = json.loads(topic_brief_path.read_text(encoding="utf-8"))
             topic_id = str(topic_brief.get("topic_id") or "topic")
@@ -379,6 +408,8 @@ def main():
             final_video = render_agent.render(render_spec)
             write_json(run_dir / "final_video.json", final_video)
 
+            validate_final_video(run_dir / "final_video.mp4")
+
             print(f"\n[OK] MVP run complete: {run_dir}")
             print(f"   - ScriptPackage:   {run_dir / 'script_package.json'}")
             print(f"   - VideoPlan:       {run_dir / 'video_plan.json'}")
@@ -398,14 +429,17 @@ def main():
                 print(f"\n[ERROR] TopicBrief not found: {topic_brief_path}")
                 sys.exit(2)
 
+            _engine_names = {"ffmpeg", "dry_run"}
             creative_spec_path = None
-            if len(sys.argv) >= 4:
+            if len(sys.argv) >= 4 and sys.argv[3].strip().lower() not in _engine_names:
                 creative_spec_path = Path(sys.argv[3])
             creative_spec = load_creative_spec(creative_spec_path)
 
             engine = "dry_run"
-            if len(sys.argv) >= 5:
-                engine = str(sys.argv[4]).strip().lower() or "dry_run"
+            for _arg in sys.argv[3:]:
+                if _arg.strip().lower() in _engine_names:
+                    engine = _arg.strip().lower()
+                    break
 
             topic_brief = json.loads(topic_brief_path.read_text(encoding="utf-8"))
             topic_id = str(topic_brief.get("topic_id") or "topic")
@@ -447,6 +481,8 @@ def main():
             render_agent = create_render_agent(output_dir=run_dir, engine=engine)
             final_video = render_agent.render(render_spec)
             write_json(run_dir / "final_video.json", final_video)
+
+            validate_final_video(run_dir / "final_video.mp4")
 
             print(f"\n[OK] Offline MVP run complete: {run_dir}")
             print(f"   - RenderSpec: {run_dir / 'render_spec.json'}")
