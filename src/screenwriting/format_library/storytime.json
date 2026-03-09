@@ -1,0 +1,12 @@
+{
+  "format": "storytime",
+  "beat_structure": ["hook", "setup", "rising_action", "turning_point", "resolution", "reflection", "cta"],
+  "hook_pattern": "Most people think [X]. They're wrong.",
+  "pacing": "medium",
+  "visual_guidance": "Follow the narrative arc. Hook: tension image. Setup: context. Resolution: outcome.",
+  "music_tone": "tense then resolved, cinematic",
+  "cta_pattern": "Would you have done the same? Follow to find out more.",
+  "target_duration_s": 55,
+  "min_beats": 5,
+  "max_beats": 8
+}

@@ -1,0 +1,12 @@
+{
+  "format": "debate",
+  "beat_structure": ["hook", "side_a", "side_b", "evidence_a", "evidence_b", "verdict", "cta"],
+  "hook_pattern": "[Side A] vs [Side B]: which one wins?",
+  "pacing": "fast",
+  "visual_guidance": "Split visual contrast between sides. Use symbolic imagery for each argument.",
+  "music_tone": "tense, confrontational",
+  "cta_pattern": "Which side do you agree with? Comment below and follow for more.",
+  "target_duration_s": 50,
+  "min_beats": 5,
+  "max_beats": 9
+}

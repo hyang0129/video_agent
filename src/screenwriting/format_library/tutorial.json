@@ -1,0 +1,12 @@
+{
+  "format": "tutorial",
+  "beat_structure": ["hook", "intro", "step_1", "step_2", "step_3", "result", "cta"],
+  "hook_pattern": "Here's how to [achieve result] in [timeframe].",
+  "pacing": "medium",
+  "visual_guidance": "Show each step visually. Use concrete demonstration images, not abstract.",
+  "music_tone": "upbeat, focused",
+  "cta_pattern": "Try this yourself and follow for more tips.",
+  "target_duration_s": 50,
+  "min_beats": 5,
+  "max_beats": 9
+}

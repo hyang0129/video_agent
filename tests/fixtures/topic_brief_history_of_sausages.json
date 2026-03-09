@@ -1,0 +1,21 @@
+{
+  "topic_id": "history_of_sausages",
+  "subtopic_id": "facts",
+  "topic": {
+    "name": "History of Sausages",
+    "positioning": "Surprising facts about one of humanity's oldest foods"
+  },
+  "subtopic": {
+    "name": "Sausage History Facts",
+    "query": "history of sausages facts",
+    "angle": "Ancient origins, bizarre traditions, and weird engineering behind the world's most popular processed meat"
+  },
+  "format": {
+    "primary": "Did You Know",
+    "target_duration_seconds": 35
+  },
+  "script_constraints": {
+    "tone": "energetic, curious",
+    "claims_policy": "Use only verified facts from database"
+  }
+}

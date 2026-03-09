@@ -1,0 +1,12 @@
+{
+  "format": "facts",
+  "beat_structure": ["hook", "fact_1", "fact_2", "fact_3", "fact_4", "fact_5", "cta"],
+  "hook_pattern": "Did you know [surprising claim]?",
+  "pacing": "fast",
+  "visual_guidance": "Each fact beat: concrete subject matter image, not abstract. Avoid 'people talking'.",
+  "music_tone": "energetic, upbeat",
+  "cta_pattern": "Which fact surprised you most? Follow for more [topic].",
+  "target_duration_s": 45,
+  "min_beats": 5,
+  "max_beats": 9
+}

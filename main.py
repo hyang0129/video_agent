@@ -25,6 +25,10 @@ from src.script_image_agent import ScriptImageConfig, create_script_image_agent
 from src.artifacts.io import ensure_run_dir, new_run_id, write_json
 from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER, ELEVENLABS_API_KEY, RESULTS_DIR
 from src.creative_spec import load_creative_spec
+from src.screenwriting.concept_agent import ConceptAgent
+from src.screenwriting.screenplay_agent import ScreenplayAgent
+from src.screenwriting.screenplay_reviewer import ScreenplayReviewer
+from src.artifacts.screenplay import screenplay_to_script_package
 
 
 def validate_final_video(mp4_path) -> bool:
@@ -199,7 +203,7 @@ def main():
         mode = sys.argv[1].lower()
 
         # Only require API keys for modes that actually call external LLM/YouTube APIs.
-        if mode in {"example1", "example2", "example3", "interactive", "script"}:
+        if mode in {"example1", "example2", "example3", "interactive", "script", "screenplay"}:
             check_api_keys()
         if mode in {"mvp"}:
             # MVP runs script generation (Google) + audio (ElevenLabs).
@@ -594,6 +598,165 @@ def main():
             out_path = run_dir / "script_image_manifest.json"
             write_json(out_path, manifest)
             print(f"\n[OK] Wrote ScriptImageManifest: {out_path}")
+        elif mode == "screenplay":
+            # Usage: python main.py screenplay <topicbrief.json> [--format facts|storytime] [--n-concepts 3] [--auto-select] [ffmpeg|dry_run]
+            if len(sys.argv) < 3:
+                print("\n[ERROR] Usage: python main.py screenplay <path-to-topicbrief.json> [--format FORMAT] [--n-concepts N] [--auto-select] [ffmpeg|dry_run]")
+                sys.exit(2)
+
+            topic_brief_path = Path(sys.argv[2]).expanduser().resolve()
+            if not topic_brief_path.exists():
+                print(f"\n[ERROR] TopicBrief not found: {topic_brief_path}")
+                sys.exit(2)
+
+            # Parse optional flags
+            args_tail = sys.argv[3:]
+            fmt_filter = None
+            n_concepts = 3
+            auto_select = False
+            engine = "dry_run"
+            _i = 0
+            while _i < len(args_tail):
+                a = args_tail[_i]
+                if a == "--format" and _i + 1 < len(args_tail):
+                    fmt_filter = [args_tail[_i + 1]]
+                    _i += 2
+                elif a == "--n-concepts" and _i + 1 < len(args_tail):
+                    n_concepts = int(args_tail[_i + 1])
+                    _i += 2
+                elif a == "--auto-select":
+                    auto_select = True
+                    _i += 1
+                elif a in {"ffmpeg", "dry_run"}:
+                    engine = a
+                    _i += 1
+                else:
+                    _i += 1
+
+            topic_brief = json.loads(topic_brief_path.read_text(encoding="utf-8"))
+            topic_id = str(topic_brief.get("topic_id") or "topic")
+            subtopic_id = str(topic_brief.get("subtopic_id") or "sub")
+
+            run_id = new_run_id("sp", f"{topic_id}_{subtopic_id}")
+            run_dir = ensure_run_dir(RESULTS_DIR, run_id)
+
+            # 1) Generate concepts
+            print(f"\n[INFO] Generating {n_concepts} concept(s)...")
+            concept_agent = ConceptAgent()
+            concepts = concept_agent.generate_concepts(topic_brief, n_concepts=n_concepts, formats=fmt_filter)
+            print(f"[OK] {len(concepts)} concept(s) generated")
+
+            # 2) Write screenplays + review each
+            screenplay_agent_inst = ScreenplayAgent()
+            reviewer = ScreenplayReviewer()
+
+            entries = []
+            for idx, concept in enumerate(concepts):
+                print(f"\n[INFO] Writing screenplay {idx + 1}/{len(concepts)} (format: {concept['format']})...")
+                sp = screenplay_agent_inst.write_screenplay(concept, topic_brief)
+                report = reviewer.review(sp)
+                sp["feasibility_report"] = report
+                entries.append((concept, sp, report))
+                write_json(run_dir / f"concept_{idx + 1}.json", concept)
+                write_json(run_dir / f"screenplay_{idx + 1}.json", sp)
+                write_json(run_dir / f"feasibility_{idx + 1}.json", report)
+
+            # 3) Summary table
+            print("\n" + "-" * 80)
+            print(f"{'#':<4} {'Format':<12} {'Score':<8} {'Action':<18} Hook")
+            print("-" * 80)
+            for idx, (concept, sp, report) in enumerate(entries):
+                print(
+                    f"{idx + 1:<4} {concept['format']:<12} {report['overall_score']:<8.2f} "
+                    f"{report['recommended_action']:<18} {concept['hook'][:40]}"
+                )
+            print("-" * 80)
+
+            # 4) Select screenplay
+            approved = [(i, e) for i, e in enumerate(entries) if e[2]["recommended_action"] == "approve"]
+            if not approved:
+                approved = sorted(enumerate(entries), key=lambda x: x[1][2]["overall_score"], reverse=True)
+
+            if auto_select or not sys.stdin.isatty():
+                chosen_idx, chosen = approved[0]
+                print(f"\n[INFO] Auto-selected screenplay #{chosen_idx + 1}")
+            else:
+                default = approved[0][0] + 1
+                try:
+                    raw_input = input(f"\nSelect screenplay [1-{len(entries)}, default={default}]: ").strip()
+                    chosen_idx = (int(raw_input) - 1) if raw_input else (default - 1)
+                    chosen_idx = max(0, min(len(entries) - 1, chosen_idx))
+                except (ValueError, EOFError):
+                    chosen_idx = default - 1
+                chosen = entries[chosen_idx]
+
+            concept, selected_sp, report = chosen
+
+            # 5) Auto-revise flagged scenes (up to 1 round in Phase 1)
+            if report["recommended_action"] == "revise_scenes":
+                print(f"\n[INFO] Revising flagged scenes (action={report['recommended_action']})...")
+                for issue in report["scene_issues"]:
+                    if issue.get("severity") == "error":
+                        scene_id = issue["scene_id"]
+                        if scene_id == "ALL":
+                            continue
+                        print(f"[INFO] Revising scene {scene_id}: {issue['issue']}")
+                        revision_field = "vo_line" if issue["issue"] in {"vo_too_long", "empty_vo_line"} else "visual"
+                        selected_sp = screenplay_agent_inst.revise_scene(
+                            selected_sp, scene_id,
+                            issue=issue["issue"],
+                            suggestion=issue["suggestion"],
+                            revision_field=revision_field,
+                        )
+                revised_report = reviewer.review(selected_sp)
+                selected_sp["feasibility_report"] = revised_report
+                write_json(run_dir / "screenplay_selected_revised.json", selected_sp)
+                print(f"[INFO] Post-revision score: {revised_report['overall_score']:.2f} ({revised_report['recommended_action']})")
+            else:
+                write_json(run_dir / "screenplay_selected.json", selected_sp)
+
+            # 6) Convert to ScriptPackage and run production pipeline
+            print("\n[INFO] Converting Screenplay to ScriptPackage...")
+            script_package = screenplay_to_script_package(selected_sp)
+            write_json(run_dir / "script_package.json", script_package)
+
+            # 7) Continue with existing production pipeline
+            check_tts_key()
+
+            video_agent = create_video_agent()
+            video_plan = video_agent.create_video_plan(script_package=script_package)
+            write_json(run_dir / "video_plan.json", video_plan)
+
+            audio_agent_inst = create_audio_agent(
+                output_dir=run_dir,
+                voice=str(script_package.get("audio", {}).get("tts", {}).get("voice") or "narrator"),
+            )
+            audio_timeline = audio_agent_inst.generate_audio_timeline(video_plan)
+            write_json(run_dir / "audio_timeline.json", audio_timeline)
+
+            music_agent = create_music_agent()
+            music_selection = music_agent.select_music(audio_timeline)
+            write_json(run_dir / "music_selection.json", music_selection)
+
+            visual_agent = create_visual_agent(output_dir=run_dir)
+            visual_manifest = visual_agent.generate_visual_manifest(video_plan)
+            write_json(run_dir / "visual_manifest.json", visual_manifest)
+
+            comp_agent = create_composition_agent(output_dir=run_dir)
+            render_spec = comp_agent.create_render_specification(video_plan, audio_timeline, visual_manifest, music_selection)
+            write_json(run_dir / "render_spec.json", render_spec)
+
+            render_agent = create_render_agent(output_dir=run_dir, engine=engine)
+            final_video = render_agent.render(render_spec)
+            write_json(run_dir / "final_video.json", final_video)
+
+            validate_final_video(run_dir / "final_video.mp4")
+
+            print(f"\n[OK] Screenplay run complete: {run_dir}")
+            print(f"   - Concepts:        {n_concepts} generated")
+            print(f"   - Selected:        screenplay #{chosen_idx + 1} ({concept['format']})")
+            print(f"   - ScriptPackage:   {run_dir / 'script_package.json'}")
+            print(f"   - MP4:             {run_dir / 'final_video.mp4'}")
         else:
             print(f"\n[ERROR] Unknown mode: {mode}")
             print_usage()
@@ -618,6 +781,7 @@ def print_usage():
     print("  python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json> - Create RenderSpec")
     print("  python main.py render <render_spec.json> [ffmpeg|dry_run] - Render final video")
     print("  python main.py scriptimages <script_package.json> - Create ScriptImageManifest (artifact-only)")
+    print("  python main.py screenplay <topicbrief.json> [--format FORMAT] [--n-concepts N] [--auto-select] [ffmpeg|dry_run] - Screenwriting pipeline")
     print("  python main.py mvp <topicbrief.json> [creative_spec.json] [ffmpeg|dry_run] - End-to-end MVP")
     print("  python main.py mvp_offline <topicbrief.json> [creative_spec.json] [ffmpeg|dry_run] - End-to-end offline MVP")
     print("\nOr import and use programmatically:")
