@@ -95,7 +95,7 @@ python run_pipeline.py "cheese facts" --engine dry_run
 
 **Cheese History Facts** — generated end-to-end by the pipeline (ElevenLabs voiceover, Pexels images, FFmpeg render):
 
-<video src="https://github.com/hyang0129/video_agent/releases/download/v0.1.0-demo/final_video.mp4" controls width="320"></video>
+[![Sample video thumbnail](docs/sample_video_thumbnail.jpg)](https://github.com/hyang0129/video_agent/releases/download/v0.1.0-demo/final_video.mp4)
 
 A successful pipeline run produces this artifact layout:
 
