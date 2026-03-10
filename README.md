@@ -236,18 +236,18 @@ video_agent/
 
 ---
 
-## Live2D Avatar Integration
+## Live2D Avatar Integration *(experimental — not required for core pipeline)*
 
-The pipeline supports an optional avatar rendering stage via the live2d renderer.
-video_agent acts as the director: it runs [Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync)
-on each audio segment, generates emotion/reaction cues from the script via LLM,
-and writes an `AvatarSceneManifest.json` per scene. The live2d renderer is then
-invoked as a subprocess and its transparent-background output is composited over
-the scene imagery by FFmpeg.
+The pipeline has an optional avatar rendering stage under active development.
+When mature, video_agent will act as the director: running [Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync)
+on each audio segment, generating emotion/reaction cues from the script via LLM,
+and writing an `AvatarSceneManifest.json` per scene. The live2d renderer would then
+be invoked as a subprocess and its transparent-background output composited over
+scene imagery by FFmpeg.
 
-The full interface — scene manifest schema, lipsync vocabulary, cue types, model
-selection, and CLI contract — is specified in
-[docs/live2d-avatar-api-contract.md](docs/live2d-avatar-api-contract.md).
+**Status:** Interface specified, components stubbed (`src/rhubarb_agent.py`, `src/avatar_packaging_agent.py`). Not wired into the main pipeline. Faceless voiceover output works without this.
+
+The full interface spec is in [docs/live2d-avatar-api-contract.md](docs/live2d-avatar-api-contract.md).
 
 ---
 
