@@ -113,3 +113,9 @@ TTS_SIMILARITY_BOOST = 0.75  # ElevenLabs similarity boost (0.0-1.0)
 # Audio file formats
 AUDIO_EXPORT_FORMAT = "mp3"  # or "wav" for uncompressed
 AUDIO_BITRATE = "192k"  # MP3 bitrate
+
+# Rhubarb Lip Sync
+RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", r"C:\tools\rhubarb\rhubarb.exe")
+RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)
+RHUBARB_OUTPUT_FORMAT = "json"
+RHUBARB_WAV_SAMPLE_RATE = 22050   # Hz — 22050 mono is sufficient and faster to process
