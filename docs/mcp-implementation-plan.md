@@ -567,7 +567,7 @@ Expected speedup for N=3: ~2.5-3x on the screenwriting phase.
 
 ## Phase 3: MCP Server Deployment
 
-**Goal:** `screenwriting-server` and `production-server` run as standalone MCP server processes. The orchestrator uses the MCP client protocol to discover and call tools.
+**Goal:** `screenwriting-server` and `producer-server` run as standalone MCP server processes. The orchestrator uses the MCP client protocol to discover and call tools.
 
 **Technology:** The `mcp` Python library (`pip install mcp`).
 
@@ -603,7 +603,7 @@ Run as: `python -m src.mcp.screenwriting_server`
 
 ### 3.2 MCP server for production
 
-**File:** `src/mcp/production_server.py`
+**File:** `src/mcp/producer_server.py`
 
 Same pattern, exposes:
 - `check_asset_availability`
@@ -685,7 +685,7 @@ Start with `stdio`. The tool interface is identical regardless of transport, so 
 | # | Item | Effort |
 |---|------|--------|
 | P3-1 | `mcp` library + `screenwriting_server.py` | 4h |
-| P3-2 | `production_server.py` | 4h |
+| P3-2 | `producer_server.py` | 4h |
 | P3-3 | Orchestrator as MCP client (stdio transport) | 3h |
 | P3-4 | Integration tests over MCP transport | 3h |
 

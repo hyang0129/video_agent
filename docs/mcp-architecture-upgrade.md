@@ -85,7 +85,7 @@ Each domain exposes an MCP server. Agents within a domain call their own server'
 ┌─────────────────────────────────────────────────────┐
 │                 MCP Server Registry                 │
 ├───────────────────────┬─────────────────────────────┤
-│  screenwriting-server │  production-server          │
+│  screenwriting-server │  producer-server            │
 │                       │                             │
 │  Tools:               │  Tools:                     │
 │  - research_topic     │  - check_asset_availability │
@@ -98,7 +98,7 @@ Each domain exposes an MCP server. Agents within a domain call their own server'
 
 ### Why cross-domain tool calls matter
 
-The `ScreenplayAgent` and `ScreenplayReviewer` can call `production-server` tools **without triggering a full production run**. For example:
+The `ScreenplayAgent` and `ScreenplayReviewer` can call `producer-server` tools **without triggering a full production run**. For example:
 
 - Call `check_asset_availability("World War I trench warfare soldiers")` before committing a visual description — if Pexels yields poor results, the writer can adjust the description now.
 - Call `estimate_tts_duration("In 1943, the tide began to turn...", voice="narrator")` to verify scene line length fits the timing window.
@@ -125,13 +125,13 @@ OrchestratorAgent
   │     └── present ranked screenplays, await approval or auto-select top-scored
   │
   └── [Producing Phase]
-        ├── call production-server/generate_audio  (parallel per scene)
-        ├── call production-server/fetch_assets    (parallel per scene)
-        ├── call production-server/select_music
+        ├── call producer-server/generate_audio  (parallel per scene)
+        ├── call producer-server/fetch_assets    (parallel per scene)
+        ├── call producer-server/select_music
         ├── [wait for all parallel tasks]
-        ├── call production-server/compose
-        ├── call production-server/render
-        └── call production-server/validate_output
+        ├── call producer-server/compose
+        ├── call producer-server/render
+        └── call producer-server/validate_output
               └── [if validation fails] → emit failure report, optionally loop back
 ```
 
@@ -276,7 +276,7 @@ Each agent becomes a standalone MCP server running as its own process (or Docker
 
 ### Tier 2 — Real Feedback Loop + Parallel Execution
 
-1. Implement `production-server` MCP tools (`check_asset_availability`, `estimate_tts_duration`).
+1. Implement `producer-server` MCP tools (`check_asset_availability`, `estimate_tts_duration`).
 2. `ScreenplayReviewer` calls these tools during write phase as pre-flight checks.
 3. `OrchestratorAgent` handles targeted scene revision when `ProductionReport` flags degraded output.
 4. Fan out 3 screenplay variants in parallel; auto-rank by feasibility score.
@@ -286,7 +286,7 @@ Each agent becomes a standalone MCP server running as its own process (or Docker
 
 ### Tier 3 — Full MCP Server Deployment
 
-1. `screenwriting-server` and `production-server` run as standalone MCP server processes.
+1. `screenwriting-server` and `producer-server` run as standalone MCP server processes.
 2. Orchestrator uses standard MCP client to discover and call tools.
 3. Add VTuber compositor path.
 4. Add `debate` and `tutorial` format templates.
@@ -395,7 +395,7 @@ src/
     quality_agent.py          # ffprobe validation, evaluation.json output
   mcp/
     screenwriting_server.py   # MCP server exposing screenwriting tools
-    production_server.py      # MCP server exposing production tools
+    producer_server.py        # MCP server exposing production tools
   orchestrator.py             # top-level coordinator
   artifacts/                  # Pydantic models for all artifact schemas
     concept.py

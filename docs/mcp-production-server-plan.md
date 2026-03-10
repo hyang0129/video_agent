@@ -1,8 +1,8 @@
-# MCP Production Server — Implementation Plan
+# MCP Producer Server — Implementation Plan
 
 **Date:** March 2026
 **Prerequisite reading:** [mcp-architecture-upgrade.md](mcp-architecture-upgrade.md), [mcp-implementation-plan.md](mcp-implementation-plan.md)
-**Goal:** Concrete, sequenced steps to implement the `production-server` MCP server and the Phase 2 prerequisites it depends on.
+**Goal:** Concrete, sequenced steps to implement the `producer-server` MCP server and the Phase 2 prerequisites it depends on.
 
 ---
 
@@ -20,14 +20,14 @@ Phase 1 (screenwriting split) is complete:
 **Not yet built:**
 - `ProductionReport` emission from `ScriptImageAgent` and `AudioAgent` (P1-6, still open)
 - `src/orchestrator.py` (Phase 2)
-- `src/mcp/production_server.py` (Phase 3)
+- `src/mcp/producer_server.py` (Phase 3)
 - `src/mcp/screenwriting_server.py` (Phase 3)
 
 ---
 
 ## Phase 2 Prerequisites (Before the MCP Server)
 
-The production server wraps agents that need small additions before they can be called as MCP tools. These are also the remaining Phase 1 item (P1-6) and Phase 2 items.
+The producer server wraps agents that need small additions before they can be called as MCP tools. These are also the remaining Phase 1 item (P1-6) and Phase 2 items.
 
 ### P2-0: ProductionReport emission (remaining P1-6)
 
@@ -212,9 +212,9 @@ Expected wall-clock improvement: audio (~20-30s) and image fetch (~10-15s) overl
 
 ---
 
-## Phase 3: Production Server MCP Tools
+## Phase 3: Producer Server MCP Tools
 
-**File:** `src/mcp/production_server.py`
+**File:** `src/mcp/producer_server.py`
 
 **Install:** `pip install mcp` (add to `requirements.txt`)
 
@@ -506,7 +506,7 @@ The existing `validate_final_video()` function in `main.py` should be extracted 
 
 ## Server Wiring
 
-**File:** `src/mcp/production_server.py`
+**File:** `src/mcp/producer_server.py`
 
 ```python
 from mcp.server import Server
@@ -514,7 +514,7 @@ from mcp.server.models import InitializationOptions
 from mcp.types import Tool, TextContent
 import mcp.server.stdio
 
-app = Server("production-server")
+app = Server("producer-server")
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
@@ -559,7 +559,7 @@ async def main():
             read_stream,
             write_stream,
             InitializationOptions(
-                server_name="production-server",
+                server_name="producer-server",
                 server_version="0.1.0",
                 capabilities=app.get_capabilities(notification_options=None, experimental_capabilities={}),
             ),
@@ -570,7 +570,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Run as: `venv/Scripts/python.exe -m src.mcp.production_server`
+Run as: `venv/Scripts/python.exe -m src.mcp.producer_server`
 
 ---
 
@@ -585,7 +585,7 @@ from mcp.client.stdio import stdio_client
 async def run_pipeline(screenplay: dict, run_dir: Path):
     server_params = StdioServerParameters(
         command="venv/Scripts/python.exe",
-        args=["-m", "src.mcp.production_server"],
+        args=["-m", "src.mcp.producer_server"],
     )
     async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -616,9 +616,9 @@ These extractions are required before the MCP server can call shared logic witho
 
 | Current location | Extract to | Used by |
 |-----------------|------------|---------|
-| `ScriptImageAgent._score_result()` | `src/tools/image_search_tools.py` | `ScriptImageAgent`, `production_server.check_asset_availability` |
-| `ScreenplayReviewer._estimated_speech_seconds()` | `src/utils/tts_utils.py` | `ScreenplayReviewer`, `production_server.estimate_tts_duration` |
-| `main.py:validate_final_video()` | `src/utils/ffprobe_utils.py` | `main.py`, `production_server.validate_output` |
+| `ScriptImageAgent._score_result()` | `src/tools/image_search_tools.py` | `ScriptImageAgent`, `producer_server.check_asset_availability` |
+| `ScreenplayReviewer._estimated_speech_seconds()` | `src/utils/tts_utils.py` | `ScreenplayReviewer`, `producer_server.estimate_tts_duration` |
+| `main.py:validate_final_video()` | `src/utils/ffprobe_utils.py` | `main.py`, `producer_server.validate_output` |
 
 Each extraction is a move, not a rewrite. Existing callers import from the new location.
 
@@ -630,7 +630,7 @@ Each extraction is a move, not a rewrite. Existing callers import from the new l
 src/
   mcp/
     __init__.py
-    production_server.py        (new)
+    producer_server.py          (new)
     screenwriting_server.py     (new — see mcp-implementation-plan.md §3.1)
   screenwriting/
     concept_agent.py            (Phase 1, done)
@@ -680,7 +680,7 @@ src/
 |---|------|---------|--------|
 | P3-0 | Extract shared utilities (relevance scorer, TTS duration, ffprobe) | `src/tools/`, `src/utils/` | 1h |
 | P3-1 | `pip install mcp`, add to `requirements.txt` | `requirements.txt` | 0.25h |
-| P3-2 | `production_server.py`: server skeleton + `list_tools()` | `src/mcp/production_server.py` | 1h |
+| P3-2 | `producer_server.py`: server skeleton + `list_tools()` | `src/mcp/producer_server.py` | 1h |
 | P3-3 | `check_asset_availability` tool | same | 1h |
 | P3-4 | `estimate_tts_duration` tool | same | 0.5h |
 | P3-5 | `generate_audio` tool (wraps AudioAgent) | same | 2h |
@@ -693,7 +693,7 @@ src/
 
 **Total Phase 3:** ~20h
 
-**Exit criterion:** `python -m src.mcp.production_server` starts cleanly; orchestrator calls `check_asset_availability` and `estimate_tts_duration` during screenplay review; full pipeline runs end-to-end through the MCP client; integration tests pass offline using fixture data.
+**Exit criterion:** `python -m src.mcp.producer_server` starts cleanly; orchestrator calls `check_asset_availability` and `estimate_tts_duration` during screenplay review; full pipeline runs end-to-end through the MCP client; integration tests pass offline using fixture data.
 
 ---
 
@@ -702,4 +702,4 @@ src/
 - Not a rewrite of any existing agent. All agent logic stays in `src/`.
 - Not a blocking dependency on Phase 3. Phase 2 delivers the revision loop; MCP is additive.
 - Not a change to the `mvp` command. All existing commands run unchanged throughout.
-- Not a cloud deployment. `stdio` transport runs production-server as a local subprocess.
+- Not a cloud deployment. `stdio` transport runs producer-server as a local subprocess.
