@@ -1,0 +1,221 @@
+# Live2D Avatar API Contract
+
+**Version:** 1.0
+**Producers:** video_agent (AvatarCueAgent)
+**Consumer:** live2d renderer
+
+---
+
+## Overview
+
+video_agent directs the live2d renderer as a pure render actor. video_agent is
+responsible for all scripting, audio generation, lipsync analysis, and cue
+generation. live2d is responsible only for rendering the avatar to video given a
+fully specified scene manifest.
+
+---
+
+## Division of Responsibility
+
+| Concern | Owner |
+|---|---|
+| Script and dialogue | video_agent (ScriptAgent) |
+| TTS audio generation | video_agent (AudioAgent / ElevenLabs) |
+| Rhubarb lipsync analysis | video_agent (AvatarCueAgent) |
+| Emotion and reaction cue generation | video_agent (AvatarCueAgent, LLM-driven from script) |
+| Avatar rendering | live2d |
+| Final compositing (avatar over background) | video_agent (FFmpeg) |
+
+live2d does **not** analyze audio, run Rhubarb, call any LLM, or make any
+creative decisions. It receives a fully-specified manifest and renders it.
+
+---
+
+## Scene Manifest
+
+File: `AvatarSceneManifest.json`
+Written by: video_agent AvatarCueAgent
+Read by: live2d renderer CLI
+
+```json
+{
+  "schema_version": "1.0",
+  "model": {
+    "id": "shiori",
+    "path": "assets/models/shiori/shiori.model3.json"
+  },
+  "audio": "results/<run_id>/audio_segments/scene_01.wav",
+  "output": "results/<run_id>/avatar_takes/scene_01.mp4",
+  "resolution": [1080, 1920],
+  "fps": 30,
+  "background": "transparent",
+  "lipsync": [
+    { "time": 0.00, "mouth_shape": "X" },
+    { "time": 0.04, "mouth_shape": "A" },
+    { "time": 0.12, "mouth_shape": "B" },
+    { "time": 0.20, "mouth_shape": "C" }
+  ],
+  "cues": [
+    { "time": 0.0,  "emotion": "neutral" },
+    { "time": 1.2,  "emotion": "happy" },
+    { "time": 3.5,  "reaction": "nod" },
+    { "time": 6.0,  "emotion": "surprised" }
+  ]
+}
+```
+
+### Top-level fields
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | string | Contract version; both sides must validate this |
+| `model` | object | Model selection; see below |
+| `audio` | string | WAV voiceover file; audio content only, not used for lipsync analysis inside live2d |
+| `output` | string | Destination MP4 path |
+| `resolution` | [int, int] | `[width, height]` in pixels |
+| `fps` | int | Target frame rate |
+| `background` | string | `"transparent"` for compositing, or a hex color `"#1a1a2e"`, or a path to a background image |
+| `lipsync` | array | Dense phoneme keyframe timeline; see below |
+| `cues` | array | Sparse director cues; see below |
+
+### Model object
+
+video_agent selects which Live2D character model to use. The live2d renderer
+resolves the model by `id` from its local model registry, falling back to
+`path` if `id` is not found.
+
+```json
+"model": {
+  "id": "shiori",
+  "path": "assets/models/shiori/shiori.model3.json"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Logical model identifier; must match an entry in live2d's model registry |
+| `path` | string | no | Explicit filesystem path to `.model3.json`; used as fallback if `id` is unregistered |
+
+**Model registry** is maintained by live2d in `assets/models/registry.json`.
+video_agent reads the registry at pipeline start to validate that the requested
+`id` exists before writing any manifests. If the `id` is absent and no `path`
+is provided, AvatarCueAgent must fail with a clear error — do not silently
+fall back to a default model.
+
+Supported model IDs are defined in the live2d model registry (`assets/models/registry.json` in the live2d repo).
+
+---
+
+## Lipsync Array
+
+`lipsync` is a dense keyframe timeline computed by video_agent using
+[Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync).
+video_agent runs `rhubarb -f json <audio.wav>` per scene and encodes the result
+into this array. live2d reads it as a direct keyframe table — no audio analysis
+is performed inside the renderer.
+
+Entries must be sorted ascending by `time`. The renderer interpolates between
+adjacent entries.
+
+```json
+{ "time": 0.04, "mouth_shape": "A" }
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `time` | float | Seconds from scene start |
+| `mouth_shape` | string | One of the 9 Rhubarb shape codes (see table below) |
+
+### Rhubarb Mouth Shape Vocabulary
+
+| Code | Phoneme group | Description |
+|---|---|---|
+| `X` | silence | Mouth closed / rest position |
+| `A` | m, b, p | Lips pressed together |
+| `B` | aa, ae, ah | Mouth open wide |
+| `C` | ao, aw, er | Rounded open |
+| `D` | ih, iy, eh, ey | Slight open |
+| `E` | oh | Rounded mid |
+| `F` | f, v | Top teeth on lower lip |
+| `G` | l, n, th | Tongue near teeth |
+| `H` | y, r | Slight open / rounded |
+
+These 9 codes are the canonical lipsync vocabulary for this contract. live2d
+must map all 9 to corresponding Live2D parameter values.
+
+---
+
+## Cues Array
+
+`cues` is a sparse timeline of director instructions generated by video_agent's
+AvatarCueAgent via LLM inference over the scene's script text. live2d applies
+each cue at its timestamp by blending to the target expression or triggering the
+named motion clip.
+
+```json
+{ "time": 1.2, "emotion": "happy" }
+{ "time": 3.5, "reaction": "nod" }
+{ "time": 4.1, "gaze": { "x": 0.5, "y": -0.2 } }
+{ "time": 5.0, "head":  { "yaw": 10, "pitch": -5, "roll": 0 } }
+```
+
+### Supported cue types
+
+| Key | Value type | Description |
+|---|---|---|
+| `emotion` | string | Blend to named facial expression: `"neutral"`, `"happy"`, `"sad"`, `"surprised"`, `"angry"` |
+| `reaction` | string | Trigger a pre-built motion clip: `"nod"`, `"shake"`, `"look_away"`, `"blink"` |
+| `gaze` | `{ "x": float, "y": float }` | Eye direction override; range -1.0 to 1.0 on each axis |
+| `head` | `{ "yaw": float, "pitch": float, "roll": float }` | Head angle override in degrees |
+
+Each cue object has exactly one directive key plus `time`. Unknown keys must be
+ignored by the renderer (forward compatibility).
+
+---
+
+## video_agent Pipeline Integration
+
+AvatarCueAgent is inserted between AudioAgent and CompositorAgent:
+
+```
+AudioAgent
+    --> AudioTimeline.json + WAV segments
+        --> AvatarCueAgent
+                [runs Rhubarb per WAV segment]
+                [LLM generates cues from ScriptPackage scene text]
+            --> AvatarSceneManifest.json[] (one per scene)
+                --> [subprocess] live2d-render --scene scene_N.json
+                    --> avatar_takes/scene_N.mp4 (transparent background)
+                        --> CompositorAgent (FFmpeg overlays avatar on images)
+                            --> RenderAgent --> final_video.mp4
+```
+
+The live2d renderer is invoked as a subprocess. video_agent waits for each take
+to complete before compositing.
+
+---
+
+## live2d Renderer CLI
+
+```bash
+# Render a single scene take
+live2d-render --scene scene_01.json
+
+# Override output path
+live2d-render --scene scene_01.json --output take_02.mp4
+
+# Transparent background for compositing (recommended)
+live2d-render --scene scene_01.json --transparent
+```
+
+The renderer exits 0 on success and non-zero on failure. It writes the output
+MP4 to the path specified in the manifest (or `--output` override).
+
+---
+
+## Schema Evolution Rules
+
+- Increment `schema_version` on any breaking change.
+- Additive changes (new optional cue types, new top-level optional fields) do
+  not require a version bump provided the renderer ignores unknown keys.
+- Both sides must reject manifests with an unrecognized `schema_version`.
