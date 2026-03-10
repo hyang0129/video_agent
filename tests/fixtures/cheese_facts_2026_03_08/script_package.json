@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0.0",
+  "created_at": "2026-03-08T02:51:12Z",
+  "script_package_id": "pkg_cheese_curds_whey_45s_001",
+  "topic_id": "topic_cheese_science_and_production_ex",
+  "subtopic_id": "sub_curds_whey_and_fermentation_proc",
+  "hook_variants": [
+    "Your cheese is basically digested milk—here's why",
+    "That orange cheddar? It's not actually orange"
+  ],
+  "script": {
+    "voiceover": "Milk is just water, protein, fat, vitamins, and sugar. But cheesemaking transforms it into something totally different. Enzymes break down the milk—basically mimicking your stomach's digestive process. The lactose drains away with the whey, while fat, vitamins, and minerals stay with the protein curds. Then comes the magic: controlled growth of bacteria, molds, and yeast during aging. These microbes are added during processing, rubbed on rinds, or applied through washing liquids. Oh, and that bright orange grocery store cheddar? It's colored with annatto from the tropical achiote tree—not naturally orange at all. Humans have been perfecting this chemistry for thousands of years. What's your favorite cheese?",
+    "beats": [
+      {
+        "t_start_s": 0.0,
+        "t_end_s": 5.0,
+        "on_screen_text": "MILK → CHEESE",
+        "vo_line": "Milk is just water, protein, fat, vitamins, and sugar. But cheesemaking transforms it into something totally different."
+      },
+      {
+        "t_start_s": 5.0,
+        "t_end_s": 12.0,
+        "on_screen_text": "ENZYME ACTION",
+        "vo_line": "Enzymes break down the milk—basically mimicking your stomach's digestive process."
+      },
+      {
+        "t_start_s": 12.0,
+        "t_end_s": 19.0,
+        "on_screen_text": "CURDS vs WHEY",
+        "vo_line": "The lactose drains away with the whey, while fat, vitamins, and minerals stay with the protein curds."
+      },
+      {
+        "t_start_s": 19.0,
+        "t_end_s": 27.0,
+        "on_screen_text": "FERMENTATION",
+        "vo_line": "Then comes the magic: controlled growth of bacteria, molds, and yeast during aging. These microbes are added during processing, rubbed on rinds, or applied through washing liquids."
+      },
+      {
+        "t_start_s": 27.0,
+        "t_end_s": 35.0,
+        "on_screen_text": "THAT ORANGE COLOR",
+        "vo_line": "That bright orange grocery store cheddar? It's colored with annatto from the tropical achiote tree—not naturally orange at all."
+      },
+      {
+        "t_start_s": 35.0,
+        "t_end_s": 45.0,
+        "on_screen_text": "ANCIENT CRAFT",
+        "vo_line": "Humans have been perfecting this chemistry for thousands of years. What's your favorite cheese?"
+      }
+    ]
+  },
+  "caption": "The science behind cheese: how enzymes, bacteria, and whey transform milk into your favorite dairy.",
+  "hashtags": [
+    "#CheeseScience",
+    "#FoodScience",
+    "#Cheesemaking",
+    "#FermentationProcess",
+    "#STEM"
+  ],
+  "safety_notes": [
+    "fact_75a152e650c9: 'Couple thousand years' is approximate; confidence is medium",
+    "fact_3052cf356b06: Historical cheese coloring practice is reported as 'may have'; medium confidence",
+    "fact_6206478b82d2: Enzyme action comparison to digestion is analogical; verify digestive accuracy if needed"
+  ],
+  "fact_sources": [
+    "fact_f08cd7a01593",
+    "fact_6206478b82d2",
+    "fact_70565f8c7a1c",
+    "fact_c422670c60ea",
+    "fact_31b1643d1628",
+    "fact_cc933283e34b",
+    "fact_75a152e650c9"
+  ]
+}

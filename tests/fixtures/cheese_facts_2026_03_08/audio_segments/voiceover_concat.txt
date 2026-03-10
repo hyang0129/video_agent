@@ -1,0 +1,6 @@
+file 'C:\Users\HongM\Code Projects\video_agent\results\sample_2026-03-08_cheese_history_facts_f77975\audio_segments\vo_scene_01.mp3'
+file 'C:\Users\HongM\Code Projects\video_agent\results\sample_2026-03-08_cheese_history_facts_f77975\audio_segments\vo_scene_02.mp3'
+file 'C:\Users\HongM\Code Projects\video_agent\results\sample_2026-03-08_cheese_history_facts_f77975\audio_segments\vo_scene_03.mp3'
+file 'C:\Users\HongM\Code Projects\video_agent\results\sample_2026-03-08_cheese_history_facts_f77975\audio_segments\vo_scene_04.mp3'
+file 'C:\Users\HongM\Code Projects\video_agent\results\sample_2026-03-08_cheese_history_facts_f77975\audio_segments\vo_scene_05.mp3'
+file 'C:\Users\HongM\Code Projects\video_agent\results\sample_2026-03-08_cheese_history_facts_f77975\audio_segments\vo_scene_06.mp3'

@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "final_video_id": "fv_109a5afd",
+  "render_spec_ref": "rs_1670580e",
+  "created_at": "2026-03-08T02:52:59.619090Z",
+  "video_file_path": "final_video.mp4",
+  "thumbnail_path": null,
+  "file_size_mb": 5.057,
+  "duration_seconds": 38.22,
+  "resolution": [
+    1080,
+    1920
+  ],
+  "fps": 30,
+  "codec": "h264",
+  "bitrate_kbps": null,
+  "render_metadata": {
+    "engine": "FfmpegRenderEngine",
+    "render_time_seconds": 70.806,
+    "success": true,
+    "warnings": [],
+    "preview_url": null
+  }
+}

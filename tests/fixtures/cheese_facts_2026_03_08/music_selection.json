@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "music_selection_id": "ms_a6ff3efd",
+  "created_at": "2026-03-08T02:51:25.592997Z",
+  "selection_method": "default",
+  "music_file_path": "C:\\Users\\HongM\\Code Projects\\video_agent\\assets\\music\\default_music.mp3",
+  "title": "Default Background Music",
+  "artist": null,
+  "license": "see C:\\Users\\HongM\\Code Projects\\video_agent\\assets\\music\\LICENSE",
+  "volume_db": -18.0,
+  "loop": true,
+  "target_duration_s": 38.22,
+  "source_duration_s": 262.4
+}

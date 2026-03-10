@@ -1,0 +1,467 @@
+{
+  "schema_version": "1.0.0",
+  "render_spec_id": "rs_1670580e",
+  "created_at": "2026-03-08T02:51:48.804379Z",
+  "video_plan_ref": "vp_pkg_cheese_curds_whey_45s_001",
+  "audio_timeline_ref": "at_6a7dee35",
+  "visual_manifest_ref": "vm_4f16f408",
+  "output_settings": {
+    "resolution": [
+      1080,
+      1920
+    ],
+    "fps": 30,
+    "format": "mp4",
+    "codec": "h264",
+    "duration_seconds": 38.22
+  },
+  "layers": [
+    {
+      "layer_id": "layer_video",
+      "type": "video",
+      "z_index": 0,
+      "clips": [
+        {
+          "clip_id": "clip_scene_01",
+          "scene_id": "scene_01",
+          "asset_ref": "asset_scene_01",
+          "source_file": "assets/scene_01.jpg",
+          "t_start_s": 0.0,
+          "t_end_s": 7.15,
+          "duration_s": 7.15,
+          "effects": [
+            {
+              "type": "ken_burns",
+              "direction": "pan_right",
+              "distance": 0.08,
+              "zoom": 1.1
+            }
+          ],
+          "transition_in": {
+            "type": "fade",
+            "duration_s": 0.3
+          },
+          "transition_out": {
+            "type": "fade",
+            "duration_s": 0.3
+          }
+        },
+        {
+          "clip_id": "clip_scene_02",
+          "scene_id": "scene_02",
+          "asset_ref": "asset_scene_02",
+          "source_file": "assets/scene_02.jpg",
+          "t_start_s": 7.15,
+          "t_end_s": 11.47,
+          "duration_s": 4.32,
+          "effects": [
+            {
+              "type": "ken_burns",
+              "direction": "pan_left",
+              "distance": 0.08,
+              "zoom": 1.1
+            }
+          ],
+          "transition_in": {
+            "type": "fade",
+            "duration_s": 0.3
+          },
+          "transition_out": {
+            "type": "fade",
+            "duration_s": 0.3
+          }
+        },
+        {
+          "clip_id": "clip_scene_03",
+          "scene_id": "scene_03",
+          "asset_ref": "asset_scene_03",
+          "source_file": "assets/scene_03.jpg",
+          "t_start_s": 11.47,
+          "t_end_s": 17.23,
+          "duration_s": 5.76,
+          "effects": [
+            {
+              "type": "ken_burns",
+              "direction": "pan_left",
+              "distance": 0.08,
+              "zoom": 1.1
+            }
+          ],
+          "transition_in": {
+            "type": "fade",
+            "duration_s": 0.3
+          },
+          "transition_out": {
+            "type": "fade",
+            "duration_s": 0.3
+          }
+        },
+        {
+          "clip_id": "clip_scene_04",
+          "scene_id": "scene_04",
+          "asset_ref": "asset_scene_04",
+          "source_file": "assets/scene_04.jpg",
+          "t_start_s": 17.23,
+          "t_end_s": 27.35,
+          "duration_s": 10.12,
+          "effects": [
+            {
+              "type": "ken_burns",
+              "direction": "pan_left",
+              "distance": 0.08,
+              "zoom": 1.1
+            }
+          ],
+          "transition_in": {
+            "type": "fade",
+            "duration_s": 0.3
+          },
+          "transition_out": {
+            "type": "fade",
+            "duration_s": 0.3
+          }
+        },
+        {
+          "clip_id": "clip_scene_05",
+          "scene_id": "scene_05",
+          "asset_ref": "asset_scene_05",
+          "source_file": "assets/scene_05.jpg",
+          "t_start_s": 27.35,
+          "t_end_s": 33.9,
+          "duration_s": 6.55,
+          "effects": [
+            {
+              "type": "ken_burns",
+              "direction": "zoom_in",
+              "intensity": 1.15,
+              "anchor": "center"
+            }
+          ],
+          "transition_in": {
+            "type": "fade",
+            "duration_s": 0.3
+          },
+          "transition_out": {
+            "type": "fade",
+            "duration_s": 0.3
+          }
+        },
+        {
+          "clip_id": "clip_scene_06",
+          "scene_id": "scene_06",
+          "asset_ref": "asset_scene_06",
+          "source_file": "assets/scene_06.jpg",
+          "t_start_s": 33.9,
+          "t_end_s": 38.22,
+          "duration_s": 4.32,
+          "effects": [
+            {
+              "type": "ken_burns",
+              "direction": "pan_right",
+              "distance": 0.08,
+              "zoom": 1.1
+            }
+          ],
+          "transition_in": {
+            "type": "fade",
+            "duration_s": 0.3
+          },
+          "transition_out": {
+            "type": "fade",
+            "duration_s": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "layer_id": "layer_subtitles",
+      "type": "text",
+      "z_index": 2,
+      "elements": [
+        {
+          "element_id": "subtitle_scene_01",
+          "scene_id": "scene_01",
+          "text": "Milk is just water, protein, fat, vitamins, and sugar. But cheesemaking transforms it into something totally different.",
+          "t_start_s": 0.0,
+          "t_end_s": 7.15,
+          "position": {
+            "x": "center",
+            "y": 0.75
+          },
+          "style": {
+            "font": "Montserrat-Bold",
+            "size": 72,
+            "color": "#FFFFFF",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            },
+            "shadow": {
+              "blur": 8,
+              "opacity": 0.8
+            }
+          },
+          "animation": {
+            "in": {
+              "type": "fade_up",
+              "duration_s": 0.3
+            },
+            "out": {
+              "type": "fade",
+              "duration_s": 0.2
+            }
+          }
+        },
+        {
+          "element_id": "subtitle_scene_02",
+          "scene_id": "scene_02",
+          "text": "Enzymes break down the milk—basically mimicking your stomach's digestive process.",
+          "t_start_s": 7.15,
+          "t_end_s": 11.47,
+          "position": {
+            "x": "center",
+            "y": 0.75
+          },
+          "style": {
+            "font": "Montserrat-Bold",
+            "size": 72,
+            "color": "#FFFFFF",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            },
+            "shadow": {
+              "blur": 8,
+              "opacity": 0.8
+            }
+          },
+          "animation": {
+            "in": {
+              "type": "fade_up",
+              "duration_s": 0.3
+            },
+            "out": {
+              "type": "fade",
+              "duration_s": 0.2
+            }
+          }
+        },
+        {
+          "element_id": "subtitle_scene_03",
+          "scene_id": "scene_03",
+          "text": "The lactose drains away with the whey, while fat, vitamins, and minerals stay with the protein curds.",
+          "t_start_s": 11.47,
+          "t_end_s": 17.23,
+          "position": {
+            "x": "center",
+            "y": 0.75
+          },
+          "style": {
+            "font": "Montserrat-Bold",
+            "size": 72,
+            "color": "#FFFFFF",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            },
+            "shadow": {
+              "blur": 8,
+              "opacity": 0.8
+            }
+          },
+          "animation": {
+            "in": {
+              "type": "fade_up",
+              "duration_s": 0.3
+            },
+            "out": {
+              "type": "fade",
+              "duration_s": 0.2
+            }
+          }
+        },
+        {
+          "element_id": "subtitle_scene_04",
+          "scene_id": "scene_04",
+          "text": "Then comes the magic: controlled growth of bacteria, molds, and yeast during aging. These microbes are added during processing, rubbed on rinds, or applied through washing liquids.",
+          "t_start_s": 17.23,
+          "t_end_s": 27.35,
+          "position": {
+            "x": "center",
+            "y": 0.75
+          },
+          "style": {
+            "font": "Montserrat-Bold",
+            "size": 72,
+            "color": "#FFFFFF",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            },
+            "shadow": {
+              "blur": 8,
+              "opacity": 0.8
+            }
+          },
+          "animation": {
+            "in": {
+              "type": "fade_up",
+              "duration_s": 0.3
+            },
+            "out": {
+              "type": "fade",
+              "duration_s": 0.2
+            }
+          }
+        },
+        {
+          "element_id": "subtitle_scene_05",
+          "scene_id": "scene_05",
+          "text": "That bright orange grocery store cheddar? It's colored with annatto from the tropical achiote tree—not naturally orange at all.",
+          "t_start_s": 27.35,
+          "t_end_s": 33.9,
+          "position": {
+            "x": "center",
+            "y": 0.75
+          },
+          "style": {
+            "font": "Montserrat-Bold",
+            "size": 72,
+            "color": "#FFFFFF",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            },
+            "shadow": {
+              "blur": 8,
+              "opacity": 0.8
+            }
+          },
+          "animation": {
+            "in": {
+              "type": "fade_up",
+              "duration_s": 0.3
+            },
+            "out": {
+              "type": "fade",
+              "duration_s": 0.2
+            }
+          }
+        },
+        {
+          "element_id": "subtitle_scene_06",
+          "scene_id": "scene_06",
+          "text": "Humans have been perfecting this chemistry for thousands of years. What's your favorite cheese?",
+          "t_start_s": 33.9,
+          "t_end_s": 38.22,
+          "position": {
+            "x": "center",
+            "y": 0.75
+          },
+          "style": {
+            "font": "Montserrat-Bold",
+            "size": 72,
+            "color": "#FFFFFF",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            },
+            "shadow": {
+              "blur": 8,
+              "opacity": 0.8
+            }
+          },
+          "animation": {
+            "in": {
+              "type": "fade_up",
+              "duration_s": 0.3
+            },
+            "out": {
+              "type": "fade",
+              "duration_s": 0.2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "layer_id": "layer_audio",
+      "type": "audio",
+      "z_index": -1,
+      "tracks": [
+        {
+          "track_id": "track_master",
+          "type": "master",
+          "source_file": "audio_master.m4a",
+          "t_start_s": 0.0,
+          "t_end_s": 38.22,
+          "volume_db": 0
+        },
+        {
+          "track_id": "track_vo",
+          "type": "voiceover",
+          "segments": [
+            {
+              "segment_id": "vo_scene_01",
+              "scene_id": "scene_01",
+              "source_file": "audio_segments\\vo_scene_01.mp3",
+              "t_start_s": 0.0,
+              "t_end_s": 7.152,
+              "volume_db": 0
+            },
+            {
+              "segment_id": "vo_scene_02",
+              "scene_id": "scene_02",
+              "source_file": "audio_segments\\vo_scene_02.mp3",
+              "t_start_s": 7.152,
+              "t_end_s": 11.471,
+              "volume_db": 0
+            },
+            {
+              "segment_id": "vo_scene_03",
+              "scene_id": "scene_03",
+              "source_file": "audio_segments\\vo_scene_03.mp3",
+              "t_start_s": 11.471,
+              "t_end_s": 17.23,
+              "volume_db": 0
+            },
+            {
+              "segment_id": "vo_scene_04",
+              "scene_id": "scene_04",
+              "source_file": "audio_segments\\vo_scene_04.mp3",
+              "t_start_s": 17.23,
+              "t_end_s": 27.354,
+              "volume_db": 0
+            },
+            {
+              "segment_id": "vo_scene_05",
+              "scene_id": "scene_05",
+              "source_file": "audio_segments\\vo_scene_05.mp3",
+              "t_start_s": 27.354,
+              "t_end_s": 33.902,
+              "volume_db": 0
+            },
+            {
+              "segment_id": "vo_scene_06",
+              "scene_id": "scene_06",
+              "source_file": "audio_segments\\vo_scene_06.mp3",
+              "t_start_s": 33.902,
+              "t_end_s": 38.221,
+              "volume_db": 0
+            }
+          ]
+        },
+        {
+          "track_id": "track_music",
+          "type": "music",
+          "source_file": "C:\\Users\\HongM\\Code Projects\\video_agent\\assets\\music\\default_music.mp3",
+          "volume_db": -18.0,
+          "loop": true,
+          "t_start_s": 0.0,
+          "t_end_s": 38.22,
+          "music_selection_id": "ms_a6ff3efd"
+        }
+      ]
+    }
+  ]
+}

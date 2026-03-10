@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0.0",
+  "created_at": "2026-03-08T02:51:25.526869Z",
+  "audio_timeline_id": "at_6a7dee35",
+  "video_plan_ref": "vp_pkg_cheese_curds_whey_45s_001",
+  "audio_file_path": "audio_master.m4a",
+  "duration_seconds": 38.22,
+  "voice_id": "21m00Tcm4TlvDq8ikWAM",
+  "tracks": [
+    {
+      "type": "voiceover",
+      "file": "audio_segments\\vo_scene_01.mp3",
+      "scene_id": "scene_01",
+      "t_start_s": 0.0,
+      "t_end_s": 7.152,
+      "volume_db": 0,
+      "metadata": {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "character_count": 119,
+        "file_size_bytes": 115400,
+        "estimated_duration_s": 4.81,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "planned_scene_duration_s": 5.0,
+        "timeline_duration_s": 7.152
+      }
+    },
+    {
+      "type": "voiceover",
+      "file": "audio_segments\\vo_scene_02.mp3",
+      "scene_id": "scene_02",
+      "t_start_s": 7.152,
+      "t_end_s": 11.471,
+      "volume_db": 0,
+      "metadata": {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "character_count": 81,
+        "file_size_bytes": 70261,
+        "estimated_duration_s": 2.93,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "planned_scene_duration_s": 7.0,
+        "timeline_duration_s": 4.319
+      }
+    },
+    {
+      "type": "voiceover",
+      "file": "audio_segments\\vo_scene_03.mp3",
+      "scene_id": "scene_03",
+      "t_start_s": 11.471,
+      "t_end_s": 17.23,
+      "volume_db": 0,
+      "metadata": {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "character_count": 101,
+        "file_size_bytes": 93248,
+        "estimated_duration_s": 3.89,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "planned_scene_duration_s": 7.0,
+        "timeline_duration_s": 5.759
+      }
+    },
+    {
+      "type": "voiceover",
+      "file": "audio_segments\\vo_scene_04.mp3",
+      "scene_id": "scene_04",
+      "t_start_s": 17.23,
+      "t_end_s": 27.354,
+      "volume_db": 0,
+      "metadata": {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "character_count": 180,
+        "file_size_bytes": 163048,
+        "estimated_duration_s": 6.79,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "planned_scene_duration_s": 8.0,
+        "timeline_duration_s": 10.124
+      }
+    },
+    {
+      "type": "voiceover",
+      "file": "audio_segments\\vo_scene_05.mp3",
+      "scene_id": "scene_05",
+      "t_start_s": 27.354,
+      "t_end_s": 33.902,
+      "volume_db": 0,
+      "metadata": {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "character_count": 127,
+        "file_size_bytes": 105787,
+        "estimated_duration_s": 4.41,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "planned_scene_duration_s": 8.0,
+        "timeline_duration_s": 6.548
+      }
+    },
+    {
+      "type": "voiceover",
+      "file": "audio_segments\\vo_scene_06.mp3",
+      "scene_id": "scene_06",
+      "t_start_s": 33.902,
+      "t_end_s": 38.221,
+      "volume_db": 0,
+      "metadata": {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "character_count": 95,
+        "file_size_bytes": 70261,
+        "estimated_duration_s": 2.93,
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "planned_scene_duration_s": 10.0,
+        "timeline_duration_s": 4.319
+      }
+    },
+    {
+      "type": "music",
+      "file": "assets\\music\\default_music.mp3",
+      "t_start_s": 0.0,
+      "t_end_s": 38.221,
+      "volume_db": -18.0,
+      "metadata": {
+        "comment": "Placeholder track: Creative Commons licensed",
+        "note": "Phase 2 will implement actual mixing"
+      }
+    }
+  ],
+  "processing_notes": [
+    "Phase 1: Individual voiceover segments generated",
+    "Phase 2 will add: audio mixing, normalization, master file export",
+    "Phase 1 integration: created master voiceover track for render"
+  ]
+}

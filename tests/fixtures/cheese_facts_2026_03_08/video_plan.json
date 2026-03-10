@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "created_at": "2026-03-08T02:51:20.405015Z",
+  "video_plan_id": "vp_pkg_cheese_curds_whey_45s_001",
+  "topic_id": "topic_cheese_science_and_production_ex",
+  "subtopic_id": "sub_curds_whey_and_fermentation_proc",
+  "inputs": {
+    "script_package_ref": "pkg_cheese_curds_whey_45s_001",
+    "creative_spec": null
+  },
+  "audio": {
+    "tts": {
+      "enabled": true,
+      "voice": "narrator"
+    }
+  },
+  "subtitles": {
+    "enabled": true,
+    "style": "large, high-contrast"
+  },
+  "scenes": [
+    {
+      "scene_id": "scene_01",
+      "t_start_s": 0.0,
+      "t_end_s": 5.0,
+      "vo_line": "Milk is just water, protein, fat, vitamins, and sugar. But cheesemaking transforms it into something totally different.",
+      "on_screen_text": "MILK → CHEESE",
+      "visual_direction": "b-roll or simple illustration supporting the on-screen text",
+      "asset_prompts": [
+        "MILK → CHEESE"
+      ]
+    },
+    {
+      "scene_id": "scene_02",
+      "t_start_s": 5.0,
+      "t_end_s": 12.0,
+      "vo_line": "Enzymes break down the milk—basically mimicking your stomach's digestive process.",
+      "on_screen_text": "ENZYME ACTION",
+      "visual_direction": "b-roll or simple illustration supporting the on-screen text",
+      "asset_prompts": [
+        "ENZYME ACTION"
+      ]
+    },
+    {
+      "scene_id": "scene_03",
+      "t_start_s": 12.0,
+      "t_end_s": 19.0,
+      "vo_line": "The lactose drains away with the whey, while fat, vitamins, and minerals stay with the protein curds.",
+      "on_screen_text": "CURDS vs WHEY",
+      "visual_direction": "b-roll or simple illustration supporting the on-screen text",
+      "asset_prompts": [
+        "CURDS vs WHEY"
+      ]
+    },
+    {
+      "scene_id": "scene_04",
+      "t_start_s": 19.0,
+      "t_end_s": 27.0,
+      "vo_line": "Then comes the magic: controlled growth of bacteria, molds, and yeast during aging. These microbes are added during processing, rubbed on rinds, or applied through washing liquids.",
+      "on_screen_text": "FERMENTATION",
+      "visual_direction": "b-roll or simple illustration supporting the on-screen text",
+      "asset_prompts": [
+        "FERMENTATION"
+      ]
+    },
+    {
+      "scene_id": "scene_05",
+      "t_start_s": 27.0,
+      "t_end_s": 35.0,
+      "vo_line": "That bright orange grocery store cheddar? It's colored with annatto from the tropical achiote tree—not naturally orange at all.",
+      "on_screen_text": "THAT ORANGE COLOR",
+      "visual_direction": "b-roll or simple illustration supporting the on-screen text",
+      "asset_prompts": [
+        "THAT ORANGE COLOR"
+      ]
+    },
+    {
+      "scene_id": "scene_06",
+      "t_start_s": 35.0,
+      "t_end_s": 45.0,
+      "vo_line": "Humans have been perfecting this chemistry for thousands of years. What's your favorite cheese?",
+      "on_screen_text": "ANCIENT CRAFT",
+      "visual_direction": "b-roll or simple illustration supporting the on-screen text",
+      "asset_prompts": [
+        "ANCIENT CRAFT"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+{
+  "schema_version": "1.0.0",
+  "visual_manifest_id": "vm_4f16f408",
+  "video_plan_ref": "vp_pkg_cheese_curds_whey_45s_001",
+  "created_at": "2026-03-08T02:51:48.801355Z",
+  "total_scenes": 6,
+  "total_assets": 6,
+  "assets": [
+    {
+      "asset_id": "asset_scene_01",
+      "scene_id": "scene_01",
+      "type": "image",
+      "source": "pexels",
+      "file_path": "assets/scene_01.jpg",
+      "url": "https://images.pexels.com/photos/8064382/pexels-photo-8064382.jpeg",
+      "resolution": [
+        2832,
+        4240
+      ],
+      "attribution": {
+        "required": true,
+        "text": "Photo by Los Muertos Crew on Pexels (https://www.pexels.com/@cristian-rojas)",
+        "license": "Pexels License"
+      },
+      "content_safety": {
+        "validated": true,
+        "service": "none",
+        "flags": [
+          "content_validation_skipped"
+        ],
+        "score": 1.0
+      },
+      "metadata": {
+        "search_query": "milk cheese production transformation fermentation",
+        "pexels_id": 8064382,
+        "alt": "High angle of crop anonymous person filtering cottage cheese with whey through colander while preparing homemade cheese",
+        "queries_tried": [
+          "milk cheese production transformation fermentation"
+        ],
+        "alternatives_considered": 10,
+        "selection_reason": "LLM-selected from validated candidates",
+        "script_line": "Milk is just water, protein, fat, vitamins, and sugar. But cheesemaking transforms it into something totally different."
+      }
+    },
+    {
+      "asset_id": "asset_scene_02",
+      "scene_id": "scene_02",
+      "type": "image",
+      "source": "pexels",
+      "file_path": "assets/scene_02.jpg",
+      "url": "https://images.pexels.com/photos/8064390/pexels-photo-8064390.jpeg",
+      "resolution": [
+        2832,
+        4240
+      ],
+      "attribution": {
+        "required": true,
+        "text": "Photo by Los Muertos Crew on Pexels (https://www.pexels.com/@cristian-rojas)",
+        "license": "Pexels License"
+      },
+      "content_safety": {
+        "validated": true,
+        "service": "none",
+        "flags": [
+          "content_validation_skipped"
+        ],
+        "score": 1.0
+      },
+      "metadata": {
+        "search_query": "enzyme milk fermentation cheese production",
+        "pexels_id": 8064390,
+        "alt": "Close-up of homemade cottage cheese draining in a red sieve, showcasing its texture.",
+        "queries_tried": [
+          "enzyme milk fermentation cheese production"
+        ],
+        "alternatives_considered": 9,
+        "selection_reason": "LLM-selected from validated candidates",
+        "script_line": "Enzymes break down the milk—basically mimicking your stomach's digestive process."
+      }
+    },
+    {
+      "asset_id": "asset_scene_03",
+      "scene_id": "scene_03",
+      "type": "image",
+      "source": "pexels",
+      "file_path": "assets/scene_03.jpg",
+      "url": "https://images.pexels.com/photos/5953691/pexels-photo-5953691.jpeg",
+      "resolution": [
+        4127,
+        6191
+      ],
+      "attribution": {
+        "required": true,
+        "text": "Photo by Anna Shvets on Pexels (https://www.pexels.com/@shvetsa)",
+        "license": "Pexels License"
+      },
+      "content_safety": {
+        "validated": true,
+        "service": "none",
+        "flags": [
+          "content_validation_skipped"
+        ],
+        "score": 1.0
+      },
+      "metadata": {
+        "search_query": "cheese making curds whey separation fermentation",
+        "pexels_id": 5953691,
+        "alt": "Close-up of fresh white cheese in a dairy production plant, showcasing the clean and organized setting.",
+        "queries_tried": [
+          "cheese making curds whey separation fermentation"
+        ],
+        "alternatives_considered": 8,
+        "selection_reason": "LLM-selected from validated candidates",
+        "script_line": "The lactose drains away with the whey, while fat, vitamins, and minerals stay with the protein curds."
+      }
+    },
+    {
+      "asset_id": "asset_scene_04",
+      "scene_id": "scene_04",
+      "type": "image",
+      "source": "pexels",
+      "file_path": "assets/scene_04.jpg",
+      "url": "https://images.pexels.com/photos/5472002/pexels-photo-5472002.jpeg",
+      "resolution": [
+        2048,
+        3072
+      ],
+      "attribution": {
+        "required": true,
+        "text": "Photo by Ines Iachelini on Pexels (https://www.pexels.com/@ines-iachelini-301791)",
+        "license": "Pexels License"
+      },
+      "content_safety": {
+        "validated": true,
+        "service": "none",
+        "flags": [
+          "content_validation_skipped"
+        ],
+        "score": 1.0
+      },
+      "metadata": {
+        "search_query": "cheese aging fermentation bacteria mold rind washing",
+        "pexels_id": 5472002,
+        "alt": "Close-up of a rustic blue cheese wheel on a wooden table, capturing its aged texture and molds.",
+        "queries_tried": [
+          "cheese aging fermentation bacteria mold rind washing"
+        ],
+        "alternatives_considered": 10,
+        "selection_reason": "LLM-selected from validated candidates",
+        "script_line": "Then comes the magic: controlled growth of bacteria, molds, and yeast during aging. These microbes are added during processing, rubbed on rinds, or applied through washing liquids."
+      }
+    },
+    {
+      "asset_id": "asset_scene_05",
+      "scene_id": "scene_05",
+      "type": "image",
+      "source": "pexels",
+      "file_path": "assets/scene_05.jpg",
+      "url": "https://images.pexels.com/photos/3087091/pexels-photo-3087091.jpeg",
+      "resolution": [
+        3067,
+        3840
+      ],
+      "attribution": {
+        "required": true,
+        "text": "Photo by Patrick Rasoanaivo on Pexels (https://www.pexels.com/@patrick-rasoanaivo-39581)",
+        "license": "Pexels License"
+      },
+      "content_safety": {
+        "validated": true,
+        "service": "none",
+        "flags": [
+          "content_validation_skipped"
+        ],
+        "score": 1.0
+      },
+      "metadata": {
+        "search_query": "annatto achiote tree tropical fruit cheese coloring",
+        "pexels_id": 3087091,
+        "alt": "Close-up of vibrant annatto seeds from opened fruit pod on a neutral background.",
+        "queries_tried": [
+          "annatto achiote tree tropical fruit cheese coloring"
+        ],
+        "alternatives_considered": 10,
+        "selection_reason": "LLM-selected from validated candidates",
+        "script_line": "That bright orange grocery store cheddar? It's colored with annatto from the tropical achiote tree—not naturally orange at all."
+      }
+    },
+    {
+      "asset_id": "asset_scene_06",
+      "scene_id": "scene_06",
+      "type": "image",
+      "source": "pexels",
+      "file_path": "assets/scene_06.jpg",
+      "url": "https://images.pexels.com/photos/5953782/pexels-photo-5953782.jpeg",
+      "resolution": [
+        3714,
+        5571
+      ],
+      "attribution": {
+        "required": true,
+        "text": "Photo by Anna Shvets on Pexels (https://www.pexels.com/@shvetsa)",
+        "license": "Pexels License"
+      },
+      "content_safety": {
+        "validated": true,
+        "service": "none",
+        "flags": [
+          "content_validation_skipped"
+        ],
+        "score": 1.0
+      },
+      "metadata": {
+        "search_query": "cheese production fermentation curds whey",
+        "pexels_id": 5953782,
+        "alt": "Stacks of cheese rounds aging on industrial racks in a cheese production facility.",
+        "queries_tried": [
+          "cheese production fermentation curds whey"
+        ],
+        "alternatives_considered": 7,
+        "selection_reason": "LLM-selected from validated candidates",
+        "script_line": "Humans have been perfecting this chemistry for thousands of years. What's your favorite cheese?"
+      }
+    }
+  ]
+}
