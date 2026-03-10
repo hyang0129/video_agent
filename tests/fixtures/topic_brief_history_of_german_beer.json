@@ -1,0 +1,21 @@
+{
+  "topic_id": "history_of_german_beer",
+  "subtopic_id": "facts",
+  "topic": {
+    "name": "History of German Beer",
+    "positioning": "The fascinating 500-year history behind Germany's most famous export"
+  },
+  "subtopic": {
+    "name": "German Beer History Facts",
+    "query": "history of german beer facts",
+    "angle": "From medieval monks to the Reinheitsgebot purity law to Oktoberfest — the surprising story behind German brewing tradition"
+  },
+  "format": {
+    "primary": "Did You Know",
+    "target_duration_seconds": 40
+  },
+  "script_constraints": {
+    "tone": "authoritative, curious",
+    "claims_policy": "Use only verified historical facts"
+  }
+}

@@ -20,12 +20,35 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+import json
 import re
 import uuid
 
 from .artifacts.io import write_json
 from .config import RESULTS_DIR
 from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
+
+# Relevance score below which an image candidate is considered too low-quality
+_RELEVANCE_THRESHOLD = 2.0
+
+
+def _write_production_report(run_dir: Path, run_id: str, new_issues: List[Dict[str, Any]]) -> None:
+    """Append new_issues to production_report.json, creating the file if absent."""
+    report_path = run_dir / "production_report.json"
+    if report_path.exists():
+        try:
+            existing = json.loads(report_path.read_text(encoding="utf-8"))
+            all_issues: List[Dict[str, Any]] = list(existing.get("issues") or []) + new_issues
+        except Exception:
+            all_issues = new_issues
+    else:
+        all_issues = new_issues
+    write_json(report_path, {
+        "schema_version": "1.0.0",
+        "run_id": run_id,
+        "issues": all_issues,
+        "degraded_scene_count": sum(1 for i in all_issues if i.get("status") == "degraded"),
+    })
 
 
 _RELEVANCE_STOPWORDS = {
@@ -363,11 +386,20 @@ class ScriptImageRetrievalAgent:
 
         raise ImageSearchError(f"Image source '{source_name}' is not implemented")
 
-    def generate_script_image_manifest(self, script_package: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_script_image_manifest(
+        self,
+        script_package: Dict[str, Any],
+        scene_ids: Optional[List[str]] = None,
+        run_id: str = "",
+    ) -> Dict[str, Any]:
         """Generate a beat-referenced image candidate manifest.
 
         Args:
             script_package: ScriptPackage artifact containing script beats.
+            scene_ids: Optional list of scene IDs to process. When provided, only
+                matching beats are fetched; others are skipped. When None, all beats
+                are processed (existing behaviour, no regression).
+            run_id: Pipeline run identifier written into production_report.json.
 
         Returns:
             ScriptImageManifest dictionary.
@@ -392,16 +424,51 @@ class ScriptImageRetrievalAgent:
         )
 
         segment_assets: List[Dict[str, Any]] = []
+        production_issues: List[Dict[str, Any]] = []
+
         for beat_index, beat in enumerate(beats):
+            # Derive scene_id: prefer explicit field (added by screenplay bridge), else positional
+            beat_scene_id = str(beat.get("scene_id") or f"scene_{beat_index + 1:02d}")
+
+            # scene_ids filter: skip beats not in the requested subset
+            if scene_ids is not None and beat_scene_id not in scene_ids:
+                continue
+
             segment_context = self._segment_context_for_beat(script=script, beat=beat)
-            segment_assets.append(
-                self._build_segment_candidate(
-                    beat=beat,
-                    beat_index=beat_index,
-                    topic_hint=topic_hint,
-                    segment_context=segment_context,
-                )
+            segment = self._build_segment_candidate(
+                beat=beat,
+                beat_index=beat_index,
+                topic_hint=topic_hint,
+                segment_context=segment_context,
+                scene_id=beat_scene_id,
             )
+            segment_assets.append(segment)
+
+            # Detect degraded segments and accumulate production issues
+            if segment["candidate_count"] == 0:
+                production_issues.append({
+                    "agent": "ScriptImageAgent",
+                    "scene_id": beat_scene_id,
+                    "status": "degraded",
+                    "issue": "no_relevant_image",
+                    "detail": f"No candidates found for queries: {segment['queries']}",
+                    "suggestion": "Rephrase visual.description to be more concrete and specific",
+                    "revision_field": "visual",
+                    "revision_possible": True,
+                })
+            else:
+                best_score = self._best_relevance_score(segment)
+                if best_score < _RELEVANCE_THRESHOLD:
+                    production_issues.append({
+                        "agent": "ScriptImageAgent",
+                        "scene_id": beat_scene_id,
+                        "status": "degraded",
+                        "issue": "no_relevant_image",
+                        "detail": f"Best result relevance {best_score:.2f}, threshold {_RELEVANCE_THRESHOLD:.2f}",
+                        "suggestion": "Rephrase visual.description to be more concrete and specific",
+                        "revision_field": "visual",
+                        "revision_possible": True,
+                    })
 
         manifest = {
             "schema_version": "1.0.0",
@@ -419,7 +486,23 @@ class ScriptImageRetrievalAgent:
         }
 
         write_json(self.output_dir / "script_image_manifest.json", manifest)
+
+        # Write production report (merges with any existing report from audio agent)
+        _effective_run_id = run_id or str(script_package.get("script_package_id") or "unknown")
+        _write_production_report(self.output_dir, _effective_run_id, production_issues)
+        if production_issues:
+            print(f"[WARN] ScriptImageAgent: {len(production_issues)} degraded scene(s) written to production_report.json")
+
         return manifest
+
+    def _best_relevance_score(self, segment: Dict[str, Any]) -> float:
+        """Return the highest relevance score among all candidates in a segment."""
+        best = 0.0
+        for cand in segment.get("candidates") or []:
+            score = float((cand.get("metadata") or {}).get("relevance", {}).get("score") or 0.0)
+            if score > best:
+                best = score
+        return best
 
     def _build_segment_candidate(
         self,
@@ -427,6 +510,7 @@ class ScriptImageRetrievalAgent:
         beat_index: int,
         topic_hint: str,
         segment_context: str = "",
+        scene_id: str = "",
     ) -> Dict[str, Any]:
         """Build candidate list for a single script beat.
 
@@ -434,11 +518,12 @@ class ScriptImageRetrievalAgent:
             beat: Script beat.
             beat_index: Zero-based beat index.
             topic_hint: Topic-level text context.
+            scene_id: Optional explicit scene identifier (from screenplay bridge).
 
         Returns:
             Segment candidate object.
         """
-        beat_id = f"beat_{beat_index + 1:02d}"
+        beat_id = scene_id or f"beat_{beat_index + 1:02d}"
         queries = _build_search_queries(
             beat=beat,
             topic_hint=topic_hint,

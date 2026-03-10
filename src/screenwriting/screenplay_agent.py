@@ -50,10 +50,20 @@ No markdown. No explanation.
 
 _REVISE_SYSTEM = """\
 You are a short-form video screenplay editor.
-You will be given an existing Screenplay and a specific scene revision task.
-Revise ONLY the specified field(s) of the specified scene. Leave all other scenes and fields unchanged.
-Return the full updated Screenplay JSON object.
-No markdown. No explanation.
+You will be given one scene from a screenplay and a revision task.
+Return ONLY a JSON object with the revised fields for that scene.
+
+For a "visual" revision return:
+{"scene_id": "scene_XX", "visual": {"description": "...", "mood": "...", "search_queries": ["...", "..."]}}
+
+For a "vo_line" revision return:
+{"scene_id": "scene_XX", "vo_line": "..."}
+
+For a "both" revision return:
+{"scene_id": "scene_XX", "vo_line": "...", "visual": {"description": "...", "mood": "...", "search_queries": ["...", "..."]}}
+
+visual.description must be concrete and specific — objects, places, events that Pexels can find.
+No markdown. No explanation. Return only the JSON object.
 """
 
 
@@ -164,32 +174,36 @@ class ScreenplayAgent:
         revision_field: "visual" | "vo_line" | "both"
         Returns an updated Screenplay dict with all other scenes unchanged.
         """
-        if revision_field == "visual":
+        # Find the target scene to include in the prompt
+        scenes = screenplay.get("scenes") or []
+        target_scene = next((s for s in scenes if s.get("scene_id") == scene_id), None)
+        if target_scene is None:
+            print(f"[WARN] Scene {scene_id} not found in screenplay; skipping revision")
+            return screenplay
+
+        if revision_field == "vo_line":
             field_instruction = (
-                f"Rewrite ONLY visual.description and visual.search_queries for scene {scene_id}. "
-                "Do not change vo_line or any other scene."
+                f"Rewrite ONLY vo_line to fix: {issue}. "
+                f"Target duration: {target_scene.get('target_duration_s', 5.0)}s."
             )
-        elif revision_field == "vo_line":
-            target_dur = next(
-                (sc["target_duration_s"] for sc in (screenplay.get("scenes") or []) if sc.get("scene_id") == scene_id),
-                5.0,
-            )
+        elif revision_field == "visual":
             field_instruction = (
-                f"Rewrite ONLY vo_line for scene {scene_id} to fit within {target_dur}s. "
-                "Do not change visual or any other scene."
+                f"Rewrite ONLY visual.description and visual.search_queries to fix: {issue}. "
+                "Use concrete, Pexels-searchable descriptions — objects, places, events."
             )
         else:
             field_instruction = (
-                f"Rewrite visual.description, visual.search_queries, AND vo_line for scene {scene_id}. "
-                "Do not change any other scene."
+                f"Rewrite visual.description, visual.search_queries AND vo_line to fix: {issue}."
             )
 
+        if suggestion:
+            field_instruction += f" Suggestion: {suggestion}"
+
         human_payload = {
-            "screenplay": screenplay,
+            "scene": target_scene,
             "revision_task": {
                 "scene_id": scene_id,
                 "issue": issue,
-                "suggestion": suggestion,
                 "revision_field": revision_field,
                 "instruction": field_instruction,
             },
@@ -200,22 +214,33 @@ class ScreenplayAgent:
             HumanMessage(content=json.dumps(human_payload, ensure_ascii=False)),
         ]
 
-        response = self.llm.invoke(messages)
-        raw = safe_json_loads(str(response.content))
-
-        if not isinstance(raw, dict) or not raw.get("scenes"):
-            # revision failed; return original unchanged
-            print(f"[WARN] Scene revision returned invalid JSON; keeping original scene {scene_id}")
+        try:
+            response = self.llm.invoke(messages)
+            patch = safe_json_loads(str(response.content))
+        except Exception as exc:
+            print(f"[WARN] Scene revision failed for {scene_id}: {exc}; keeping original")
             return screenplay
 
-        # Merge: keep revised screenplay but preserve screenplay_id and metadata
-        raw["screenplay_id"] = screenplay.get("screenplay_id")
-        raw["schema_version"] = screenplay.get("schema_version")
-        raw["created_at"] = screenplay.get("created_at")
-        raw["concept_ref"] = screenplay.get("concept_ref")
-        raw["format"] = screenplay.get("format")
+        if not isinstance(patch, dict) or patch.get("scene_id") != scene_id:
+            print(f"[WARN] Scene revision returned unexpected response for {scene_id}; keeping original")
+            return screenplay
 
-        target_duration_s = int(screenplay.get("target_duration_s") or 45)
-        raw["scenes"] = _coerce_scenes(raw.get("scenes") or [], target_duration_s)
+        # Surgical patch: update only the returned fields on the target scene
+        updated_scenes = []
+        for scene in scenes:
+            if scene.get("scene_id") != scene_id:
+                updated_scenes.append(scene)
+                continue
+            patched = dict(scene)
+            if "vo_line" in patch:
+                patched["vo_line"] = str(patch["vo_line"]).strip()
+            if "visual" in patch and isinstance(patch["visual"], dict):
+                v = patch["visual"]
+                patched["visual"] = {
+                    "description": str(v.get("description") or patched["visual"].get("description") or "").strip(),
+                    "mood": str(v.get("mood") or patched["visual"].get("mood") or "neutral").strip(),
+                    "search_queries": list(v.get("search_queries") or patched["visual"].get("search_queries") or []),
+                }
+            updated_scenes.append(patched)
 
-        return raw
+        return {**screenplay, "scenes": updated_scenes}

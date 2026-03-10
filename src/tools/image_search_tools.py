@@ -13,6 +13,37 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+_RELEVANCE_STOPWORDS = {"the", "and", "with", "that", "this", "from", "have", "a", "an", "of", "in", "on", "at", "to", "for", "is", "are", "was", "were"}
+
+
+def _relevance_tokens(text: str) -> set[str]:
+    tokens = re.findall(r"\b[a-z]{3,}\b", text.lower())
+    return {t for t in tokens if t not in _RELEVANCE_STOPWORDS}
+
+
+def score_candidate_relevance(candidate: Dict[str, Any], query: str) -> float:
+    """Score one image candidate's relevance to a query using alt-text token overlap.
+
+    Args:
+        candidate: Normalized image result dict (with metadata.alt or metadata.title).
+        query: Search query or visual description.
+
+    Returns:
+        Relevance score in [0.0, 1.0]. Higher is better.
+    """
+    metadata = candidate.get("metadata") or {}
+    alt_text = str(metadata.get("alt") or metadata.get("title") or "").strip()
+    if not alt_text:
+        return 0.0
+
+    query_tokens = _relevance_tokens(query)
+    if not query_tokens:
+        return 0.0
+
+    alt_tokens = _relevance_tokens(alt_text)
+    overlap = query_tokens.intersection(alt_tokens)
+    return round(len(overlap) / len(query_tokens), 3)
+
 import requests
 
 from ..config import PEXELS_API_KEY

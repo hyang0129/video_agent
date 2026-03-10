@@ -106,6 +106,7 @@ def screenplay_to_script_package(screenplay: dict[str, Any]) -> dict[str, Any]:
         current_t = t_end
 
         beats.append({
+            "scene_id": str(scene.get("scene_id") or f"scene_{i + 1:02d}"),
             "t_start_s": t_start,
             "t_end_s": t_end,
             "on_screen_text": str(scene.get("on_screen_text") or "").strip(),

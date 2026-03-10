@@ -12,10 +12,34 @@ Usage:
 """
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
 from src.config import AUDIO_SAMPLE_RATE
+
+
+# --- log parsing patterns ---
+
+_RE_CONTAINER_MISMATCH = re.compile(
+    r"\[WARN \].*switching container to \"(?P<ext>\.\w+)\""
+)
+_RE_UNDEFINED_EXPRESSION = re.compile(
+    r"\[WARN \] Cue t=(?P<t>[\d.]+)s: emotion \"(?P<name>[^\"]+)\" not defined on model"
+)
+_RE_UNDEFINED_REACTION = re.compile(
+    r"\[WARN \] Cue t=(?P<t>[\d.]+)s: reaction \"(?P<name>[^\"]+)\" not defined on model"
+)
+_RE_RENDER_COMPLETE = re.compile(
+    r"\[INFO \] Render complete: (?P<frames>\d+) frames in (?P<secs>[\d.]+)s \((?P<fps>[\d.]+) fps\)"
+)
+_RE_OUTPUT_LINE = re.compile(
+    r"\[INFO \] Output: \"(?P<path>[^\"]+)\""
+)
+_RE_FFMPEG_FINAL = re.compile(
+    r"\[INFO \] FFmpeg finalized\. Output: \"(?P<path>[^\"]+)\""
+)
+_RE_ERROR = re.compile(r"\[ERROR\]")
 
 
 _DEFAULT_MODEL = {
@@ -134,6 +158,150 @@ class AvatarPackagingAgent:
             keyframes.append({"time": round(last["end"], 3), "mouth_shape": "X"})
 
         return keyframes
+
+    def review_takes(self, takes_dir: Path) -> dict:
+        """Parse all .log files under takes_dir and emit avatar_render_report.json.
+
+        Returns the report dict. Also writes it to takes_dir/avatar_render_report.json.
+        """
+        takes_dir = Path(takes_dir)
+        log_files = sorted(takes_dir.glob("*.log"))
+
+        scenes = []
+        category_totals: dict[str, int] = {}
+
+        for log_path in log_files:
+            scene_id = log_path.stem
+            scene_entry = self._parse_log(log_path, scene_id)
+            scenes.append(scene_entry)
+            for issue in scene_entry["issues"]:
+                cat = issue["category"]
+                category_totals[cat] = category_totals.get(cat, 0) + 1
+
+        ok = sum(1 for s in scenes if s["status"] == "ok")
+        warn = sum(1 for s in scenes if s["status"] == "warning")
+        error = sum(1 for s in scenes if s["status"] == "error")
+
+        report = {
+            "schema_version": "1.0",
+            "takes_dir": str(takes_dir).replace("\\", "/"),
+            "scenes": scenes,
+            "summary": {
+                "total_scenes": len(scenes),
+                "ok": ok,
+                "warning": warn,
+                "error": error,
+                "by_category": category_totals,
+            },
+        }
+
+        report_path = takes_dir / "avatar_render_report.json"
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+        status_line = f"ok={ok} warn={warn} error={error}"
+        print(f"[INFO] avatar_render_report.json: {len(scenes)} scenes ({status_line})")
+        if warn:
+            for cat, count in category_totals.items():
+                print(f"[WARN] {cat}: {count} occurrence(s)")
+
+        return report
+
+    def _parse_log(self, log_path: Path, scene_id: str) -> dict:
+        """Parse a single renderer .log file into a scene result dict."""
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+
+        issues = []
+        frame_count = None
+        render_fps = None
+        output_requested = None
+        output_actual = None
+        has_error = False
+
+        for line in lines:
+            m = _RE_OUTPUT_LINE.search(line)
+            if m:
+                output_requested = m.group("path")
+
+            m = _RE_CONTAINER_MISMATCH.search(line)
+            if m:
+                actual_ext = m.group("ext")
+                requested = output_requested or ""
+                actual = re.sub(r"\.\w+$", actual_ext, requested) if requested else ""
+                issues.append({
+                    "severity": "warn",
+                    "category": "container_mismatch",
+                    "message": f"transparent output forced {Path(requested).suffix} -> {actual_ext}",
+                    "detail": f"output written to {Path(actual).name if actual else actual_ext}",
+                    "implication": "downstream compositor must accept .mov instead of .mp4",
+                })
+                output_actual = actual
+
+            m = _RE_UNDEFINED_EXPRESSION.search(line)
+            if m:
+                issues.append({
+                    "severity": "warn",
+                    "category": "undefined_expression",
+                    "message": f"emotion '{m.group('name')}' not defined on model at t={m.group('t')}s",
+                    "implication": "expression held at default; visual may be incorrect",
+                })
+
+            m = _RE_UNDEFINED_REACTION.search(line)
+            if m:
+                issues.append({
+                    "severity": "warn",
+                    "category": "undefined_reaction",
+                    "message": f"reaction '{m.group('name')}' not defined on model at t={m.group('t')}s",
+                    "implication": "reaction skipped; no motion played",
+                })
+
+            m = _RE_RENDER_COMPLETE.search(line)
+            if m:
+                frame_count = int(m.group("frames"))
+                render_fps = float(m.group("fps"))
+
+            m = _RE_FFMPEG_FINAL.search(line)
+            if m:
+                output_actual = output_actual or m.group("path")
+
+            if _RE_ERROR.search(line):
+                has_error = True
+                issues.append({
+                    "severity": "error",
+                    "category": "render_error",
+                    "message": line.strip(),
+                    "implication": "scene may not have rendered correctly",
+                })
+
+        # check output file actually exists
+        if output_actual:
+            out_path = log_path.parent / Path(output_actual).name
+            if not out_path.exists():
+                has_error = True
+                issues.append({
+                    "severity": "error",
+                    "category": "missing_output",
+                    "message": f"expected output file not found: {out_path.name}",
+                    "implication": "render did not complete; scene unusable",
+                })
+
+        if has_error:
+            status = "error"
+        elif issues:
+            status = "warning"
+        else:
+            status = "ok"
+
+        entry = {
+            "scene_id": scene_id,
+            "status": status,
+            "output_file_requested": Path(output_requested).name if output_requested else None,
+            "output_file_actual": Path(output_actual).name if output_actual else None,
+            "frame_count": frame_count,
+            "render_fps": render_fps,
+            "issues": issues,
+        }
+        return entry
 
     def _convert_to_wav(self, src: Path, dst: Path) -> bool:
         """Convert audio file to WAV via FFmpeg. Returns True on success."""

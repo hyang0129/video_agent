@@ -29,32 +29,8 @@ from src.screenwriting.concept_agent import ConceptAgent
 from src.screenwriting.screenplay_agent import ScreenplayAgent
 from src.screenwriting.screenplay_reviewer import ScreenplayReviewer
 from src.artifacts.screenplay import screenplay_to_script_package
-
-
-def validate_final_video(mp4_path) -> bool:
-    """Run ffprobe to confirm the MP4 is playable (has video stream, non-zero duration)."""
-    import subprocess
-    mp4_path = Path(mp4_path)
-    if not mp4_path.exists() or mp4_path.stat().st_size == 0:
-        print(f"[ERROR] Post-render validation FAILED: {mp4_path} missing or empty")
-        return False
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_type,duration",
-            "-of", "csv=p=0",
-            str(mp4_path),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        print(f"[ERROR] Post-render validation FAILED: no readable video stream in {mp4_path.name}")
-        print(f"        ffprobe: {result.stderr.strip()}")
-        return False
-    print(f"[OK] Post-render validation passed: {mp4_path.name} is playable")
-    return True
+from src.orchestrator import ProductionOrchestrator
+from src.utils.ffprobe_utils import validate_video as validate_final_video
 
 
 def check_api_keys():
@@ -615,6 +591,8 @@ def main():
             n_concepts = 3
             auto_select = False
             engine = "dry_run"
+            use_mcp = False
+            serial = False
             _i = 0
             while _i < len(args_tail):
                 a = args_tail[_i]
@@ -626,6 +604,12 @@ def main():
                     _i += 2
                 elif a == "--auto-select":
                     auto_select = True
+                    _i += 1
+                elif a == "--use-mcp":
+                    use_mcp = True
+                    _i += 1
+                elif a == "--serial":
+                    serial = True
                     _i += 1
                 elif a in {"ffmpeg", "dry_run"}:
                     engine = a
@@ -723,16 +707,32 @@ def main():
             # 7) Continue with existing production pipeline
             check_tts_key()
 
+            voice = str(script_package.get("audio", {}).get("tts", {}).get("voice") or "narrator")
+
             video_agent = create_video_agent()
             video_plan = video_agent.create_video_plan(script_package=script_package)
             write_json(run_dir / "video_plan.json", video_plan)
 
-            audio_agent_inst = create_audio_agent(
-                output_dir=run_dir,
-                voice=str(script_package.get("audio", {}).get("tts", {}).get("voice") or "narrator"),
+            # Run orchestrated production (audio + image with revision loop)
+            if use_mcp:
+                print(f"[INFO] Orchestrator mode: MCP client (serial={serial})")
+            orch = ProductionOrchestrator()
+            audio_timeline, selected_sp, video_plan = orch.run(
+                screenplay=selected_sp,
+                script_package=script_package,
+                video_plan=video_plan,
+                run_dir=run_dir,
+                screenplay_agent=screenplay_agent_inst,
+                voice=voice,
+                use_mcp=use_mcp,
+                serial=serial,
             )
-            audio_timeline = audio_agent_inst.generate_audio_timeline(video_plan)
             write_json(run_dir / "audio_timeline.json", audio_timeline)
+
+            # Refresh script_package + video_plan in case orchestrator revised the screenplay
+            script_package = screenplay_to_script_package(selected_sp)
+            video_plan = video_agent.create_video_plan(script_package=script_package)
+            write_json(run_dir / "video_plan.json", video_plan)
 
             music_agent = create_music_agent()
             music_selection = music_agent.select_music(audio_timeline)
@@ -781,7 +781,7 @@ def print_usage():
     print("  python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json> - Create RenderSpec")
     print("  python main.py render <render_spec.json> [ffmpeg|dry_run] - Render final video")
     print("  python main.py scriptimages <script_package.json> - Create ScriptImageManifest (artifact-only)")
-    print("  python main.py screenplay <topicbrief.json> [--format FORMAT] [--n-concepts N] [--auto-select] [ffmpeg|dry_run] - Screenwriting pipeline")
+    print("  python main.py screenplay <topicbrief.json> [--format FORMAT] [--n-concepts N] [--auto-select] [--use-mcp] [--serial] [ffmpeg|dry_run] - Screenwriting pipeline")
     print("  python main.py mvp <topicbrief.json> [creative_spec.json] [ffmpeg|dry_run] - End-to-end MVP")
     print("  python main.py mvp_offline <topicbrief.json> [creative_spec.json] [ffmpeg|dry_run] - End-to-end offline MVP")
     print("\nOr import and use programmatically:")

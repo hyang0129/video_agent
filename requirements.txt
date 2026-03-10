@@ -24,9 +24,13 @@ pytrends>=4.9.0
 # Utilities
 pydantic>=2.0.0
 tqdm>=4.66.0
+loguru>=0.7.0
 
 # Audio processing
 elevenlabs>=0.2.0
+
+# MCP (Model Context Protocol) server/client
+mcp>=1.0.0
 # pydub>=0.25.0  # Phase 2: for audio mixing
 # pyloudnorm>=0.1.0  # Phase 2: for audio normalization
 # ffmpeg-python>=0.2.0  # Phase 2: for advanced audio processing

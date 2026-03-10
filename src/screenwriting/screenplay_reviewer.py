@@ -6,7 +6,9 @@ from typing import Any
 
 from ..artifacts.screenplay import new_feasibility_report
 
-_WORDS_PER_MINUTE = 150.0
+from ..utils.tts_utils import estimate_duration_s as _estimate_duration_s, _WPM_BY_PRESET
+
+_WORDS_PER_MINUTE = _WPM_BY_PRESET.get("narrator", 150)
 
 _GENERIC_VISUAL_PHRASES = frozenset([
     "people talking",
@@ -23,8 +25,7 @@ _GENERIC_VISUAL_PHRASES = frozenset([
 
 
 def _estimated_speech_seconds(vo_line: str) -> float:
-    words = len(vo_line.split())
-    return (words / _WORDS_PER_MINUTE) * 60.0
+    return _estimate_duration_s(vo_line, voice_preset="narrator")
 
 
 def _is_generic_visual(description: str) -> bool:

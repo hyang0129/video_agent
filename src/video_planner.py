@@ -60,7 +60,7 @@ def script_package_to_video_plan(
             continue
         scenes.append(
             {
-                "scene_id": f"scene_{i:02d}",
+                "scene_id": str(beat.get("scene_id") or f"scene_{i:02d}"),
                 "t_start_s": float(beat.get("t_start_s", 0) or 0),
                 "t_end_s": float(beat.get("t_end_s", 0) or 0),
                 "vo_line": str(beat.get("vo_line") or "").strip(),

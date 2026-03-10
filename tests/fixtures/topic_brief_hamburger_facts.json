@@ -1,0 +1,21 @@
+{
+  "topic_id": "hamburger_facts",
+  "subtopic_id": "facts",
+  "topic": {
+    "name": "Hamburger Facts",
+    "positioning": "Surprising facts about the world's most iconic fast food"
+  },
+  "subtopic": {
+    "name": "Hamburger History Facts",
+    "query": "hamburger facts history",
+    "angle": "From its disputed origins to record-breaking creations — the wild history and science behind the humble burger"
+  },
+  "format": {
+    "primary": "Did You Know",
+    "target_duration_seconds": 35
+  },
+  "script_constraints": {
+    "tone": "energetic, curious",
+    "claims_policy": "Use only verified facts"
+  }
+}

@@ -167,14 +167,22 @@ class TestAudioGenerationAgent:
         sample_video_plan,
         temp_output_dir
     ):
-        """Test error handling when TTS fails."""
-        # Mock TTS failure
+        """TTS failure uses a silent fallback; degraded issue is written to production_report."""
+        import json
         mock_generate_voiceover.side_effect = TTSError("API error")
-        
+
         agent = AudioGenerationAgent(output_dir=temp_output_dir)
-        
-        with pytest.raises(AudioGenerationError, match="Failed to generate voiceover"):
-            agent.generate_audio_timeline(sample_video_plan)
+        # Should NOT raise; instead returns a timeline with silent tracks
+        timeline = agent.generate_audio_timeline(sample_video_plan)
+
+        vo_tracks = [t for t in timeline["tracks"] if t.get("type") == "voiceover"]
+        assert len(vo_tracks) > 0  # silent fallback tracks present
+
+        report_path = temp_output_dir / "production_report.json"
+        assert report_path.exists()
+        report = json.loads(report_path.read_text())
+        assert report["degraded_scene_count"] > 0
+        assert any(i["issue"] == "tts_failed" for i in report["issues"])
     
     def test_generate_audio_timeline_empty_scenes(self, temp_output_dir):
         """Test error when no scenes provided."""

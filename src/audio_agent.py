@@ -25,6 +25,27 @@ import subprocess
 import wave
 import uuid
 
+from .artifacts.io import write_json as _write_json
+
+
+def _write_production_report(run_dir: Path, run_id: str, new_issues: List[Dict[str, Any]]) -> None:
+    """Append new_issues to production_report.json, creating the file if absent."""
+    report_path = run_dir / "production_report.json"
+    if report_path.exists():
+        try:
+            existing = json.loads(report_path.read_text(encoding="utf-8"))
+            all_issues: List[Dict[str, Any]] = list(existing.get("issues") or []) + new_issues
+        except Exception:
+            all_issues = new_issues
+    else:
+        all_issues = new_issues
+    _write_json(report_path, {
+        "schema_version": "1.0.0",
+        "run_id": run_id,
+        "issues": all_issues,
+        "degraded_scene_count": sum(1 for i in all_issues if i.get("status") == "degraded"),
+    })
+
 from .tools.tts_tools import (
     generate_voiceover,
     get_voice_id,
@@ -157,6 +178,7 @@ class AudioGenerationAgent:
     def generate_audio_timeline(
         self,
         video_plan: Dict[str, Any],
+        scene_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Generate complete audio timeline from video plan.
         
@@ -221,20 +243,26 @@ class AudioGenerationAgent:
         # Generate voiceover tracks
         tracks = []
         current_time_s = 0.0
-        
+        production_issues: List[Dict[str, Any]] = []
+
         for scene in scenes:
             vo_line = scene.get("vo_line", "").strip()
             if not vo_line:
                 continue
-            
+
             scene_id = scene.get("scene_id", "unknown")
+
+            # scene_ids filter: skip scenes not in the requested subset
+            if scene_ids is not None and scene_id not in scene_ids:
+                continue
+
             planned_start = float(scene.get("t_start_s", 0))
             planned_end = float(scene.get("t_end_s", 0))
             scene_duration = planned_end - planned_start
-            
+
             if scene_duration <= 0:
                 continue
-            
+
             try:
                 # Generate voiceover for this scene
                 if silent_mode:
@@ -257,29 +285,60 @@ class AudioGenerationAgent:
                     metadata=metadata,
                     fallback_duration_s=scene_duration,
                 )
-                track_start_s = round(current_time_s, 3)
-                track_end_s = round(current_time_s + actual_duration_s, 3)
-                
-                # Add track to timeline
-                tracks.append({
-                    "type": "voiceover",
-                    "file": str(audio_path.relative_to(self.output_dir)),
-                    "scene_id": scene_id,
-                    "t_start_s": track_start_s,
-                    "t_end_s": track_end_s,
-                    "volume_db": 0,
-                    "metadata": {
-                        **metadata,
-                        "planned_scene_duration_s": round(scene_duration, 3),
-                        "timeline_duration_s": round(actual_duration_s, 3),
-                    },
-                })
-                current_time_s = track_end_s
-            
+
+                # Duration overshoot: flag if TTS ran >20% longer than planned
+                if actual_duration_s > scene_duration * 1.2:
+                    word_count = len(vo_line.split())
+                    target_words = max(1, int(word_count * (scene_duration / actual_duration_s)))
+                    production_issues.append({
+                        "agent": "AudioAgent",
+                        "scene_id": scene_id,
+                        "status": "degraded",
+                        "issue": "vo_too_long",
+                        "detail": f"TTS duration {actual_duration_s:.1f}s, target {scene_duration:.1f}s",
+                        "suggestion": f"Shorten vo_line from {word_count} words to ~{target_words} words",
+                        "revision_field": "vo_line",
+                        "revision_possible": True,
+                    })
+
             except TTSError as e:
-                raise AudioGenerationError(
-                    f"Failed to generate voiceover for scene {scene_id}: {e}"
+                # Do not abort: write silent fallback and record the degraded issue
+                print(f"[WARN] TTS failed for scene {scene_id}: {e}")
+                production_issues.append({
+                    "agent": "AudioAgent",
+                    "scene_id": scene_id,
+                    "status": "degraded",
+                    "issue": "tts_failed",
+                    "detail": str(e),
+                    "suggestion": "Simplify vo_line: remove special characters, shorten to under 20 words",
+                    "revision_field": "vo_line",
+                    "revision_possible": True,
+                })
+                segment_path = self.audio_segments_dir / f"vo_{scene_id}.wav"
+                audio_path, metadata = _write_silent_wav(
+                    output_path=segment_path,
+                    duration_s=scene_duration,
+                    sample_rate=AUDIO_SAMPLE_RATE,
                 )
+                actual_duration_s = scene_duration
+
+            track_start_s = round(current_time_s, 3)
+            track_end_s = round(current_time_s + actual_duration_s, 3)
+
+            tracks.append({
+                "type": "voiceover",
+                "file": str(audio_path.relative_to(self.output_dir)),
+                "scene_id": scene_id,
+                "t_start_s": track_start_s,
+                "t_end_s": track_end_s,
+                "volume_db": 0,
+                "metadata": {
+                    **metadata,
+                    "planned_scene_duration_s": round(scene_duration, 3),
+                    "timeline_duration_s": round(actual_duration_s, 3),
+                },
+            })
+            current_time_s = track_end_s
         
         if not tracks:
             raise AudioGenerationError("No voiceover tracks generated")
@@ -330,7 +389,13 @@ class AudioGenerationAgent:
         timeline_path = self.output_dir / "audio_timeline.json"
         with open(timeline_path, "w", encoding="utf-8") as f:
             json.dump(audio_timeline, f, indent=2, ensure_ascii=False)
-        
+
+        # Write production report (merges with any existing report from other agents)
+        run_id = str(video_plan.get("video_plan_id") or "unknown")
+        _write_production_report(self.output_dir, run_id, production_issues)
+        if production_issues:
+            print(f"[WARN] AudioAgent: {len(production_issues)} degraded scene(s) written to production_report.json")
+
         return audio_timeline
 
     def _validate_video_plan(self, video_plan: Dict[str, Any]) -> None:
