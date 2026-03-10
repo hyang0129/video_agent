@@ -219,6 +219,17 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Timeline:** Week 2
 - **Effort:** 1 day
 
+#### 1.4b Align Screenwriting Avatar Emotes with Available Emotes
+- **Priority:** P1 (content quality)
+- **Status:** Open
+- **Problem:** The screenwriting agent assigns avatar emotes that may not exist in the actual emote set, causing mismatches or silent fallbacks at render time.
+- **Implementation:**
+  - Audit the emote vocabulary used in [src/screenwriting/](src/screenwriting/) against the emotes actually available from the avatar system
+  - Update the screenplay prompt/schema to enumerate only valid emote identifiers
+  - Add validation in the screenplay reviewer to reject or flag unrecognized emotes
+- **Owner:** TBD
+- **Timeline:** Week 1-2
+
 #### 1.5 Script Image → Video Integration
 - **Priority:** P0/P1 (visual quality gate)
 - **Status:** In Progress

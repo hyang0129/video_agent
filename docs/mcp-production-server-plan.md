@@ -17,11 +17,17 @@ Phase 1 (screenwriting split) is complete:
 - `src/screenwriting/format_library/` — `facts`, `storytime`, `tutorial`, `debate` templates
 - `main.py screenplay` command — end-to-end: concept → screenplay → review → revision → production
 
-**Not yet built:**
-- `ProductionReport` emission from `ScriptImageAgent` and `AudioAgent` (P1-6, still open)
-- `src/orchestrator.py` (Phase 2)
-- `src/mcp/producer_server.py` (Phase 3)
-- `src/mcp/screenwriting_server.py` (Phase 3)
+**Phase 2 complete (2026-03-10):**
+- `ProductionReport` emission from `ScriptImageAgent` and `AudioAgent` — done
+- `src/orchestrator.py` — `ProductionOrchestrator` with revision loop + parallel execution — done
+- `main.py screenplay` command wired through orchestrator — done
+- `scene_ids` filter on both agents — done
+- `scene_id` propagated: screenplay → script_package beats → video_plan scenes — done
+- 10 new tests in `tests/test_orchestrator.py` — all passing
+
+**Not yet built (Phase 3):**
+- `src/mcp/producer_server.py`
+- `src/mcp/screenwriting_server.py`
 
 ---
 
