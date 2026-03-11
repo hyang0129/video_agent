@@ -6,150 +6,57 @@
 
 ---
 
-## Transport Comparison: stdio (deprecated) vs SSE vs HTTPS
+## Transport Model
 
-MCP nominally supports three transport configurations. Two of them are useful here; one is being deprecated.
-
-### stdio — DEPRECATED
-
-The orchestrator spawns each MCP server as a child subprocess. Communication is over stdin/stdout pipes.
+The transport is always HTTPS (SSE over TLS). The only thing that changes between local dev and production is **whether the client verifies the server's certificate**, controlled by the `MCP_VERIFY_SSL` env var.
 
 ```
-Orchestrator process
-    │  stdin/stdout pipes
-    ▼
-python -m src.mcp.producer_server   (child process)
+                   Local dev                    Production
+                   ─────────────────────────    ─────────────────────────
+Server cert:       auto-generated self-signed    Let's Encrypt / trusted CA
+Client verify:     MCP_VERIFY_SSL=false          MCP_VERIFY_SSL=true
+Token auth:        required (same)               required (same)
+Code path:         identical                     identical
 ```
 
-| Attribute | Details |
-|-----------|---------|
-| Setup complexity | None — no sockets, no ports, no certs |
-| Authentication | None needed — OS process isolation is the security boundary |
-| Network required | No — all local |
-| Multi-machine | No — orchestrator and server must share a filesystem |
-| External clients | No — only the spawning orchestrator can connect |
-| Latency | Lowest — IPC, no TCP overhead |
-| Server lifetime | Tied to orchestrator — starts and stops with the parent |
-| Debugging | Hard — stdout is consumed by the MCP framing; `stderr` only |
+This means: one implementation, no transport switch logic, tests exercise the same stack as production.
 
-**Why deprecated:** The serial debug run and all integration tests already call the MCP tool handlers as direct Python functions (`from src.mcp.producer_server import call_tool`). The `stdio` subprocess wrapper adds a process spawn, an IPC round-trip, and JSON serialization overhead without providing anything that a direct import does not. It is the worst of both worlds: slower than a direct call, less capable than HTTPS. It is removed from the recommended architecture. If a future use case genuinely requires subprocess isolation, `stdio` can be reintroduced on a dedicated branch.
+### Why not a direct-import local mode?
+
+The previous design had a `local` mode that bypassed the network entirely via `from src.mcp.producer_server import call_tool`. This is still used by **unit tests and the pytest integration suite** (they call `call_tool` directly because they don't need the server at all). But the **orchestrator** should always go through the HTTP stack — skipping the transport means a class of bugs (connection handling, auth middleware, SSE framing) is never exercised locally.
+
+### Why not plain SSE (HTTP)?
+
+Dropping TLS means the Bearer token and tool results are plaintext on the wire. Even on localhost, other processes can sniff loopback traffic on some OS configurations. Since the server auto-generates a self-signed cert and `verify=False` costs nothing, there is no reason to trade security for convenience.
+
+### Deprecated: stdio
+
+The `stdio` subprocess transport is removed. It offered nothing over a direct import for local use and nothing over HTTPS for networked use. See the original deprecation rationale above.
 
 ---
 
-### Direct import (replaces stdio for local use)
+### Comparison: what changed
 
-The orchestrator imports tool handler functions directly. No subprocess, no transport layer.
-
-```python
-from src.mcp.producer_server import call_tool   # same handler the HTTPS server uses
-
-result = await call_tool("generate_audio", {...})
-```
-
-| Attribute | Details |
-|-----------|---------|
-| Setup complexity | None |
-| Authentication | None — same process |
-| Multi-machine | No |
-| External clients | No |
-| Latency | None — in-process function call |
-| Debugging | Full Python debugger / pytest support |
-| Best for | Local dev, CI, integration tests, serial debug runs |
-
-This is what the test suite already does. The orchestrator uses this mode when `MCP_TRANSPORT` is not set (or `=local`). No code generation needed — the tool handlers are plain async functions.
-
----
-
-### SSE (HTTP, no TLS)
-
-The MCP server runs as a long-lived HTTP process. The client connects over plain HTTP using Server-Sent Events for the response stream.
-
-```
-Orchestrator / external client
-    │  HTTP  POST /messages  (tool call)
-    │  HTTP  GET  /sse       (response stream)
-    ▼
-Starlette app on http://host:port
-    ▼
-MCP tool handlers
-```
-
-| Attribute | Details |
-|-----------|---------|
-| Setup complexity | Low — run uvicorn, no certs |
-| Authentication | Optional — Bearer token if desired; network ACL is common alternative |
-| Network required | Yes — TCP socket |
-| Multi-machine | Yes — any host that can reach the server IP/port |
-| External clients | Yes — Claude Desktop, curl, any HTTP client |
-| Latency | Low — TCP overhead only (~1ms local) |
-| Server lifetime | Independent — survives orchestrator restart |
-| Debugging | Easy — use curl, browser DevTools, Wireshark |
-| Best for | LAN-only deployments, dev environment shared between teammates, local demo where HTTPS cert overhead is not worth it |
-
-**Caution:** Plain HTTP means tokens and tool results are unencrypted on the wire. Acceptable on a trusted LAN; not acceptable over the internet or on shared networks.
-
----
-
-### HTTPS (SSE over TLS)
-
-Same SSE transport, with TLS encryption terminating at the server (or at a reverse proxy like Caddy/nginx in front of it).
-
-```
-Orchestrator / external client
-    │  HTTPS (TLS 1.2+)  POST /messages
-    │  HTTPS              GET  /sse
-    ▼
-uvicorn with ssl_context  (or Caddy reverse proxy)
-    ▼
-Starlette app
-    ▼
-MCP tool handlers
-```
-
-| Attribute | Details |
-|-----------|---------|
-| Setup complexity | Medium — need a cert (self-signed or Let's Encrypt) |
-| Authentication | Bearer token required (no network-level isolation) |
-| Network required | Yes |
-| Multi-machine | Yes |
-| External clients | Yes — and safe over the public internet |
-| Latency | Low — TLS handshake adds ~1-3ms per new connection; subsequent calls are fast |
-| Server lifetime | Independent |
-| Debugging | Requires TLS-aware tools (curl `-k`, Wireshark with key log) |
-| Best for | Public demo endpoint, cloud deployment, recruiter access, multi-team environments |
-
----
-
-### Comparison Matrix
-
-| Criterion | ~~stdio~~ (deprecated) | Direct import | SSE (HTTP) | HTTPS |
-|-----------|------------------------|---------------|------------|-------|
-| Local dev simplicity | — | Best | Good | Acceptable |
-| Multi-machine | No | No | Yes | Yes |
-| External client access | No | No | LAN only | Yes |
-| Wire encryption | N/A (IPC) | N/A (in-process) | None | TLS 1.2+ |
-| Auth required | No | No | Recommended | Required |
-| Cert management | None | None | None | Required |
-| Recruiter demo endpoint | No | No | Risky | Yes |
-| CI/CD pipeline use | Yes | Yes | Yes | Yes |
-| Debug with breakpoints | No | Yes | Yes | Yes |
-| ElevenLabs/Pexels exposure | Local only | Local only | Anyone on LAN | Anyone with token |
+| Criterion | ~~stdio~~ | ~~direct import (orchestrator)~~ | HTTPS local (`verify=False`) | HTTPS production (`verify=True`) |
+|-----------|-----------|----------------------------------|------------------------------|----------------------------------|
+| Same code path as prod | No | No | **Yes** | Yes |
+| Network stack exercised | No | No | **Yes** | Yes |
+| Cert management | None | None | Auto-generated | Let's Encrypt / CA |
+| Client cert verification | — | — | Skipped | Enforced |
+| Wire encryption | No | No | Yes | Yes |
+| Token auth | No | No | Yes | Yes |
+| External clients | No | No | Yes (trust self-signed CA) | Yes |
 
 ### Decision guide
 
 ```
-Does anything outside this process need to call a tool?
-  No  → Direct import (MCP_TRANSPORT=local, default)
-  Yes →
-    Is this LAN-only with trusted users?
-      Yes → SSE (HTTP) — zero cert overhead
-      No  → HTTPS — required for internet, external Claude Desktop, recruiter demo
+Is this a unit test or pytest integration fixture?
+  Yes → call call_tool() directly (import, no server needed)
+  No  →
+    Always use HTTPS.
+    MCP_VERIFY_SSL=false  (local dev, self-signed cert auto-generated)
+    MCP_VERIFY_SSL=true   (production, trusted CA cert)
 ```
-
-For Vibe Insta:
-- **Local dev / CI / tests:** Direct import (no transport layer)
-- **Recruiter demo / external Claude Desktop access:** HTTPS
-- **Trusted LAN team use:** SSE (HTTP) acceptable; HTTPS preferred
 
 ---
 
@@ -167,14 +74,7 @@ HTTPS resolves all three. The MCP SDK's SSE transport runs over HTTP; layering T
 
 ## Transport Layer: MCP over SSE over HTTPS
 
-MCP supports two standard transports:
-
-| Transport | When to use |
-|-----------|-------------|
-| `stdio` | Local dev: orchestrator spawns server as subprocess |
-| `SSE` (Server-Sent Events) | Network access: server is a long-running HTTP process |
-
-The MCP SDK's SSE server is built on **Starlette**. **FastAPI** extends Starlette, so the MCP SSE transport mounts directly inside a FastAPI app. Running the FastAPI app with **uvicorn** and a TLS certificate adds HTTPS. No custom protocol work required.
+The MCP SDK's SSE transport is built on **Starlette**. **FastAPI** extends Starlette, so the MCP SSE transport mounts directly inside a FastAPI app. Running the FastAPI app with **uvicorn** and a TLS certificate gives HTTPS. No custom protocol work required.
 
 ```
 Client (orchestrator / Claude Desktop)
@@ -347,34 +247,28 @@ venv/Scripts/python.exe -m src.mcp.screenwriting_server --port 8444
 
 ---
 
-## Client Setup: Orchestrator Transport Modes
+## Client Setup: Orchestrator
 
-Two modes, selected by `MCP_TRANSPORT` env var:
+The orchestrator always connects over HTTPS. `MCP_VERIFY_SSL` controls whether the cert chain is validated.
 
 **File:** `src/orchestrator.py`
 
 ```python
-import os
+import os, json
 from mcp.client.sse import sse_client
 from mcp import ClientSession
 
-_TRANSPORT = os.environ.get("MCP_TRANSPORT", "local")  # local | https
+_VERIFY_SSL = os.environ.get("MCP_VERIFY_SSL", "false").lower() == "true"
+# false  → self-signed cert accepted (local dev, auto-generated cert)
+# true   → cert chain must be valid (production, trusted CA)
+# MCP_CA_BUNDLE overrides the default CA store when using a private CA.
+_CA_BUNDLE  = os.environ.get("MCP_CA_BUNDLE") or _VERIFY_SSL
 
 async def _call_producer_tool(name: str, arguments: dict) -> dict:
-    """Single entry point for all producer tool calls. Transport-agnostic."""
-    if _TRANSPORT == "local":
-        # Direct import — no subprocess, no network, full debugger support.
-        # This is what the test suite already does.
-        from src.mcp.producer_server import call_tool
-        result = await call_tool(name, arguments)
-        return json.loads(result[0].text)
-
-    # HTTPS path — used for external clients and multi-machine deploys.
-    base_url  = os.environ["PRODUCER_SERVER_URL"]
-    token     = os.environ["MCP_SERVER_TOKEN"]
-    ca_bundle = os.environ.get("MCP_CA_BUNDLE")
-    headers   = {"Authorization": f"Bearer {token}"}
-    async with sse_client(f"{base_url}/sse", headers=headers, verify=ca_bundle or True) as (r, w):
+    base_url = os.environ["PRODUCER_SERVER_URL"]   # https://localhost:8443
+    token    = os.environ["MCP_SERVER_TOKEN"]
+    headers  = {"Authorization": f"Bearer {token}"}
+    async with sse_client(f"{base_url}/sse", headers=headers, verify=_CA_BUNDLE) as (r, w):
         async with ClientSession(r, w) as session:
             await session.initialize()
             result = await session.call_tool(name, arguments)
@@ -388,7 +282,10 @@ async def run_pipeline(screenplay: dict, run_dir: Path):
     ...
 ```
 
-The `stdio_client` import is removed entirely. The `local` path is a direct function call with zero overhead and full debugger support — equivalent to what the integration tests already do.
+No transport switch logic. `_CA_BUNDLE` resolves to:
+- `False` when `MCP_VERIFY_SSL=false` — TLS handshake completes but cert is not validated
+- `True` when `MCP_VERIFY_SSL=true` — uses the system CA store
+- A file path when `MCP_CA_BUNDLE=certs/ca.pem` — uses the specified CA bundle (private CA)
 
 ---
 
@@ -398,27 +295,32 @@ All transport and TLS settings come from environment variables so no code change
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_TRANSPORT` | `local` | `local` (direct import) or `https` |
-| `PRODUCER_SERVER_URL` | — | Base URL when `MCP_TRANSPORT=https` (e.g. `https://localhost:8443`) |
-| `SCREENWRITING_SERVER_URL` | — | Base URL for screenwriting server |
-| `MCP_SERVER_TOKEN` | — | Shared Bearer token (required for HTTPS mode) |
-| `MCP_CA_BUNDLE` | — | Path to `ca.pem` for self-signed certs; omit for trusted CA |
+| `PRODUCER_SERVER_URL` | — | e.g. `https://localhost:8443` |
+| `SCREENWRITING_SERVER_URL` | — | e.g. `https://localhost:8444` |
+| `MCP_SERVER_TOKEN` | — | Shared Bearer token (required) |
+| `MCP_VERIFY_SSL` | `false` | `false` = skip cert verification (local/self-signed); `true` = enforce (production) |
+| `MCP_CA_BUNDLE` | — | Path to CA bundle for a private CA; overrides `MCP_VERIFY_SSL` |
 | `MCP_PRODUCER_PORT` | `8443` | Port for producer server |
 | `MCP_SCREENWRITING_PORT` | `8444` | Port for screenwriting server |
-| `MCP_HOST` | `0.0.0.0` | Bind address for server processes |
+| `MCP_HOST` | `0.0.0.0` | Bind address |
 
-`.env` defaults (no file needed for local dev — `local` transport requires no env vars):
+`.env` for local dev (self-signed cert auto-generated, verification skipped):
 
 ```
-# Local dev default — no .env required. Direct import, no server process.
-# MCP_TRANSPORT=local
-
-# Set these only when running the HTTPS server:
-MCP_TRANSPORT=https
 PRODUCER_SERVER_URL=https://localhost:8443
 SCREENWRITING_SERVER_URL=https://localhost:8444
-MCP_SERVER_TOKEN=<32-byte hex — generate: python -c "import secrets; print(secrets.token_hex(32))">
-MCP_CA_BUNDLE=certs/ca.pem   # omit when using a trusted CA cert
+MCP_SERVER_TOKEN=<generate: python -c "import secrets; print(secrets.token_hex(32))">
+MCP_VERIFY_SSL=false
+```
+
+`.env` for production (trusted CA cert, verification enforced):
+
+```
+PRODUCER_SERVER_URL=https://your-host:8443
+SCREENWRITING_SERVER_URL=https://your-host:8444
+MCP_SERVER_TOKEN=<token>
+MCP_VERIFY_SSL=true
+# MCP_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt  # only if using a private CA
 ```
 
 ---
@@ -564,7 +466,7 @@ These items layer on top of Phase 3 (MCP server skeleton in `stdio` mode already
 
 **Total:** ~6h
 
-**Exit criterion:** `python scripts/start_mcp_servers.py --https` starts both servers; `curl -k -H "Authorization: Bearer <token>" https://localhost:8443/sse` returns a valid SSE stream; orchestrator with `MCP_TRANSPORT=https` runs the full pipeline end-to-end; Claude Desktop config connects and lists tools.
+**Exit criterion:** `python scripts/start_mcp_servers.py` starts both servers with auto-generated self-signed cert; `curl -k -H "Authorization: Bearer <token>" https://localhost:8443/health` returns `{"status":"ok"}`; `curl -k -H "Authorization: Bearer <token>" https://localhost:8443/sse` opens an SSE stream; orchestrator with `MCP_VERIFY_SSL=false` runs the full pipeline end-to-end; Claude Desktop config (with `MCP_CA_BUNDLE` pointing at `certs/ca.pem`) connects and lists tools.
 
 ---
 
