@@ -29,6 +29,7 @@
 
   "workspaceFolder": "/workspaces/video_agent",
 
+  "initializeCommand": ".devcontainer\\initialize.cmd",
   "postCreateCommand": ".devcontainer/post-create.sh",
 
   "remoteUser": "vscode"
