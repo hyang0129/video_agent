@@ -1,95 +1,113 @@
-# Submodule Integration Plan: chatterbox + live2d
+# Vendor Integration Plan: chatterbox + live2d
 
 ## Context
 Two external repos are consumed as dependencies without active development:
-- **chatterbox** (https://github.com/hyang0129/chatterbox) — Python TTS package with pyproject.toml; exposes `ChatterboxTurboTTS` API
+- **chatterbox** (https://github.com/hyang0129/chatterbox) — Python TTS package; exposes `ChatterboxTurboTTS` API
 - **live2d** (https://github.com/hyang0129/live2d) — C++ binary renderer; exposes `live2d-render` and `live2d-inspect` CLI commands
 
-Goal: keep both pinned to upstream commits, updatable on demand, and runnable from within the video_agent project.
+Goal: keep both pinned/accessible, updatable on demand, and runnable from within the video_agent project.
 
-## Approach: Git Submodules under `vendor/`
-
-Both repos are added as submodules. Git tracks the exact commit for reproducibility. Updates are explicit and intentional.
-
-### Directory layout after implementation
+## Directory layout
 ```
 vendor/
-  chatterbox/   <- git submodule (python package, pip install from here)
+  chatterbox/   <- bind-mounted from host (NOT a submodule)
   live2d/       <- git submodule (C++ binary, built via CMake)
 ```
 
-## Implementation Steps
+---
 
-### 1. Add submodules
+## live2d — Git Submodule (already done)
+
+live2d is a git submodule under `vendor/live2d/`. Already configured in `.gitmodules`.
+
 ```bash
-mkdir -p vendor
-git submodule add https://github.com/hyang0129/chatterbox vendor/chatterbox
-git submodule add https://github.com/hyang0129/live2d vendor/live2d
-```
-This creates `.gitmodules` and pins each to the current HEAD commit.
+# Init after fresh clone:
+git submodule update --init --recursive
 
-### 2. Update requirements.txt
-Add chatterbox as a local editable install so it can be imported by the pipeline:
-```
-# External submodule packages
--e vendor/chatterbox
-```
-Place this near the top of requirements.txt, above the langchain block.
-
-### 3. Add a Makefile for setup and updates
-
-Create `Makefile` at the project root with targets:
-- `make submodules-init` — init and fetch all submodules after a fresh clone
-- `make submodules-update` — pull latest from upstream for both
-- `make live2d-build` — CMake build of live2d binary (puts `live2d-render`, `live2d-inspect` in `vendor/live2d/build/bin/`)
-
-```makefile
-.PHONY: submodules-init submodules-update live2d-build
-
-submodules-init:
-	git submodule update --init --recursive
-
-submodules-update:
-	git submodule update --remote --merge
-
-live2d-build:
-	cmake -S vendor/live2d -B vendor/live2d/build -DCMAKE_BUILD_TYPE=Release
-	cmake --build vendor/live2d/build --parallel
-```
-
-### 4. Update .gitignore
-Add `vendor/live2d/build/` to .gitignore to exclude compiled artifacts:
-```
-vendor/live2d/build/
-```
-Do NOT ignore vendor/chatterbox or vendor/live2d themselves — submodule directories must remain tracked.
-
-### 5. Document usage in CLAUDE.md (Key File Locations table)
-Add two rows:
-| `vendor/chatterbox/` | TTS submodule — Python API (`ChatterboxTurboTTS`) |
-| `vendor/live2d/`     | Live2D renderer submodule — CLI: `live2d-render`, `live2d-inspect` |
-
-## Files to Modify
-- `requirements.txt` — add `-e vendor/chatterbox`
-- `.gitignore` — add `vendor/live2d/build/`
-- `CLAUDE.md` — add rows to Key File Locations table
-- `Makefile` — new file
-- `.gitmodules` — auto-created by `git submodule add`
-
-## Ongoing Update Workflow
-```bash
-# Pull latest from both upstream repos:
+# Update to latest upstream:
 git submodule update --remote --merge
 
-# After updating live2d, rebuild:
+# Build:
 make live2d-build
-
-# After updating chatterbox, reinstall:
-pip install -e vendor/chatterbox
 ```
 
+---
+
+## chatterbox — Bind Mount (separate venv)
+
+### Why not a submodule?
+Chatterbox already exists as a standalone repo on the dev machine at
+`C:\Users\HongM\Code Projects\chatterbox\`. A bind mount avoids duplicating the clone
+and lets edits on the host reflect immediately in the container.
+
+### Why a separate venv?
+Chatterbox requires PyTorch+CUDA (~2GB+). Video_agent uses LangChain. Installing both
+in one venv risks dependency conflicts and bloats the base environment. A dedicated venv
+at `/opt/chatterbox-venv` keeps them isolated.
+
+### Implementation
+
+#### 1. `.devcontainer/devcontainer.json` — Add bind mount
+
+```json
+"mounts": [
+  "source=${localEnv:USERPROFILE}/Code Projects/chatterbox,target=/workspaces/video_agent/vendor/chatterbox,type=bind,consistency=cached"
+]
+```
+
+`${localEnv:USERPROFILE}` resolves to the Windows user home (e.g. `C:\Users\HongM`).
+
+#### 2. `.devcontainer/post-create.sh` — Create chatterbox venv
+
+After the video_agent pip install block, add:
+
+```bash
+# ------------------------------------------------------------------
+# Chatterbox: separate venv to isolate PyTorch deps
+# ------------------------------------------------------------------
+CHATTERBOX_DIR="/workspaces/video_agent/vendor/chatterbox"
+CHATTERBOX_VENV="/opt/chatterbox-venv"
+if [ -d "$CHATTERBOX_DIR" ]; then
+  python -m venv "$CHATTERBOX_VENV"
+  "$CHATTERBOX_VENV/bin/pip" install --no-cache-dir -r "$CHATTERBOX_DIR/requirements.txt"
+  "$CHATTERBOX_VENV/bin/pip" install --no-cache-dir -e "$CHATTERBOX_DIR"
+  echo "[OK] Chatterbox venv ready at $CHATTERBOX_VENV"
+else
+  echo "[WARN] Chatterbox not mounted at $CHATTERBOX_DIR -- skipping"
+fi
+```
+
+#### 3. `.gitignore` — Exclude bind-mounted directory
+
+```
+vendor/chatterbox/
+```
+
+Since chatterbox is a bind mount (not a submodule), git must not track it.
+
+### Usage
+
+Start the chatterbox FastAPI server (run from `vendor/chatterbox/`):
+```bash
+cd /workspaces/video_agent/vendor/chatterbox
+/opt/chatterbox-venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8100
+```
+
+Import in a script using the chatterbox venv:
+```bash
+/opt/chatterbox-venv/bin/python -c "from chatterbox.tts_turbo import ChatterboxTurboTTS; print('OK')"
+```
+
+---
+
+## Files Modified
+- `.devcontainer/devcontainer.json` — add `mounts` array
+- `.devcontainer/post-create.sh` — add chatterbox venv setup block
+- `.gitignore` — add `vendor/chatterbox/`
+
 ## Verification
-1. After `git submodule update --init`, `vendor/chatterbox/` and `vendor/live2d/` are populated.
-2. `pip install -e vendor/chatterbox` succeeds; `python -c "from chatterbox.tts_turbo import ChatterboxTurboTTS"` works.
-3. `make live2d-build` completes; `vendor/live2d/build/bin/live2d-render --help` runs.
-4. `git status` shows `.gitmodules` tracked, no untracked vendor contents.
+1. Rebuild devcontainer (`Dev Containers: Rebuild Container`)
+2. Confirm mount: `ls /workspaces/video_agent/vendor/chatterbox/`
+3. Confirm chatterbox venv: `/opt/chatterbox-venv/bin/python -c "import chatterbox; print('OK')"`
+4. Confirm video_agent venv unaffected: `python -c "import langchain; print('OK')"`
+5. Confirm `git status` doesn't show `vendor/chatterbox` as untracked

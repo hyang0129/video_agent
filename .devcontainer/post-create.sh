@@ -27,6 +27,21 @@ fi
 pip install --no-cache-dir -r requirements.txt
 
 # ------------------------------------------------------------------
+# Chatterbox: separate venv to isolate PyTorch deps
+# ------------------------------------------------------------------
+CHATTERBOX_DIR="/workspaces/video_agent/vendor/chatterbox"
+CHATTERBOX_VENV="/opt/chatterbox-venv"
+PYTHON311="/usr/local/python3.11/bin/python3"
+if [ -d "$CHATTERBOX_DIR" ]; then
+  "$PYTHON311" -m venv "$CHATTERBOX_VENV"
+  "$CHATTERBOX_VENV/bin/pip" install --no-cache-dir -r "$CHATTERBOX_DIR/requirements.txt"
+  "$CHATTERBOX_VENV/bin/pip" install --no-cache-dir -e "$CHATTERBOX_DIR"
+  echo "[OK] Chatterbox venv ready at $CHATTERBOX_VENV"
+else
+  echo "[WARN] Chatterbox not mounted at $CHATTERBOX_DIR -- skipping"
+fi
+
+# ------------------------------------------------------------------
 # Verify key tools
 # ------------------------------------------------------------------
 echo "[INFO] Python: $(python --version)"

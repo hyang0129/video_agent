@@ -1,9 +1,10 @@
 # Environment variables
 .env
 
-# Vendor submodule build artifacts
+# Vendor build artifacts and bind-mounted repos
 vendor/live2d/build/
 vendor/live2d/renders/
+vendor/chatterbox/
 
 # TLS certificates (auto-generated at runtime)
 certs/
