@@ -274,4 +274,7 @@ Non-ASCII is fine in comments, docstrings, and data strings (voiceover content, 
 
 ## License
 
-MIT
+This project is licensed under PolyForm Noncommercial License 1.0.0.
+Commercial use is not permitted under this license.
+
+See [LICENSE](LICENSE) for full terms.
