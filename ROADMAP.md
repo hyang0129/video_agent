@@ -156,6 +156,22 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Owner:** TBD
 - **Effort:** 1-2 days
 
+#### 0.8 Integrate chatterbox as Vendor Submodule (TTS Upgrade) 🔥
+- **Priority:** P0
+- **Status:** Open
+- **Why Tier 0:** chatterbox provides a self-hosted 350M-parameter TTS model (ChatterboxTurboTTS) that replaces ElevenLabs dependency, eliminating free-tier character limits and enabling unlimited local voice generation — a strong architectural differentiator.
+- **Implementation:**
+  - Add `git submodule add https://github.com/hyang0129/chatterbox vendor/chatterbox`
+  - Add `-e vendor/chatterbox` to `requirements.txt`
+  - Add `make submodules-init` and `make submodules-update` targets to `Makefile`
+  - Document vendor layout in CLAUDE.md Key File Locations table
+- **Python API:** `from chatterbox.tts_turbo import ChatterboxTurboTTS`
+- **Success Metric:** `from chatterbox.tts_turbo import ChatterboxTurboTTS` importable; submodule pinned and updatable via `git submodule update --remote`
+- **Design doc:** [docs/submodule-integration-plan.md](docs/submodule-integration-plan.md)
+- **Effort:** 0.5 days
+
+---
+
 ### 🎯 Tier 1: Production Readiness (1-2 weeks)
 
 **Goal:** Make the MVP fully production-complete with high-quality output
@@ -262,6 +278,21 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Owner:** TBD
 - **Timeline:** Immediate
 - **Effort:** 1-2 days for first integrated pass
+
+#### 1.6 Integrate live2d as Vendor Submodule (Avatar Renderer)
+- **Priority:** P1
+- **Status:** Open
+- **Why Tier 1:** live2d is a C++ CMake binary project (not a Python package) — requires a build step. Adds `live2d-render` and `live2d-inspect` CLI tools for avatar animation rendering, extending the compositor stage.
+- **Implementation:**
+  - Add `git submodule add https://github.com/hyang0129/live2d vendor/live2d`
+  - Add `make live2d-build` target (CMake build → `vendor/live2d/build/bin/`)
+  - Add `vendor/live2d/build/` to `.gitignore`
+  - Document in CLAUDE.md Key File Locations table
+- **CLI:** `live2d-render --scene scene.json`, `live2d-inspect --model <name>`
+- **Success Metric:** `vendor/live2d/build/bin/live2d-render --help` runs after `make live2d-build`
+- **Design doc:** [docs/submodule-integration-plan.md](docs/submodule-integration-plan.md)
+- **Dependencies:** CMake, C++ toolchain in dev environment
+- **Effort:** 0.5-1 day
 
 ---
 
@@ -508,6 +539,7 @@ winget install ImageMagick.ImageMagick
 - [ ] Metrics summary exists with runtime + output-count evidence (`results/metrics_summary.json`)
 - [ ] Parallel execution benchmark is documented (wall-clock comparison logged)
 - [ ] MCP servers run as real long-lived subprocesses over stdio transport (not in-process)
+- [ ] chatterbox submodule integrated and importable (`vendor/chatterbox/`)
 
 ### Tier 1 Complete When:
 - [x] Videos have on-screen text overlays rendered
@@ -516,6 +548,7 @@ winget install ImageMagick.ImageMagick
 - [ ] Voiceover is LUFS normalized (-16.0 ±1.0)
 - [ ] CI/CD runs tests on every PR
 - [ ] No P0/P1 bugs in issue tracker
+- [ ] live2d submodule integrated and buildable (`make live2d-build`)
 
 ### Tier 2 Complete When:
 - [ ] LangChain upgraded to 1.x (branch ready, pending human review + merge)
