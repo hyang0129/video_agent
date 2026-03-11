@@ -1,6 +1,9 @@
 # Environment variables
 .env
 
+# Transient devcontainer file (git identity relay)
+.devcontainer/.gituser.tmp
+
 # Python
 __pycache__/
 *.py[cod]
