@@ -152,6 +152,7 @@ This tier is the current execution priority and supersedes older sequencing belo
   - Handle server lifecycle: startup, health check, graceful shutdown.
 - **Success Metric:** `use_mcp=True` calls traverse the actual stdio JSON-RPC wire; tool handlers execute in isolated subprocesses with no shared memory with the orchestrator.
 - **Dependencies:** `mcp` SDK already installed; no new dependencies required.
+- **Design doc:** [docs/mcp-server-architecture.md](docs/mcp-server-architecture.md)
 - **Owner:** TBD
 - **Effort:** 1-2 days
 

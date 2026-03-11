@@ -18,7 +18,6 @@ Runs all 9 stages in sequence:
 import argparse
 import json
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -35,6 +34,7 @@ from src.visual_agent import create_visual_agent
 from src.composition_agent import create_composition_agent
 from src.render_agent import create_render_agent
 from src.artifacts.io import ensure_run_dir, new_run_id, write_json
+from src.utils.ffprobe_utils import probe_video_info
 from src.config import (
     ANTHROPIC_API_KEY,
     ELEVENLABS_API_KEY,
@@ -112,28 +112,71 @@ def check_api_keys():
     print(f"[OK] API keys configured (LLM provider: {LLM_PROVIDER})")
 
 
-def validate_final_video(mp4_path) -> bool:
+_PARITY_THRESHOLD_S = 0.25
+
+
+def validate_and_write_evaluation(mp4_path, audio_timeline, run_dir, run_duration_s=0.0) -> bool:
+    """Run ffprobe validation, check audio/video duration parity, write evaluation.json.
+
+    Returns True if all quality gates pass, False otherwise.
+    Hard gate: missing audio stream or parity > 0.25s are failures.
+    """
     mp4_path = Path(mp4_path)
+    run_dir = Path(run_dir)
+
+    failures = []
     if not mp4_path.exists() or mp4_path.stat().st_size == 0:
         print(f"[ERROR] Post-render validation FAILED: {mp4_path} missing or empty")
-        return False
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_type,duration",
-            "-of", "csv=p=0",
-            str(mp4_path),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
+        failures.append("mp4_missing")
+        info = {"has_video": False, "has_audio": False, "video_duration_s": 0.0, "audio_duration_s": 0.0}
+    else:
+        info = probe_video_info(mp4_path)
+
+    video_duration_s = info["video_duration_s"]
+    audio_duration_s = info["audio_duration_s"]
+
+    # Prefer timeline duration as reference if available (accounts for silence fill intent)
+    timeline_duration_s = float((audio_timeline or {}).get("duration_seconds") or audio_duration_s)
+    parity_s = abs(video_duration_s - timeline_duration_s)
+    parity_ok = parity_s <= _PARITY_THRESHOLD_S
+
+    if not info["has_video"]:
+        failures.append("no_video_stream")
         print(f"[ERROR] Post-render validation FAILED: no readable video stream in {mp4_path.name}")
-        print(f"        ffprobe: {result.stderr.strip()}")
-        return False
-    print(f"[OK] Post-render validation passed: {mp4_path.name} is playable")
-    return True
+    if not info["has_audio"]:
+        failures.append("no_audio_stream")
+        print(f"[ERROR] Post-render validation FAILED: no audio stream in {mp4_path.name}")
+    if not parity_ok:
+        failures.append(f"duration_parity_{parity_s:.2f}s_exceeds_{_PARITY_THRESHOLD_S}s")
+        print(
+            f"[ERROR] Post-render validation FAILED: audio/video duration mismatch "
+            f"{video_duration_s:.2f}s vs {timeline_duration_s:.2f}s (delta={parity_s:.2f}s > {_PARITY_THRESHOLD_S}s)"
+        )
+
+    passed = len(failures) == 0
+    if passed:
+        print(
+            f"[OK] Post-render validation passed: {mp4_path.name} "
+            f"video={video_duration_s:.2f}s audio={audio_duration_s:.2f}s parity={parity_s:.3f}s"
+        )
+
+    evaluation = {
+        "schema_version": "1.0.0",
+        "mp4_path": str(mp4_path),
+        "video_duration_s": round(video_duration_s, 3),
+        "audio_duration_s": round(audio_duration_s, 3),
+        "timeline_duration_s": round(timeline_duration_s, 3),
+        "duration_parity_s": round(parity_s, 3),
+        "duration_parity_ok": parity_ok,
+        "has_video_stream": info["has_video"],
+        "has_audio_stream": info["has_audio"],
+        "run_duration_s": round(run_duration_s, 1),
+        "passed": passed,
+        "failures": failures,
+    }
+    write_json(run_dir / "evaluation.json", evaluation)
+    print(f"[INFO] evaluation.json written to {run_dir / 'evaluation.json'}")
+    return passed
 
 
 def main():
@@ -159,6 +202,7 @@ def main():
 
     check_api_keys()
     check_cookies()
+    pipeline_start = time.time()
 
     if not shutil.which("ffmpeg") and engine == "ffmpeg":
         print("[ERROR] ffmpeg not found on PATH. Install it or use --engine dry_run.")
@@ -298,10 +342,19 @@ def main():
     write_json(run_dir / "final_video.json", final_video)
     print(f"[OK] Stage 8 complete. FinalVideo: {run_dir / 'final_video.mp4'}")
 
-    validate_final_video(run_dir / "final_video.mp4")
+    run_duration_s = time.time() - pipeline_start
+    validation_passed = validate_and_write_evaluation(
+        run_dir / "final_video.mp4",
+        audio_timeline,
+        run_dir,
+        run_duration_s=run_duration_s,
+    )
 
     print(f"\n{'='*60}")
-    print(f"[OK] Pipeline complete: {run_dir}")
+    if validation_passed:
+        print(f"[OK] Pipeline complete: {run_dir}")
+    else:
+        print(f"[ERROR] Pipeline complete with validation failures: {run_dir}")
     print(f"{'='*60}")
     print(f"   topic_brief.json      <- Stage 0 (market research)")
     print(f"   facts.db              <- Stage 1 (fact mining)")
@@ -312,6 +365,10 @@ def main():
     print(f"   visual_manifest.json  <- Stage 6")
     print(f"   render_spec.json      <- Stage 7")
     print(f"   final_video.mp4       <- Stage 8")
+    print(f"   evaluation.json       <- post-render quality gate")
+
+    if not validation_passed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
