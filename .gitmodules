@@ -1,0 +1,3 @@
+[submodule "vendor/live2d"]
+	path = vendor/live2d
+	url = https://github.com/hyang0129/live2d
