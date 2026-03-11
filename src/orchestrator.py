@@ -9,11 +9,9 @@ Outputs written to run_dir:
 - scene_results.json      - per-scene production status after final round
 
 MCP mode (use_mcp=True):
-    Calls produce tools from producer_server in-process (no subprocess).
-    This avoids stdio pipe issues and is sufficient for local debugging.
-    NOTE: This is a debug shortcut — not a proper MCP client/server setup.
-    A real MCP deployment would use the stdio transport with a long-lived
-    server process.
+    Calls produce tools from video_agent_server in-process (no subprocess).
+    This avoids network overhead and is sufficient for local debugging.
+    For HTTPS transport, use _mcp_session() + VIDEO_AGENT_SERVER_URL instead.
 
 Serial mode (serial=True):
     Runs audio generation then image fetching sequentially instead of in
@@ -25,11 +23,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
 
 from .artifacts.io import write_json
 from .artifacts.screenplay import screenplay_to_script_package
@@ -38,6 +40,31 @@ from .script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
 from .video_planner import script_package_to_video_plan
 
 MAX_REVISION_ROUNDS = 2
+
+_VERIFY_SSL = os.environ.get("MCP_VERIFY_SSL", "false").lower() == "true"
+_CA_BUNDLE = os.environ.get("MCP_CA_BUNDLE") or _VERIFY_SSL
+
+
+@asynccontextmanager
+async def _mcp_session():
+    """Hold one TLS connection + MCP session for the duration of a pipeline run.
+
+    Opening a new session per tool call wastes a TLS handshake + MCP initialize
+    round-trip on every call -- avoid that pattern.
+    """
+    import httpx
+
+    base_url = os.environ["VIDEO_AGENT_SERVER_URL"]
+    token = os.environ["MCP_SERVER_TOKEN"]
+    http_client = httpx.AsyncClient(
+        headers={"Authorization": f"Bearer {token}"},
+        verify=_CA_BUNDLE,
+    )
+    async with http_client:
+        async with streamable_http_client(f"{base_url}/mcp/", http_client=http_client) as (r, w, _):
+            async with ClientSession(r, w) as session:
+                await session.initialize()
+                yield session
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +78,7 @@ async def _call_tool_inprocess(tool_name: str, arguments: dict) -> dict:
     It imports and calls the tool handler function directly, which avoids
     all pipe/buffer issues while exercising the same handler code.
     """
-    from .mcp.producer_server import call_tool  # noqa: PLC0415
+    from .mcp.video_agent_server import call_tool  # noqa: PLC0415
     logger.debug("[MCP-inproc] calling tool={} args_keys={}", tool_name, list(arguments.keys()))
     result = await call_tool(tool_name, arguments)
     text = result[0].text if result else "{}"
@@ -275,6 +302,9 @@ class ProductionOrchestrator:
         run_id = str(video_plan.get("video_plan_id") or "unknown")
         mode = ("mcp-serial" if serial else "mcp-parallel") if use_mcp else ("serial" if serial else "parallel")
 
+        log_path = Path(run_dir) / "orchestrator.log"
+        log_id = logger.add(str(log_path), level="DEBUG", encoding="utf-8")
+
         logger.info("[orch] run start  run_id={} voice={} mode={}", run_id, voice, mode)
         logger.debug("[orch] run_dir={}", run_dir)
 
@@ -412,6 +442,7 @@ class ProductionOrchestrator:
             ok_count,
             len(scene_results) - ok_count,
         )
+        logger.remove(log_id)
         return audio_timeline, screenplay, video_plan
 
     # ------------------------------------------------------------------

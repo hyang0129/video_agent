@@ -97,7 +97,7 @@ async def test_generate_audio_tool(tmp_path: Path, ww2_video_plan: Dict[str, Any
         - audio_segments/*.wav (or *.mp3 if ElevenLabs key present)
         - production_report.json — should have 0 degraded scenes for clean input
     """
-    from src.mcp.producer_server import call_tool
+    from src.mcp.video_agent_server import call_tool
 
     has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
     voice = "narrator" if has_elevenlabs else "silent"
@@ -161,7 +161,7 @@ async def test_fetch_assets_tool(tmp_path: Path, ww2_script_package: Dict[str, A
         - visual_manifest.json — inspect per-scene images, check relevance scores
         - production_report.json — degraded scenes should list low-relevance issues
     """
-    from src.mcp.producer_server import call_tool
+    from src.mcp.video_agent_server import call_tool
 
     has_pexels = bool(os.getenv("PEXELS_API_KEY"))
 
@@ -221,7 +221,7 @@ async def test_parallel_production(
     - production_report.json contains merged issues from AudioAgent + ScriptImageAgent
     - No file-level race conditions from concurrent writes
     """
-    from src.mcp.producer_server import call_tool
+    from src.mcp.video_agent_server import call_tool
 
     has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
     voice = "narrator" if has_elevenlabs else "silent"
@@ -298,7 +298,7 @@ async def test_full_producer_pipeline(
         - final_video.mp4  (if ffmpeg available — watch for sync issues)
         - evaluation.json  (if ffmpeg available — check duration_parity_ok)
     """
-    from src.mcp.producer_server import call_tool
+    from src.mcp.video_agent_server import call_tool
 
     has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
     has_ffmpeg = _ffmpeg_available()
@@ -375,13 +375,16 @@ async def test_full_producer_pipeline(
         "audio_timeline": audio_timeline,
         "video_plan": vp,
         "run_dir": str(tmp_path),
+        "engine": "ffmpeg",
     })
     render_data = _parse(render_result)
     assert render_data.get("status") == "ok", f"render_video failed: {render_data}"
 
     mp4_path = render_data.get("mp4_path", "")
     assert mp4_path, "render_video returned no mp4_path"
-    assert Path(mp4_path).exists(), f"MP4 not found at {mp4_path}"
+    mp4 = Path(mp4_path)
+    assert mp4.exists(), f"MP4 not found at {mp4_path}"
+    assert mp4.stat().st_size > 0, f"MP4 is empty (0 bytes) at {mp4_path}"
 
     print(f"MP4: {mp4_path}")
     print(f"Duration: {render_data.get('duration_s', 0):.1f}s")
@@ -400,16 +403,25 @@ async def test_full_producer_pipeline(
     assert eval_path.exists(), "evaluation.json not written by validate_output"
 
     evaluation = json.loads(eval_path.read_text(encoding="utf-8"))
-    # Assert schema — not whether the video is production-quality
-    # (render_agent may produce a stub if CompositorAgent output is incomplete)
     assert "passed" in evaluation
     assert "duration_parity_ok" in evaluation
     assert "video_duration_s" in evaluation
+    assert "render_health" in evaluation, "render_health block missing from evaluation.json"
+
+    rh = evaluation["render_health"]
+    assert rh.get("file_size_bytes", 0) > 0, (
+        f"render_health reports empty MP4 — critical_failures: {rh.get('critical_failures')}"
+    )
+    assert "DryRun" not in rh.get("engine", ""), (
+        f"DryRunRenderEngine was used — MP4 will be empty. critical_failures: {rh.get('critical_failures')}"
+    )
 
     review = copy_to_review(tmp_path, "mcp_full_pipeline")
     print(f"Passed: {validate_data['passed']}")
     print(f"Duration parity: {validate_data.get('duration_parity_s', '?'):.2f}s "
           f"({'OK' if validate_data.get('duration_parity_ok') else 'FAIL'})")
+    print(f"Render health: engine={rh.get('engine')} size={rh.get('file_size_bytes')}B "
+          f"degraded={rh.get('degraded_scene_count')} critical={rh.get('critical_failures')}")
     print(f"Failures: {validate_data.get('failures', [])}")
     print(f"Review dir: {review}")
     if has_elevenlabs:
@@ -432,7 +444,7 @@ async def test_validate_output_writes_evaluation_json(tmp_path: Path) -> None:
     - Writes evaluation.json with the correct schema
     - Correctly reports duration_parity_ok when parity is within threshold
     """
-    from src.mcp.producer_server import call_tool
+    from src.mcp.video_agent_server import call_tool
 
     # Build a minimal 5-second MP4 (black video + silent audio) via ffmpeg
     mp4_path = tmp_path / "synthetic.mp4"

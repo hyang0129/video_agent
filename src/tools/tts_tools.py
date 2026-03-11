@@ -48,7 +48,7 @@ def _get_retry_session() -> requests.Session:
 
 def generate_voiceover(
     text: str,
-    voice_id: str = "21m00Tcm4TlvDq8ikWAM",  # Default: Rachel (ElevenLabs)
+    voice_id: str = "JBFqnCBsd6RMkjVDRZzb",  # Default: George (ElevenLabs)
     output_path: Optional[Path] = None,
     stability: float = 0.5,
     similarity_boost: float = 0.75,
@@ -302,10 +302,10 @@ def normalize_audio(
 # These IDs are intentionally pinned for determinism and to match
 # the pipeline docs + tests.
 VOICE_PRESETS = {
-    "narrator": "21m00Tcm4TlvDq8ikWAM",  # Rachel
-    "energetic": "pNInz6obpgDQGcFmaJgB",  # Adam
-    "calm": "EXAVITQu4vr4xnSDxMaL",  # Bella/Sarah-era calm preset
-    "authoritative": "VR6AewLTigWG4xSOukaG",  # Arnold (deep)
+    "narrator": "JBFqnCBsd6RMkjVDRZzb",  # George - Warm, Captivating Storyteller
+    "energetic": "TX3LPaxmHKxFdv7VOQHJ",  # Liam - Energetic, Social Media Creator
+    "calm": "EXAVITQu4vr4xnSDxMaL",       # Sarah - Mature, Reassuring, Confident
+    "authoritative": "IKne3meq5aSn9XLyUdCD",  # Charlie - Deep, Confident, Energetic
 }
 
 

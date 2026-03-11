@@ -308,7 +308,7 @@ class ScriptImageConfig:
     """
 
     output_dir: Optional[Path] = None
-    image_sources: Sequence[str] = ("wikimedia", "pexels")
+    image_sources: Sequence[str] = ("pexels",)
     min_candidates_per_segment: int = 1
     max_candidates_per_segment: int = 5
     max_queries_per_segment: int = 3

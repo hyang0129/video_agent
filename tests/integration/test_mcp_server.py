@@ -37,7 +37,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_estimate_tts_duration_narrator(self):
-        from src.mcp.producer_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("estimate_tts_duration", {
             "text": "Hello world. This is a test sentence for TTS duration estimation.",
@@ -52,7 +52,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_estimate_tts_duration_calm_preset(self):
-        from src.mcp.producer_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("estimate_tts_duration", {
             "text": "calm voice test",
@@ -64,7 +64,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_estimate_tts_duration_unknown_preset_fallback(self):
-        from src.mcp.producer_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("estimate_tts_duration", {
             "text": "test",
@@ -75,7 +75,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self):
-        from src.mcp.producer_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("does_not_exist", {})
         data = _parse(result)
@@ -87,7 +87,7 @@ class TestProducerServerLightweightTools:
         reason="PEXELS_API_KEY not set",
     )
     async def test_check_asset_availability_live(self):
-        from src.mcp.producer_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("check_asset_availability", {
             "query": "World War II tank battlefield",
@@ -103,7 +103,7 @@ class TestProducerServerLightweightTools:
     async def test_check_asset_availability_no_pexels_key(self, monkeypatch):
         """When PEXELS_API_KEY is empty, returns unknown availability."""
         monkeypatch.setattr("src.config.PEXELS_API_KEY", "")
-        from src.mcp.producer_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("check_asset_availability", {"query": "test query"})
         data = _parse(result)
@@ -115,10 +115,10 @@ class TestProducerServerLightweightTools:
 # Producer server — list_tools
 # ---------------------------------------------------------------------------
 
-class TestProducerServerListTools:
+class TestVideoAgentServerListTools:
     @pytest.mark.asyncio
-    async def test_list_tools_returns_six_tools(self):
-        from src.mcp.producer_server import list_tools
+    async def test_list_tools_returns_ten_tools(self):
+        from src.mcp.video_agent_server import list_tools
 
         tools = await list_tools()
         names = {t.name for t in tools}
@@ -129,35 +129,20 @@ class TestProducerServerListTools:
             "fetch_assets",
             "render_video",
             "validate_output",
-        }
-
-    @pytest.mark.asyncio
-    async def test_all_tools_have_required_inputschema(self):
-        from src.mcp.producer_server import list_tools
-
-        tools = await list_tools()
-        for tool in tools:
-            assert tool.inputSchema is not None, f"{tool.name} missing inputSchema"
-            assert tool.inputSchema.get("type") == "object"
-
-
-# ---------------------------------------------------------------------------
-# Screenwriting server — list_tools
-# ---------------------------------------------------------------------------
-
-class TestScreenwritingServerListTools:
-    @pytest.mark.asyncio
-    async def test_list_tools_returns_four_tools(self):
-        from src.mcp.screenwriting_server import list_tools
-
-        tools = await list_tools()
-        names = {t.name for t in tools}
-        assert names == {
             "generate_concepts",
             "write_screenplay",
             "review_feasibility",
             "revise_scene",
         }
+
+    @pytest.mark.asyncio
+    async def test_all_tools_have_required_inputschema(self):
+        from src.mcp.video_agent_server import list_tools
+
+        tools = await list_tools()
+        for tool in tools:
+            assert tool.inputSchema is not None, f"{tool.name} missing inputSchema"
+            assert tool.inputSchema.get("type") == "object"
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +152,7 @@ class TestScreenwritingServerListTools:
 class TestScreenwritingServerReviewFeasibility:
     @pytest.mark.asyncio
     async def test_review_valid_screenplay(self):
-        from src.mcp.screenwriting_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         screenplay = {
             "screenplay_id": "sp_test",
@@ -198,7 +183,7 @@ class TestScreenwritingServerReviewFeasibility:
 
     @pytest.mark.asyncio
     async def test_review_empty_screenplay(self):
-        from src.mcp.screenwriting_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("review_feasibility", {"screenplay": {"scenes": []}})
         data = _parse(result)
@@ -207,7 +192,7 @@ class TestScreenwritingServerReviewFeasibility:
 
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self):
-        from src.mcp.screenwriting_server import call_tool
+        from src.mcp.video_agent_server import call_tool
 
         result = await call_tool("nonexistent_tool", {})
         data = _parse(result)

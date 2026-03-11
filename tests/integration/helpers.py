@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
+ARTIFACTS_DIR = Path(__file__).resolve().parents[1] / "artifacts"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -18,8 +19,7 @@ def load_fixture(name: str) -> Dict[str, Any]:
 
 
 def review_dir(stage: str) -> Path:
-    root = PROJECT_ROOT / "results" / "test" / "stages"
-    return root / f"{stage}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    return ARTIFACTS_DIR / f"{stage}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 def copy_to_review(src: Path, stage: str) -> Path:

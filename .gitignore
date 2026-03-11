@@ -1,6 +1,9 @@
 # Environment variables
 .env
 
+# TLS certificates (auto-generated at runtime)
+certs/
+
 # Transient devcontainer file (git identity relay)
 .devcontainer/.gituser.tmp
 
@@ -50,6 +53,9 @@ data/
 # Results (exclude generated content but keep examples)
 results/
 !results/.gitkeep
+
+# Test artifacts (generated media and pipeline run outputs)
+tests/artifacts/
 
 # Test files in root (should be in tests/)
 /test_*.py

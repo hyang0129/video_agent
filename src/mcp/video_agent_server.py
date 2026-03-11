@@ -1,20 +1,29 @@
-"""MCP Producer Server — exposes production pipeline tools over stdio transport.
+"""MCP Video Agent Server — all 10 tools over HTTPS Streamable HTTP transport.
+
+Merges the former producer_server.py (6 production tools) and
+screenwriting_server.py (4 screenwriting tools) into a single server.
 
 Tools exposed:
-  1. check_asset_availability  — Pexels probe, no download
-  2. estimate_tts_duration     — heuristic, no API call
-  3. generate_audio            — wraps AudioGenerationAgent
-  4. fetch_assets              — wraps ScriptImageRetrievalAgent
-  5. render_video              — wraps CompositorAgent + RenderAgent
-  6. validate_output           — ffprobe validation + evaluation.json
+  Screenwriting (4):
+    1. generate_concepts        -- generate N concept variants from a TopicBrief
+    2. write_screenplay         -- write a Screenplay from a Concept
+    3. review_feasibility       -- heuristic pre-flight validation (no API call)
+    4. revise_scene             -- revise one scene given a structured issue
+
+  Production (6):
+    5. check_asset_availability -- Pexels probe, no download
+    6. estimate_tts_duration    -- heuristic, no API call
+    7. generate_audio           -- wraps AudioGenerationAgent
+    8. fetch_assets             -- wraps ScriptImageRetrievalAgent
+    9. render_video             -- wraps CompositorAgent + RenderAgent
+   10. validate_output          -- ffprobe validation + evaluation.json
 
 Run as:
-    venv/Scripts/python.exe -m src.mcp.producer_server
+    MCP_SERVER_TOKEN=<token> python -m src.mcp.video_agent_server --port 8443
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import struct
 import traceback
@@ -23,10 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
-import mcp.server.stdio
 from mcp.server import Server
-from mcp.server.lowlevel.server import NotificationOptions
-from mcp.server.models import InitializationOptions
 from mcp.types import TextContent, Tool
 
 from ..artifacts.io import write_json
@@ -34,48 +40,47 @@ from ..artifacts.screenplay import screenplay_to_script_package
 from ..audio_agent import create_audio_agent
 from ..composition_agent import create_composition_agent
 from ..render_agent import create_render_agent
+from ..screenwriting.concept_agent import ConceptAgent
+from ..screenwriting.screenplay_agent import ScreenplayAgent
+from ..screenwriting.screenplay_reviewer import ScreenplayReviewer
 from ..script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
 from ..tools.image_search_tools import ImageSearchError, score_candidate_relevance, search_pexels_images
 from ..utils.ffprobe_utils import probe_video_info
 from ..utils.tts_utils import _WPM_BY_PRESET, estimate_duration_s
 from ..video_planner import script_package_to_video_plan
+from .https_server_base import DEFAULT_CERT, DEFAULT_KEY, run_https_server
 
-app = Server("producer-server")
+app = Server("video-agent-server")
 
 _PARITY_THRESHOLD_S = 0.25
 
 
 # ---------------------------------------------------------------------------
-# Asset download helpers
+# Asset download helpers (from former producer_server)
 # ---------------------------------------------------------------------------
 
 def _write_placeholder_bmp(path: Path, width: int = 720, height: int = 1280) -> None:
-    """Write a solid grey BMP for use when image download fails."""
     path.parent.mkdir(parents=True, exist_ok=True)
     row_size = (width * 3 + 3) & ~3
     pixel_data_size = row_size * height
     file_size = 54 + pixel_data_size
     bmp = bytearray()
-    # BMP file header
     bmp += b"BM"
     bmp += struct.pack("<I", file_size)
     bmp += b"\x00\x00\x00\x00"
     bmp += struct.pack("<I", 54)
-    # DIB header
     bmp += struct.pack("<I", 40)
     bmp += struct.pack("<i", width)
-    bmp += struct.pack("<i", -height)  # top-down
+    bmp += struct.pack("<i", -height)
     bmp += struct.pack("<H", 1)
     bmp += struct.pack("<H", 24)
     bmp += b"\x00" * 24
-    # Pixel data (medium grey)
     row = bytes([0x80, 0x80, 0x80] * width) + bytes(row_size - width * 3)
     bmp += row * height
     path.write_bytes(bytes(bmp))
 
 
 def _download_image(url: str, dest: Path) -> bool:
-    """Download url to dest. Returns True on success."""
     try:
         resp = requests.get(url, timeout=30, stream=True)
         resp.raise_for_status()
@@ -92,18 +97,6 @@ def _script_image_manifest_to_visual_manifest(
     manifest: Dict[str, Any],
     run_dir: Path,
 ) -> Dict[str, Any]:
-    """Convert ScriptImageManifest (segments + candidate URLs) to VisualManifest (assets + local paths).
-
-    Downloads the top-ranked candidate for each segment. Falls back to a
-    placeholder BMP when the download fails.
-
-    Args:
-        manifest: ScriptImageManifest returned by ScriptImageRetrievalAgent.
-        run_dir: Run output directory; images land in run_dir/assets/.
-
-    Returns:
-        VisualManifest dict compatible with CompositionAgent.
-    """
     assets_dir = run_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
 
@@ -111,8 +104,6 @@ def _script_image_manifest_to_visual_manifest(
     for seg in manifest.get("segments") or []:
         scene_id = str(seg.get("beat_id") or seg.get("scene_id") or f"scene_{len(assets) + 1:02d}")
         candidates = seg.get("candidates") or []
-
-        # Pick best candidate (already sorted by relevance score from ScriptImageRetrievalAgent)
         top = candidates[0] if candidates else None
 
         if top:
@@ -157,6 +148,68 @@ def _script_image_manifest_to_visual_manifest(
 @app.list_tools()
 async def list_tools() -> List[Tool]:
     return [
+        # -- Screenwriting tools (4) --
+        Tool(
+            name="generate_concepts",
+            description="Generate N concept variants from a TopicBrief. Returns list of Concept dicts.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic_brief": {"type": "object", "description": "TopicBrief dict"},
+                    "n_concepts": {"type": "integer", "default": 3, "description": "Number of concept variants"},
+                    "creative_spec": {"type": "object", "description": "Optional CreativeSpec dict"},
+                },
+                "required": ["topic_brief"],
+            },
+        ),
+        Tool(
+            name="write_screenplay",
+            description="Write a Screenplay from a Concept dict. Returns a Screenplay dict.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "concept": {"type": "object", "description": "Concept dict"},
+                    "creative_spec": {"type": "object", "description": "Optional CreativeSpec dict"},
+                    "format": {
+                        "type": "string",
+                        "enum": ["facts", "storytime", "tutorial", "debate"],
+                        "default": "facts",
+                    },
+                },
+                "required": ["concept"],
+            },
+        ),
+        Tool(
+            name="review_feasibility",
+            description="Heuristic pre-flight validation of a Screenplay. No API call. Returns FeasibilityReport.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "screenplay": {"type": "object", "description": "Screenplay dict"},
+                },
+                "required": ["screenplay"],
+            },
+        ),
+        Tool(
+            name="revise_scene",
+            description="Revise one scene in a Screenplay given a structured issue from production or review.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "screenplay": {"type": "object", "description": "Screenplay dict"},
+                    "scene_id": {"type": "string"},
+                    "issue": {"type": "string", "description": "Issue code, e.g. tts_failed, vo_too_long"},
+                    "suggestion": {"type": "string", "description": "Revision suggestion from the production report"},
+                    "revision_field": {
+                        "type": "string",
+                        "enum": ["vo_line", "visual", "on_screen_text"],
+                        "description": "Which field to revise",
+                    },
+                },
+                "required": ["screenplay", "scene_id"],
+            },
+        ),
+        # -- Production tools (6) --
         Tool(
             name="check_asset_availability",
             description="Probe Pexels for a visual description. Returns relevance score. No image download.",
@@ -171,7 +224,7 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="estimate_tts_duration",
-            description="Estimate TTS duration for a voice line. Heuristic — no API call.",
+            description="Estimate TTS duration for a voice line. Heuristic -- no API call.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -192,7 +245,7 @@ async def list_tools() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "screenplay": {"type": "object", "description": "Screenplay dict (used to derive video_plan if video_plan not provided)"},
-                    "video_plan": {"type": "object", "description": "Pre-built VideoPlan dict (skips screenplay→video_plan derivation)"},
+                    "video_plan": {"type": "object", "description": "Pre-built VideoPlan dict (skips screenplay->video_plan derivation)"},
                     "run_dir": {"type": "string", "description": "Path to run output directory"},
                     "scene_ids": {
                         "type": "array",
@@ -264,9 +317,70 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
 
     try:
         # ------------------------------------------------------------------
-        # 1. check_asset_availability
+        # 1. generate_concepts
         # ------------------------------------------------------------------
-        if name == "check_asset_availability":
+        if name == "generate_concepts":
+            topic_brief = arguments["topic_brief"]
+            n_concepts = int(arguments.get("n_concepts", 3))
+            creative_spec = arguments.get("creative_spec")
+
+            agent = ConceptAgent()
+            concepts = agent.generate_concepts(
+                topic_brief=topic_brief,
+                n_concepts=n_concepts,
+                creative_spec=creative_spec,
+            )
+            return _json({"status": "ok", "concepts": concepts, "count": len(concepts)})
+
+        # ------------------------------------------------------------------
+        # 2. write_screenplay
+        # ------------------------------------------------------------------
+        elif name == "write_screenplay":
+            concept = arguments["concept"]
+            creative_spec = arguments.get("creative_spec")
+            fmt = str(arguments.get("format", "facts"))
+
+            agent = ScreenplayAgent()
+            screenplay = agent.write_screenplay(
+                concept=concept,
+                creative_spec=creative_spec,
+                format=fmt,
+            )
+            return _json({"status": "ok", "screenplay": screenplay})
+
+        # ------------------------------------------------------------------
+        # 3. review_feasibility
+        # ------------------------------------------------------------------
+        elif name == "review_feasibility":
+            screenplay = arguments["screenplay"]
+            reviewer = ScreenplayReviewer()
+            report = reviewer.review(screenplay)
+            return _json({"status": "ok", "feasibility_report": report})
+
+        # ------------------------------------------------------------------
+        # 4. revise_scene
+        # ------------------------------------------------------------------
+        elif name == "revise_scene":
+            screenplay = arguments["screenplay"]
+            scene_id = str(arguments["scene_id"])
+            issue = str(arguments.get("issue", ""))
+            suggestion = str(arguments.get("suggestion", ""))
+            revision_field = str(arguments.get("revision_field", ""))
+
+            agent = ScreenplayAgent()
+            revised = agent.revise_scene(
+                screenplay=screenplay,
+                scene_id=scene_id,
+                issue=issue,
+                suggestion=suggestion,
+                revision_field=revision_field,
+            )
+            return _json({"status": "ok", "screenplay": revised})
+
+        # ------------------------------------------------------------------
+        # 5. check_asset_availability
+        # ------------------------------------------------------------------
+        elif name == "check_asset_availability":
             query = str(arguments["query"])
             n = int(arguments.get("n_results", 5))
 
@@ -309,7 +423,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             })
 
         # ------------------------------------------------------------------
-        # 2. estimate_tts_duration
+        # 6. estimate_tts_duration
         # ------------------------------------------------------------------
         elif name == "estimate_tts_duration":
             text = str(arguments.get("text", ""))
@@ -326,7 +440,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             })
 
         # ------------------------------------------------------------------
-        # 3. generate_audio
+        # 7. generate_audio
         # ------------------------------------------------------------------
         elif name == "generate_audio":
             run_dir = Path(str(arguments["run_dir"]))
@@ -335,7 +449,6 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
 
             run_dir.mkdir(parents=True, exist_ok=True)
 
-            # Accept a pre-built video_plan (checkpoint mode) or derive from screenplay
             if "video_plan" in arguments:
                 video_plan: Dict[str, Any] = arguments["video_plan"]
             elif "screenplay" in arguments:
@@ -348,7 +461,6 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             agent = create_audio_agent(output_dir=run_dir, voice=voice)
             audio_timeline = agent.generate_audio_timeline(video_plan, scene_ids=scene_ids)
 
-            # Read accumulated production issues for this run
             report_path = run_dir / "production_report.json"
             production_issues: List[Dict[str, Any]] = []
             if report_path.exists():
@@ -380,7 +492,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             })
 
         # ------------------------------------------------------------------
-        # 4. fetch_assets
+        # 8. fetch_assets
         # ------------------------------------------------------------------
         elif name == "fetch_assets":
             script_package: Dict[str, Any] = arguments["script_package"]
@@ -394,13 +506,11 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 script_package, scene_ids=scene_ids, run_id=run_id
             )
 
-            # Download top-ranked candidates to local files and build a
-            # VisualManifest (assets list) that CompositionAgent can consume.
             visual_manifest = _script_image_manifest_to_visual_manifest(script_image_manifest, run_dir)
             write_json(run_dir / "visual_manifest.json", visual_manifest)
 
             report_path = run_dir / "production_report.json"
-            production_issues: List[Dict[str, Any]] = []
+            production_issues = []
             if report_path.exists():
                 try:
                     data = json.loads(report_path.read_text(encoding="utf-8"))
@@ -442,7 +552,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             })
 
         # ------------------------------------------------------------------
-        # 5. render_video
+        # 9. render_video
         # ------------------------------------------------------------------
         elif name == "render_video":
             visual_manifest: Dict[str, Any] = arguments["visual_manifest"]
@@ -460,7 +570,8 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             )
             write_json(run_dir / "render_spec.json", render_spec)
 
-            render_agent = create_render_agent(output_dir=run_dir)
+            engine_name = str(arguments.get("engine") or "ffmpeg")
+            render_agent = create_render_agent(output_dir=run_dir, engine=engine_name)
             render_result = render_agent.render(render_spec)
 
             mp4_path = str(render_result.get("output_path") or run_dir / "final_video.mp4")
@@ -474,7 +585,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             })
 
         # ------------------------------------------------------------------
-        # 6. validate_output
+        # 10. validate_output
         # ------------------------------------------------------------------
         elif name == "validate_output":
             mp4_path = Path(str(arguments["mp4_path"]))
@@ -497,6 +608,38 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             if not parity_ok:
                 failures.append(f"duration_parity_{parity_s:.2f}s_exceeds_{_PARITY_THRESHOLD_S}s")
 
+            # render_health: structured critical-failure record (no log parsing)
+            file_size_bytes = mp4_path.stat().st_size if mp4_path.exists() else 0
+
+            fv_json_path = run_dir / "final_video.json"
+            fv_meta = json.loads(fv_json_path.read_text(encoding="utf-8")) if fv_json_path.exists() else {}
+            engine_name = (fv_meta.get("render_metadata") or {}).get("engine", "unknown")
+
+            pr_path = run_dir / "production_report.json"
+            pr = json.loads(pr_path.read_text(encoding="utf-8")) if pr_path.exists() else {}
+            degraded_count = int(pr.get("degraded_scene_count") or 0)
+            total_scenes = len(pr.get("issues") or []) + (degraded_count if not pr.get("issues") else 0)
+
+            critical_failures: List[str] = []
+            if file_size_bytes == 0:
+                critical_failures.append("mp4_empty")
+            if "DryRun" in engine_name:
+                critical_failures.append("dry_run_engine_used")
+            if not info["has_audio"]:
+                critical_failures.append("no_audio_stream")
+            if degraded_count > 0 and degraded_count == total_scenes:
+                critical_failures.append(f"all_{total_scenes}_scenes_degraded")
+            elif degraded_count > 0:
+                critical_failures.append(f"{degraded_count}_scenes_degraded")
+
+            render_health = {
+                "engine": engine_name,
+                "file_size_bytes": file_size_bytes,
+                "degraded_scene_count": degraded_count,
+                "critical_failures": critical_failures,
+                "ok": len(critical_failures) == 0,
+            }
+
             evaluation = {
                 "schema_version": "1.0.0",
                 "mp4_path": str(mp4_path),
@@ -508,6 +651,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 "has_audio_stream": info["has_audio"],
                 "passed": len(failures) == 0,
                 "failures": failures,
+                "render_health": render_health,
             }
             evaluation_path = run_dir / "evaluation.json"
             write_json(evaluation_path, evaluation)
@@ -522,6 +666,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 "evaluation_path": str(evaluation_path),
                 "passed": len(failures) == 0,
                 "failures": failures,
+                "render_health": render_health,
             })
 
         else:
@@ -535,36 +680,17 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
 # Server entry point
 # ---------------------------------------------------------------------------
 
-async def main() -> None:
-    import sys
-    import anyio
-    from io import TextIOWrapper
+def main():
+    import argparse
 
-    # Capture the real stdout/stdin buffers before redirecting sys.stdout.
-    # Tool handlers (and imported libraries) may call print(), which writes to
-    # sys.stdout.  On MCP's stdio transport that stdout is the JSON-RPC channel;
-    # any extraneous bytes corrupt the message framing and cause the client to
-    # hang.  We fix this by:
-    #   1. Wrapping the real buffers explicitly so MCP still uses fd 1 / fd 0.
-    #   2. Replacing sys.stdout with sys.stderr so all print() output goes there.
-    _real_stdin = anyio.wrap_file(TextIOWrapper(sys.stdin.buffer, encoding="utf-8"))
-    _real_stdout = anyio.wrap_file(TextIOWrapper(sys.stdout.buffer, encoding="utf-8"))
-    sys.stdout = sys.stderr  # print() -> stderr from here on
-
-    async with mcp.server.stdio.stdio_server(stdin=_real_stdin, stdout=_real_stdout) as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="producer-server",
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+    parser = argparse.ArgumentParser(description="Video Agent MCP server over HTTPS")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8443)
+    parser.add_argument("--cert", type=Path, default=DEFAULT_CERT)
+    parser.add_argument("--key", type=Path, default=DEFAULT_KEY)
+    args = parser.parse_args()
+    run_https_server(app, "video-agent-server", args.host, args.port, args.cert, args.key)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
