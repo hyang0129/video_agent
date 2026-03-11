@@ -23,7 +23,7 @@
       "Bash(grep*)",
       "Bash(rm*)",
       "Bash(pytest*)",
-      "Bash(venv/Scripts/pytest*)"
+      "Bash(venv/Scripts/pytest*)",
     ]
   }
 }
