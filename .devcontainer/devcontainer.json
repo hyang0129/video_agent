@@ -19,14 +19,15 @@
       "extensions": [
         "ms-python.python",
         "ms-python.pylint",
-        "charliermarsh.ruff"
+        "charliermarsh.ruff",
+        "anthropic.claude-code"
       ]
     }
   },
 
-  "containerEnv": {
-    "LIVE2D_REPO_PATH": "/workspace/live2d"
-  },
+  "runArgs": ["--env-file", ".env"],
+
+  "workspaceFolder": "/workspaces/video_agent",
 
   "postCreateCommand": ".devcontainer/post-create.sh",
 
