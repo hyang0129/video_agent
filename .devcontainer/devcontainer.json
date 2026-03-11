@@ -33,7 +33,7 @@
     "source=${localEnv:USERPROFILE}/Code Projects/chatterbox,target=/workspaces/video_agent/vendor/chatterbox,type=bind,consistency=cached"
   ],
 
-  "runArgs": ["--env-file", ".env"],
+  "runArgs": ["--gpus", "all", "--env-file", ".env"],
 
   "workspaceFolder": "/workspaces/video_agent",
 

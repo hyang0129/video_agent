@@ -31,7 +31,7 @@ pip install --no-cache-dir -r requirements.txt
 # ------------------------------------------------------------------
 CHATTERBOX_DIR="/workspaces/video_agent/vendor/chatterbox"
 CHATTERBOX_VENV="/opt/chatterbox-venv"
-PYTHON311="/usr/local/python3.11/bin/python3"
+PYTHON311="/usr/local/python3.11/current/bin/python3"
 if [ -d "$CHATTERBOX_DIR" ]; then
   "$PYTHON311" -m venv "$CHATTERBOX_VENV"
   "$CHATTERBOX_VENV/bin/pip" install --no-cache-dir -r "$CHATTERBOX_DIR/requirements.txt"
