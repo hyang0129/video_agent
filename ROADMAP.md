@@ -1,6 +1,6 @@
 # Video Agent Pipeline - Development Roadmap
 
-**Last Updated:** March 4, 2026
+**Last Updated:** March 11, 2026
 
 ## Planning Source of Truth
 
@@ -26,6 +26,7 @@ The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) wi
 - Added operational render helpers: `scripts/run_render.py` and `scripts/run_starwars_render_with_logs.py`.
 - Began Phase 1 audio-track integration: AudioTimeline now emits optional `audio_master.*`, composition forwards a `master` track, and render prefers master audio with segment fallback.
 - Verified at least one recent output MP4 has a valid AAC audio stream via `ffprobe`.
+- **MCP migration (serverless/in-process test pipeline):** Built two MCP servers with full stdio transport definitions — `src/mcp/screenwriting_server.py` (concept + screenplay tools) and `src/mcp/producer_server.py` (audio, image fetch, render, validate tools). The `ProductionOrchestrator` in `src/orchestrator.py` dispatches to these tool handlers in-process (`_call_tool_inprocess`) rather than via subprocess/stdio, giving a single-threaded-compatible test pipeline. Both parallel and serial execution modes are wired and tested. A full long-lived subprocess MCP server upgrade is planned under Tier 2.
 
 **Working Command:**
 ```powershell
@@ -82,30 +83,35 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 0.1 Publish on GitHub + Portfolio-Grade README 🔥 HIGHEST ROI
 - **Priority:** P0
-- **Status:** Open
+- **Status:** ✅ Done (March 2026)
 - **Deliverables:**
-  - Public GitHub repo link (or explicit reviewer access path)
-  - README quickstart (`python main.py mvp ...`) from clean setup to output
-  - Architecture diagram for the end-to-end pipeline
-  - Example output section with screenshot/GIF and artifact links
+  - Public GitHub repo at `https://github.com/hyang0129/video_agent`
+  - README quickstart (`python run_pipeline.py "cheese facts" --engine ffmpeg`) from clean setup to output
+  - Mermaid architecture diagram (multi-agent pipeline with parallel branch callout)
+  - Example output section with `docs/sample_video_thumbnail.jpg` + GitHub release MP4 link
+  - Stage-by-stage CLI table, API key table, project structure, tech stack, known limitations
 - **Success Metric:** A reviewer can understand architecture and run first output in under 10 minutes.
 
 #### 0.2 Close Audio Continuity Gap (Full-Duration Audio-Synced Output) 🔥
 - **Priority:** P0
 - **Status:** In Progress
 - **Problem:** Some outputs have audio ending early vs video duration.
-- **Implementation:**
-  - Enforce final audio duration to match video duration (music bed or silence fill)
-  - Add hard post-render validation (`ffprobe`) for stream presence + duration parity
-  - Fail run on mismatch and write actionable error report
+- **Progress:**
+  - `validate_output` tool in `producer_server.py` checks duration parity and writes `evaluation.json` ✅
+  - `run_pipeline.py` only validates video stream presence — no audio duration parity check ❌
+  - No hard fail on mismatch in the main pipeline runner ❌
+- **Remaining work:**
+  - Wire duration-parity check (<=0.25s) into `run_pipeline.py` post-render step
+  - Fail run and write actionable error if parity check fails
+  - Enforce audio fill (silence or music bed) when voiceover ends before video duration
 - **Success Metric:** `|audio_duration - video_duration| <= 0.25s` for all validation runs.
 
 #### 0.3 Show One Real Output Example (Public Artifact)
 - **Priority:** P0
-- **Status:** Open
+- **Status:** ✅ Done (March 2026)
 - **Deliverables:**
-  - Upload at least one generated video to unlisted YouTube or GDrive
-  - Link artifact in README under "Example Output"
+  - GitHub release `v0.1.0-demo` hosts `final_video.mp4` (cheese history facts, ElevenLabs + Pexels + FFmpeg)
+  - Thumbnail linked in README under "Example Output" (`docs/sample_video_thumbnail.jpg`)
 - **Success Metric:** Recruiters can watch a concrete output without running code.
 
 #### 0.4 Add Lightweight Evaluation Layer
@@ -115,7 +121,8 @@ This tier is the current execution priority and supersedes older sequencing belo
   - Subtitle/audio alignment drift (ms)
   - Output duration vs target duration
   - API usage and estimated per-run cost
-- **Implementation:** Persist `results/<run_id>/evaluation.json` and a concise `evaluation_summary.md`.
+- **Progress:** `evaluation.json` written by `validate_output` in `producer_server.py` (MCP path only). Not yet wired into `run_pipeline.py` or `full_pipeline_runner.py`.
+- **Remaining work:** Call `probe_video_info` + write `evaluation.json` at the end of `run_pipeline.py`.
 
 #### 0.5 Add End-to-End Metrics + Evidence Counters
 - **Priority:** P1
@@ -124,14 +131,29 @@ This tier is the current execution priority and supersedes older sequencing belo
   - End-to-end pipeline runtime
   - Stage-level runtime breakdown
   - Total runs and successful rendered videos
+- **Progress:** None — `results/metrics_summary.json` does not yet exist; no pipeline runner writes runtime metrics.
 - **Deliverable:** Keep rolling summary in `results/metrics_summary.json` and surface snapshot in README (e.g., "generated 20+ test videos").
 
 #### 0.6 Async/Parallel Agent Execution (Systems Credibility Upgrade)
 - **Priority:** P2
-- **Status:** Open
-- **Scope:** Parallelize independent branches (e.g., audio generation and visual retrieval/fetch).
-- **Deliverable:** Sequential vs parallel benchmark on identical topic input.
-- **Success Metric:** Demonstrate measurable wall-clock improvement with no quality regression.
+- **Status:** Partially Done
+- **Progress:** `ProductionOrchestrator` in `src/orchestrator.py` runs audio + image fetch in parallel via `asyncio.gather` + `ThreadPoolExecutor`. Both MCP and direct modes support parallel and serial execution. `run_pipeline.py` remains fully sequential.
+- **Remaining work:** Document a sequential vs parallel benchmark on identical topic input. Add timing output to orchestrator run summary.
+- **Success Metric:** Documented wall-clock improvement with no quality regression.
+
+#### 0.7 MCP Full Server Mode (Architecture Showcase) 🔥
+- **Priority:** P0
+- **Status:** Open (serverless/in-process baseline complete)
+- **Why Tier 0:** Running tool handlers as real isolated subprocesses over stdio JSON-RPC is a significant architectural differentiator — directly demonstrable to a recruiter as a multi-process agent system, not just in-process function dispatch.
+- **Background:** `use_mcp=True` in `ProductionOrchestrator` currently calls tool handlers in-process via `_call_tool_inprocess()`, bypassing the stdio wire. The MCP servers (`screenwriting_server`, `producer_server`) are fully implemented and ready to be promoted.
+- **Implementation:**
+  - Spawn `src/mcp/screenwriting_server.py` and `src/mcp/producer_server.py` as long-lived subprocesses on orchestrator startup.
+  - Replace `_call_tool_inprocess` with a real MCP stdio client (JSON-RPC over pipes).
+  - Handle server lifecycle: startup, health check, graceful shutdown.
+- **Success Metric:** `use_mcp=True` calls traverse the actual stdio JSON-RPC wire; tool handlers execute in isolated subprocesses with no shared memory with the orchestrator.
+- **Dependencies:** `mcp` SDK already installed; no new dependencies required.
+- **Owner:** TBD
+- **Effort:** 1-2 days
 
 ### 🎯 Tier 1: Production Readiness (1-2 weeks)
 
@@ -259,6 +281,7 @@ This tier is the current execution priority and supersedes older sequencing belo
   - `langchain-google-genai` bumped to `>=2.0.0`
   - `langchain-anthropic` bumped to `>=0.3.0`
 - **Human review gate:** Run Stage 1-3 integration tests and sign off before merging
+
 
 #### 2.2 Results Directory Cleanup Job
 - **Priority:** P2 (maintenance)
@@ -477,12 +500,13 @@ winget install ImageMagick.ImageMagick
 ## Success Criteria
 
 ### Tier 0 (Recruiter Appeal) Complete When:
-- [ ] Repo is publicly shareable with strong README (diagram + quickstart + output visuals)
-- [ ] At least one real generated video artifact link is live in README
-- [ ] Audio continuity passes duration parity checks in validation runs
-- [ ] Per-run evaluation artifacts are generated (`evaluation.json`)
-- [ ] Metrics summary exists with runtime + output-count evidence
-- [ ] Parallel execution benchmark is documented
+- [x] Repo is publicly shareable with strong README (diagram + quickstart + output visuals)
+- [x] At least one real generated video artifact link is live in README
+- [ ] Audio continuity passes duration parity checks in validation runs (`run_pipeline.py` hard-fail wired)
+- [ ] Per-run evaluation artifacts are generated (`evaluation.json`) from `run_pipeline.py`
+- [ ] Metrics summary exists with runtime + output-count evidence (`results/metrics_summary.json`)
+- [ ] Parallel execution benchmark is documented (wall-clock comparison logged)
+- [ ] MCP servers run as real long-lived subprocesses over stdio transport (not in-process)
 
 ### Tier 1 Complete When:
 - [x] Videos have on-screen text overlays rendered
@@ -573,4 +597,4 @@ Open an issue or start a discussion in the repo to:
 - Share use cases
 
 **Maintainer:** TBD  
-**Last Review:** March 4, 2026
+**Last Review:** March 11, 2026
