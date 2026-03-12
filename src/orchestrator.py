@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -96,7 +97,7 @@ async def _produce_parallel_mcp(
     voice: str,
     audio_scene_ids: Optional[List[str]] = None,
     image_scene_ids: Optional[List[str]] = None,
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
+) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, float]]:
     """Run audio + image production via MCP tool calls in parallel."""
     audio_args: Dict[str, Any] = {
         "screenplay": screenplay,
@@ -126,12 +127,16 @@ async def _produce_parallel_mcp(
 
     audio_timeline = audio_result.get("audio_timeline") or {}
     image_manifest = image_result.get("visual_manifest") or {}
+    tool_timings = {
+        "generate_audio": audio_result.get("elapsed_seconds", 0.0),
+        "fetch_assets": image_result.get("elapsed_seconds", 0.0),
+    }
     logger.debug(
         "[orch] MCP parallel done: audio_tracks={} image_assets={}",
         len(audio_timeline.get("tracks") or []),
         len(image_manifest.get("assets") or []),
     )
-    return audio_timeline, image_manifest
+    return audio_timeline, image_manifest, tool_timings
 
 
 async def _produce_serial_mcp(
@@ -142,7 +147,7 @@ async def _produce_serial_mcp(
     voice: str,
     audio_scene_ids: Optional[List[str]] = None,
     image_scene_ids: Optional[List[str]] = None,
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
+) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, float]]:
     """Run audio then image production via MCP tool calls sequentially."""
     audio_args: Dict[str, Any] = {
         "screenplay": screenplay,
@@ -182,7 +187,11 @@ async def _produce_serial_mcp(
 
     audio_timeline = audio_result.get("audio_timeline") or {}
     image_manifest = image_result.get("visual_manifest") or {}
-    return audio_timeline, image_manifest
+    tool_timings = {
+        "generate_audio": audio_result.get("elapsed_seconds", 0.0),
+        "fetch_assets": image_result.get("elapsed_seconds", 0.0),
+    }
+    return audio_timeline, image_manifest, tool_timings
 
 
 async def _produce_parallel(
@@ -309,10 +318,15 @@ class ProductionOrchestrator:
         logger.info("[orch] run start  run_id={} voice={} mode={}", run_id, voice, mode)
         logger.debug("[orch] run_dir={}", run_dir)
 
+        run_t0 = time.monotonic()
+        tool_timings: Dict[str, float] = {}
+        revision_timings: List[Dict[str, Any]] = []
+
+        production_t0 = time.monotonic()
         if use_mcp:
             logger.info("[orch] MCP client mode -- delegating to producer-server")
             _mcp_fn = _produce_serial_mcp if serial else _produce_parallel_mcp
-            audio_timeline, image_manifest = asyncio.run(
+            audio_timeline, image_manifest, tool_timings = asyncio.run(
                 _mcp_fn(screenplay, script_package, run_dir, run_id, voice)
             )
         else:
@@ -331,11 +345,13 @@ class ProductionOrchestrator:
             audio_timeline, image_manifest = asyncio.run(
                 _direct_fn(audio_agent, image_agent, video_plan, script_package, run_id)
             )
+        production_elapsed_s = round(time.monotonic() - production_t0, 2)
 
         logger.info(
-            "[orch] round 0 complete -- audio_tracks={} image_segments={}",
+            "[orch] round 0 complete -- audio_tracks={} image_segments={} elapsed={:.1f}s",
             len(audio_timeline.get("tracks") or []),
             len(image_manifest.get("segments") or image_manifest.get("assets") or []),
+            production_elapsed_s,
         )
 
         for round_num in range(1, MAX_REVISION_ROUNDS + 1):
@@ -348,6 +364,7 @@ class ProductionOrchestrator:
                 logger.info("[orch] no degraded scenes after round {}; done", round_num - 1)
                 break
 
+            round_t0 = time.monotonic()
             logger.info(
                 "[orch] revision round {}/{} -- {} degraded scene(s)",
                 round_num,
@@ -396,7 +413,7 @@ class ProductionOrchestrator:
 
             if use_mcp:
                 _mcp_fn = _produce_serial_mcp if serial else _produce_parallel_mcp
-                re_audio, re_image = asyncio.run(
+                re_audio, re_image, _rev_timings = asyncio.run(
                     _mcp_fn(
                         screenplay,
                         script_package,
@@ -440,7 +457,15 @@ class ProductionOrchestrator:
                 image_manifest = re_image
                 logger.debug("[orch]   image_manifest updated")
 
-            logger.info("[orch] revision round {} complete", round_num)
+            round_elapsed_s = round(time.monotonic() - round_t0, 2)
+            revision_timings.append({
+                "round": round_num,
+                "elapsed_s": round_elapsed_s,
+                "scenes_revised": len(degraded),
+            })
+            logger.info("[orch] revision round {} complete ({:.1f}s)", round_num, round_elapsed_s)
+
+        total_elapsed_s = round(time.monotonic() - run_t0, 2)
 
         scene_results = self._build_scene_results(
             audio_timeline=audio_timeline,
@@ -454,11 +479,40 @@ class ProductionOrchestrator:
         })
 
         ok_count = sum(1 for s in scene_results if s.get("status") == "ok")
+        degraded_count = len(scene_results) - ok_count
+
+        # Write timing-enriched production report
+        write_json(run_dir / "production_report.json", {
+            "schema_version": "1.1.0",
+            "run_id": run_id,
+            "mode": mode,
+            "total_elapsed_s": total_elapsed_s,
+            "production_elapsed_s": production_elapsed_s,
+            "tool_timings": tool_timings,
+            "revision_rounds": revision_timings,
+            "issues": self._read_production_issues(run_dir),
+            "degraded_scene_count": degraded_count,
+        })
+
+        # Update rolling metrics summary
+        from .metrics import update_metrics_summary
+        from .config import RESULTS_DIR
+        stage_timings = {**tool_timings, "production_total": production_elapsed_s}
+        update_metrics_summary(
+            metrics_path=RESULTS_DIR / "metrics_summary.json",
+            run_id=run_id,
+            run_duration_s=total_elapsed_s,
+            stage_timings=stage_timings,
+            passed=(degraded_count == 0),
+            mode=mode,
+        )
+
         logger.info(
-            "[orch] run complete  scenes={} ok={} degraded={}",
+            "[orch] run complete  scenes={} ok={} degraded={} elapsed={:.1f}s",
             len(scene_results),
             ok_count,
-            len(scene_results) - ok_count,
+            degraded_count,
+            total_elapsed_s,
         )
         logger.remove(log_id)
         return audio_timeline, screenplay, video_plan

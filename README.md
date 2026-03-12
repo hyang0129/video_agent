@@ -251,6 +251,27 @@ The full interface spec is in [docs/live2d-avatar-api-contract.md](docs/live2d-a
 
 ---
 
+## Performance
+
+The orchestrator supports both **serial** and **parallel** execution for the audio generation + image fetching stages (the two heaviest I/O-bound stages). All other stages have data dependencies and run sequentially.
+
+| Mode | Description |
+|------|-------------|
+| `mcp-serial` | Audio generation runs first, then image fetching |
+| `mcp-parallel` | Audio + image run concurrently via `asyncio.gather` |
+
+**Reproducing the benchmark:**
+
+```bash
+python scripts/benchmark_parallel.py
+```
+
+This runs the WW2 tanks fixture through both modes and prints a wall-clock comparison. Results are saved to `results/benchmark_results.json`.
+
+**Metrics tracking:** Every orchestrator run appends timing data to `results/metrics_summary.json` — per-run duration, stage-level timings, pass/fail status, and execution mode.
+
+---
+
 ## Known Limitations
 
 These are tracked in [ROADMAP.md](ROADMAP.md):

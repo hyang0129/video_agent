@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import struct
+import time
 import traceback
 import uuid
 from pathlib import Path
@@ -320,7 +321,11 @@ async def list_tools() -> List[Tool]:
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C901
+    _tool_t0 = time.monotonic()
+
     def _json(obj: Any) -> List[TextContent]:
+        if isinstance(obj, dict):
+            obj["elapsed_seconds"] = round(time.monotonic() - _tool_t0, 3)
         return [TextContent(type="text", text=json.dumps(obj, ensure_ascii=False))]
 
     try:

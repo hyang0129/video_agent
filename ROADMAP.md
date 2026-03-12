@@ -128,18 +128,28 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Priority:** P1
 - **Status:** Open
 - **Track:**
-  - End-to-end pipeline runtime
-  - Stage-level runtime breakdown
+  - End-to-end pipeline runtime (wall-clock)
+  - Stage-level runtime breakdown (per MCP tool call or orchestrator stage)
   - Total runs and successful rendered videos
-- **Progress:** None — `results/metrics_summary.json` does not yet exist; no pipeline runner writes runtime metrics.
-- **Deliverable:** Keep rolling summary in `results/metrics_summary.json` and surface snapshot in README (e.g., "generated 20+ test videos").
+  - MCP vs direct-mode performance comparison
+- **Integration points:**
+  - **MCP server (`video_agent_server.py`):** Each tool handler already wraps a discrete pipeline stage — add timing instrumentation around tool dispatch and return elapsed time in tool results.
+  - **Orchestrator (`orchestrator.py`):** Records parallel vs serial execution timing per production pass. Emit stage timings in `production_report.json`.
+  - **`run_pipeline.py`:** Collect stage timings from either MCP responses or direct calls, write `metrics_summary.json` at end of run.
+- **Progress:** None — `results/metrics_summary.json` does not yet exist. MCP server and orchestrator are functional but do not yet emit timing data.
+- **Deliverable:** Rolling `results/metrics_summary.json` with per-run and aggregate stats. Surface snapshot in README (e.g., "generated 20+ test videos, avg pipeline time Xs").
 
 #### 0.6 Async/Parallel Agent Execution (Systems Credibility Upgrade)
 - **Priority:** P2
 - **Status:** Partially Done
+- **Depends on:** 0.5 (timing instrumentation provides the benchmark data)
 - **Progress:** `ProductionOrchestrator` in `src/orchestrator.py` runs audio + image fetch in parallel via `asyncio.gather` + `ThreadPoolExecutor`. Both MCP and direct modes support parallel and serial execution. `run_pipeline.py` remains fully sequential.
-- **Remaining work:** Document a sequential vs parallel benchmark on identical topic input. Add timing output to orchestrator run summary.
-- **Success Metric:** Documented wall-clock improvement with no quality regression.
+- **Remaining work:**
+  - Wire `run_pipeline.py` to use orchestrator's parallel mode (currently sequential only).
+  - Once 0.5 timing instrumentation lands, run identical topic through both `serial=True` and `serial=False` orchestrator modes and record wall-clock delta.
+  - Optionally compare MCP-server vs direct-dispatch overhead on same workload.
+  - Document benchmark results in README or `docs/`.
+- **Success Metric:** Documented wall-clock improvement (serial vs parallel) with no quality regression. Benchmark reproducible from a single CLI command.
 
 #### 0.7 MCP Full Server Mode (Architecture Showcase) 🔥
 - **Priority:** P0
@@ -170,6 +180,20 @@ This tier is the current execution priority and supersedes older sequencing belo
 ### 🎯 Tier 1: Production Readiness (1-2 weeks)
 
 **Goal:** Make the MVP fully production-complete with high-quality output
+
+#### 1.0 Consolidate onto MCP-Only Pipeline (Remove Legacy Direct Execution Paths)
+- **Priority:** P1
+- **Status:** Open
+- **Depends on:** 0.7 (MCP server already done)
+- **Problem:** The codebase has two parallel execution paths — MCP server dispatch and direct agent invocation — with duplicated orchestration logic. The direct paths (`mvp`, `mvp_offline`, individual-stage modes, `run_pipeline.py`) are legacy code predating the MCP server and offer no additional capability. This adds maintenance burden, splits metrics instrumentation, and muddies the architecture story.
+- **Scope:**
+  - Delete `run_pipeline.py` (375 lines), `full_pipeline_runner.py` (238 lines), and `run_star_wars_*.py` — legacy pipelines fully superseded by MCP tools.
+  - Delete `mvp`, `mvp_offline`, and individual-stage modes from `main.py` — these are pre-MCP hardcoded sequencing.
+  - Collapse `main.py` to a thin MCP client CLI that routes commands through the MCP server.
+  - Remove dual-mode branching in `orchestrator.py` (`use_mcp` flag, `_produce_parallel()` / `_produce_serial()` direct paths) — orchestrator always dispatches via MCP.
+  - Update tests: stage integration tests call MCP tools directly; remove direct-agent test fixtures that duplicate MCP test coverage.
+- **Estimated removal:** ~1,200 lines of legacy pipeline code + ~140 lines of dual-mode branching in orchestrator.
+- **Success Metric:** Single execution path (MCP) for all pipeline modes. `main.py` is a CLI client, not an agent orchestrator. Zero `use_mcp` branching remains.
 
 #### 1.1 Text Overlay Rendering 🔥 CRITICAL
 - **Priority:** P0 (blocks production use)
