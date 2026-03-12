@@ -105,17 +105,18 @@ def screenplay_to_script_package(screenplay: dict[str, Any]) -> dict[str, Any]:
         t_end = round(current_t + dur, 2)
         current_t = t_end
 
+        visual = scene.get("visual") or {}
+        queries = visual.get("search_queries") or []
+        asset_prompts.append(str(queries[0]) if queries else str(visual.get("description") or ""))
+
         beats.append({
             "scene_id": str(scene.get("scene_id") or f"scene_{i + 1:02d}"),
             "t_start_s": t_start,
             "t_end_s": t_end,
             "on_screen_text": str(scene.get("on_screen_text") or "").strip(),
             "vo_line": str(scene.get("vo_line") or "").strip(),
+            "visual_queries": queries,
         })
-
-        visual = scene.get("visual") or {}
-        queries = visual.get("search_queries") or []
-        asset_prompts.append(str(queries[0]) if queries else str(visual.get("description") or ""))
 
     voiceover = " ".join(b["vo_line"] for b in beats if b.get("vo_line"))
 
@@ -123,7 +124,12 @@ def screenplay_to_script_package(screenplay: dict[str, Any]) -> dict[str, Any]:
     voice = str(narrator.get("voice_preset") or "narrator")
 
     topic_id = str(screenplay.get("format") or "topic")
-    subtopic_id = str(screenplay.get("screenplay_id") or "sub")
+    # Derive a readable subtopic from VO text so image queries use real keywords.
+    # Strip punctuation so tokens like "?" don't contaminate search queries.
+    import re as _re
+    vo_raw = " ".join(b["vo_line"] for b in beats[:3] if b.get("vo_line"))
+    vo_words = _re.sub(r"[^a-zA-Z0-9 ]", " ", vo_raw).split()
+    subtopic_id = " ".join(vo_words[:8]) if vo_words else str(screenplay.get("screenplay_id") or "sub")
 
     return {
         "schema_version": "1.0.0",

@@ -44,7 +44,7 @@ from ..screenwriting.concept_agent import ConceptAgent
 from ..screenwriting.screenplay_agent import ScreenplayAgent
 from ..screenwriting.screenplay_reviewer import ScreenplayReviewer
 from ..script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
-from ..tools.image_search_tools import ImageSearchError, score_candidate_relevance, search_pexels_images
+from ..tools.image_search_tools import ImageSearchError, score_candidate_relevance, search_pexels_images, wikimedia_rate_limiter
 from ..utils.ffprobe_utils import probe_video_info
 from ..utils.tts_utils import _WPM_BY_PRESET, estimate_duration_s
 from ..video_planner import script_package_to_video_plan
@@ -80,9 +80,19 @@ def _write_placeholder_bmp(path: Path, width: int = 720, height: int = 1280) -> 
     path.write_bytes(bytes(bmp))
 
 
+_DOWNLOAD_HEADERS = {
+    "User-Agent": "VideoAgent/1.0",
+}
+
+
+_WIKIMEDIA_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org")
+
+
 def _download_image(url: str, dest: Path) -> bool:
     try:
-        resp = requests.get(url, timeout=30, stream=True)
+        if any(h in url for h in _WIKIMEDIA_HOSTS):
+            wikimedia_rate_limiter.throttle()
+        resp = requests.get(url, timeout=30, stream=True, headers=_DOWNLOAD_HEADERS)
         resp.raise_for_status()
         dest.parent.mkdir(parents=True, exist_ok=True)
         with dest.open("wb") as f:
@@ -102,24 +112,22 @@ def _script_image_manifest_to_visual_manifest(
 
     assets: List[Dict[str, Any]] = []
     for seg in manifest.get("segments") or []:
-        scene_id = str(seg.get("beat_id") or seg.get("scene_id") or f"scene_{len(assets) + 1:02d}")
+        scene_id = str(seg.get("segment_id") or seg.get("beat_id") or seg.get("scene_id") or f"scene_{len(assets) + 1:02d}")
         candidates = seg.get("candidates") or []
-        top = candidates[0] if candidates else None
 
-        if top:
-            ext = Path(str(top.get("url", ""))).suffix.lower() or ".jpg"
+        downloaded: Optional[Dict[str, Any]] = None
+        for cand in candidates:
+            ext = Path(str(cand.get("url", ""))).suffix.lower() or ".jpg"
             if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
                 ext = ".jpg"
             dest = assets_dir / f"{scene_id}{ext}"
-            ok = _download_image(top["url"], dest)
-            if not ok:
-                dest = assets_dir / f"{scene_id}_placeholder.bmp"
-                _write_placeholder_bmp(dest)
-                source = "placeholder"
-                attribution: Dict[str, Any] = {}
-            else:
-                source = str(top.get("source", "unknown"))
-                attribution = dict(top.get("attribution") or {})
+            if _download_image(cand["url"], dest):
+                downloaded = cand
+                break
+
+        if downloaded:
+            source = str(downloaded.get("source", "unknown"))
+            attribution: Dict[str, Any] = dict(downloaded.get("attribution") or {})
         else:
             dest = assets_dir / f"{scene_id}_placeholder.bmp"
             _write_placeholder_bmp(dest)
@@ -501,12 +509,63 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             run_id = str(arguments.get("run_id", ""))
 
             run_dir.mkdir(parents=True, exist_ok=True)
-            agent = ScriptImageRetrievalAgent(ScriptImageConfig(output_dir=run_dir))
+            agent = ScriptImageRetrievalAgent(ScriptImageConfig(
+                output_dir=run_dir,
+                image_sources=("wikimedia", "pexels"),
+            ))
             script_image_manifest = agent.generate_script_image_manifest(
                 script_package, scene_ids=scene_ids, run_id=run_id
             )
 
             visual_manifest = _script_image_manifest_to_visual_manifest(script_image_manifest, run_dir)
+
+            # If any scenes are placeholders (Wikimedia downloads failed), retry with Pexels only.
+            placeholder_ids = [
+                a["scene_id"] for a in (visual_manifest.get("assets") or [])
+                if a.get("source") == "placeholder" and a.get("scene_id")
+            ]
+            if placeholder_ids:
+                pexels_agent = ScriptImageRetrievalAgent(ScriptImageConfig(
+                    output_dir=run_dir,
+                    image_sources=("pexels",),
+                ))
+                pexels_manifest = pexels_agent.generate_script_image_manifest(
+                    script_package, scene_ids=placeholder_ids, run_id=run_id
+                )
+                pexels_vm = _script_image_manifest_to_visual_manifest(pexels_manifest, run_dir)
+                pexels_by_scene = {
+                    a["scene_id"]: a for a in (pexels_vm.get("assets") or [])
+                    if a.get("source") != "placeholder" and a.get("scene_id")
+                }
+                if pexels_by_scene:
+                    visual_manifest = {
+                        **visual_manifest,
+                        "assets": [
+                            pexels_by_scene.get(a["scene_id"], a)
+                            for a in (visual_manifest.get("assets") or [])
+                        ],
+                    }
+
+            # When re-fetching a subset of scenes, merge into the existing manifest.
+            existing_vm_path = run_dir / "visual_manifest.json"
+            if scene_ids and existing_vm_path.exists():
+                try:
+                    existing_vm = json.loads(existing_vm_path.read_text(encoding="utf-8"))
+                    new_assets_by_scene = {a["scene_id"]: a for a in (visual_manifest.get("assets") or []) if a.get("scene_id")}
+                    merged_assets = [
+                        new_assets_by_scene.get(a["scene_id"], a)
+                        for a in (existing_vm.get("assets") or [])
+                        if a.get("scene_id")
+                    ]
+                    # Add any new scenes not in the original manifest.
+                    existing_ids = {a["scene_id"] for a in merged_assets}
+                    for a in (visual_manifest.get("assets") or []):
+                        if a.get("scene_id") and a["scene_id"] not in existing_ids:
+                            merged_assets.append(a)
+                    visual_manifest = {**visual_manifest, "assets": merged_assets}
+                except Exception:
+                    pass
+
             write_json(run_dir / "visual_manifest.json", visual_manifest)
 
             report_path = run_dir / "production_report.json"
@@ -520,7 +579,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
 
             scene_assets = []
             for seg in (script_image_manifest.get("segments") or []):
-                sid = seg.get("beat_id") or seg.get("scene_id", "")
+                sid = seg.get("segment_id") or seg.get("beat_id") or seg.get("scene_id", "")
                 candidates = seg.get("candidates") or []
                 top_score = 0.0
                 image_paths: List[str] = []

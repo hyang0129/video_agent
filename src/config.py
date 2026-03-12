@@ -114,6 +114,11 @@ TTS_SIMILARITY_BOOST = 0.75  # ElevenLabs similarity boost (0.0-1.0)
 AUDIO_EXPORT_FORMAT = "mp3"  # or "wav" for uncompressed
 AUDIO_BITRATE = "192k"  # MP3 bitrate
 
+# TTS Backend Selection
+# Values: "elevenlabs" | "chatterbox_direct" | "chatterbox_server"
+TTS_BACKEND = os.getenv("TTS_BACKEND", "chatterbox_server")
+CHATTERBOX_SERVER_URL = os.getenv("CHATTERBOX_SERVER_URL", "http://localhost:8000")
+
 # Rhubarb Lip Sync
 RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", r"C:\tools\rhubarb\rhubarb.exe")
 RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)

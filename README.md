@@ -93,7 +93,7 @@ python run_pipeline.py "cheese facts" --engine dry_run
 
 ## Example Output
 
-**Cheese History Facts** — generated end-to-end by the pipeline (ElevenLabs voiceover, Pexels images, FFmpeg render):
+**Cheese History Facts** — generated end-to-end by the pipeline (Chatterbox TTS voiceover, Pexels images, FFmpeg render):
 
 [![Sample video thumbnail](docs/sample_video_thumbnail.jpg)](https://github.com/hyang0129/video_agent/releases/download/v0.1.0-demo/final_video.mp4)
 
@@ -115,7 +115,7 @@ results/sample_2026-03-08_cheese_history_facts_f77975/
     final_video.mp4         <- Stage 8: 9:16 vertical short (15-60s)
 ```
 
-Target format: faceless, caption-first, ElevenLabs voiceover, Pexels stock images, FFmpeg-rendered with `drawtext` subtitle overlays.
+Target format: faceless, caption-first, Chatterbox TTS voiceover (local GPU, no API cost), Pexels stock images, FFmpeg-rendered with `drawtext` subtitle overlays.
 
 ---
 
@@ -126,7 +126,7 @@ Target format: faceless, caption-first, ElevenLabs voiceover, Pexels stock image
 | `YOUTUBE_API_KEY` | Stage 0 (market research) | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) — enable YouTube Data API v3 |
 | `ANTHROPIC_API_KEY` | Stages 2-3 (script, video plan) | [Anthropic Console](https://console.anthropic.com/settings/keys) |
 | `GOOGLE_API_KEY` | Alternative to Anthropic | [AI Studio](https://aistudio.google.com/app/apikey) — free tier |
-| `ELEVENLABS_API_KEY` | Stage 4 (TTS voiceover) | [ElevenLabs](https://elevenlabs.io/app/settings/api-keys) — free tier: 10k chars/month |
+| `ELEVENLABS_API_KEY` | Stage 4 (TTS voiceover, ElevenLabs backend only) | [ElevenLabs](https://elevenlabs.io/app/settings/api-keys) — free tier: 10k chars/month. Not required when using Chatterbox TTS (default). |
 | `PEXELS_API_KEY` | Stage 6 (image search) | [Pexels](https://www.pexels.com/api/) — falls back to placeholder BMPs if absent |
 
 Set `LLM_PROVIDER=claude` (default) or `LLM_PROVIDER=google` in `.env` to choose the LLM backend.
@@ -227,7 +227,7 @@ video_agent/
 | Agent orchestration | LangChain 0.3.x |
 | LLM (default) | Anthropic Claude (claude-sonnet) |
 | LLM (alternative) | Google Gemini (via langchain-google-genai) |
-| TTS voiceover | ElevenLabs API |
+| TTS voiceover | [Chatterbox Turbo TTS](vendor/chatterbox/) (local GPU, default) or ElevenLabs API (`TTS_BACKEND=elevenlabs`) |
 | Image retrieval | Pexels API |
 | Video rendering | FFmpeg (local, zero cloud cost) |
 | Artifact format | Typed JSON files |

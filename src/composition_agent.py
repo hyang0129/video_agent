@@ -174,7 +174,9 @@ class CompositionAgent:
 
             asset = asset_by_scene.get(scene_id)
             if not asset:
-                raise CompositionError(f"No visual asset found for scene {scene_id}")
+                # Fall back to any available asset rather than failing the render.
+                asset = next(iter(asset_by_scene.values()), None) or {}
+                print(f"[WARN] No visual asset for {scene_id}, using fallback")
 
             t_start = float(seg.get("t_start_s") or 0.0)
             t_end = float(seg.get("t_end_s") or 0.0)

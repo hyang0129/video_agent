@@ -266,26 +266,33 @@ def _build_search_queries(
     segment_context = _normalize_phrase(segment_context)
     anchor = _topic_anchor(topic_hint)
 
-    focus_input = f"{on_screen_text} {vo_line} {segment_context}".strip()
-    focus_terms = _extract_focus_terms(focus_input, max_terms=max_queries)
-
     queries: List[str] = []
     seen: set[str] = set()
 
-    # Always include a topic-level anchor to keep retrieval on-subject.
-    if anchor:
-        key = anchor.lower()
-        seen.add(key)
-        queries.append(anchor)
-
-    for term in focus_terms:
-        query = _normalize_phrase(term)
-        if anchor and anchor.lower() not in query.lower():
-            query = f"{query} {anchor}".strip()
+    # Prefer per-scene visual_queries from the screenplay (most specific/accurate).
+    for vq in (beat.get("visual_queries") or []):
+        query = _normalize_phrase(str(vq))
         key = query.lower()
         if query and key not in seen:
             seen.add(key)
             queries.append(query)
+        if len(queries) >= max_queries:
+            break
+
+    if len(queries) < max_queries:
+        # Fall back to focus terms extracted from VO/on-screen text.
+        focus_input = f"{on_screen_text} {vo_line} {segment_context}".strip()
+        focus_terms = _extract_focus_terms(focus_input, max_terms=max_queries)
+        for term in focus_terms:
+            query = _normalize_phrase(term)
+            if anchor and anchor.lower() not in query.lower():
+                query = f"{query} {anchor}".strip()
+            key = query.lower()
+            if query and key not in seen:
+                seen.add(key)
+                queries.append(query)
+            if len(queries) >= max_queries:
+                break
 
     if not queries:
         fallback = anchor or on_screen_text or vo_line or topic_hint or "historical reference"

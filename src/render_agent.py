@@ -221,7 +221,7 @@ class FfmpegRenderEngine(RenderEngine):
                 f"aformat=sample_fmts=s16:channel_layouts=stereo,"
                 f"volume={vol_linear:.4f}[amusic]"
             )
-            filter_parts.append(f"[aout][amusic]amix=inputs=2:duration=first:normalize=0[amixed]")
+            filter_parts.append(f"[aout][amusic]amix=inputs=2:duration=first[amixed]")
             aout_label = "[amixed]"
 
         filter_complex = ";".join(filter_parts)

@@ -23,7 +23,7 @@ from src.render_agent import create_render_agent
 from src.music_agent import create_music_agent
 from src.script_image_agent import ScriptImageConfig, create_script_image_agent
 from src.artifacts.io import ensure_run_dir, new_run_id, write_json
-from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER, ELEVENLABS_API_KEY, RESULTS_DIR
+from src.config import YOUTUBE_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER, ELEVENLABS_API_KEY, RESULTS_DIR, TTS_BACKEND
 from src.creative_spec import load_creative_spec
 from src.screenwriting.concept_agent import ConceptAgent
 from src.screenwriting.screenplay_agent import ScreenplayAgent
@@ -61,6 +61,9 @@ def check_api_keys():
 
 def check_tts_key():
     """Verify TTS API key is configured for audio generation."""
+    if TTS_BACKEND in {"chatterbox_server", "chatterbox_direct"}:
+        print(f"[OK] TTS backend: {TTS_BACKEND} (no API key required)")
+        return
     if ELEVENLABS_API_KEY:
         print("[OK] ELEVENLABS_API_KEY configured")
         return

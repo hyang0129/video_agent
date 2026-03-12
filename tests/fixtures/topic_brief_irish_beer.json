@@ -1,0 +1,21 @@
+{
+  "topic_id": "history_of_irish_beer",
+  "subtopic_id": "facts",
+  "topic": {
+    "name": "History of Irish Beer",
+    "positioning": "The fascinating story behind Ireland's legendary brewing tradition"
+  },
+  "subtopic": {
+    "name": "Irish Beer History",
+    "query": "history of irish beer brewing Ireland",
+    "angle": "Surprising origins and milestones in Irish brewing culture"
+  },
+  "format": {
+    "primary": "Did You Know",
+    "target_duration_seconds": 35
+  },
+  "script_constraints": {
+    "tone": "warm, storytelling, conversational",
+    "claims_policy": "Use only verified historical facts"
+  }
+}

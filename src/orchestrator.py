@@ -36,6 +36,7 @@ from mcp.client.streamable_http import streamable_http_client
 from .artifacts.io import write_json
 from .artifacts.screenplay import screenplay_to_script_package
 from .audio_agent import AudioGenerationAgent, create_audio_agent
+from .config import TTS_BACKEND
 from .script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
 from .video_planner import script_package_to_video_plan
 
@@ -315,6 +316,11 @@ class ProductionOrchestrator:
                 _mcp_fn(screenplay, script_package, run_dir, run_id, voice)
             )
         else:
+            if TTS_BACKEND == "chatterbox_direct" and not serial:
+                raise RuntimeError(
+                    "[ERROR] chatterbox_direct backend requires serial=True "
+                    "(GPU model is not safe for concurrent inference)"
+                )
             audio_agent = create_audio_agent(output_dir=run_dir, voice=voice)
             image_agent = ScriptImageRetrievalAgent(ScriptImageConfig(output_dir=run_dir))
 
@@ -416,8 +422,20 @@ class ProductionOrchestrator:
                 )
 
             if audio_scene_ids:
-                audio_timeline = re_audio
-                logger.debug("[orch]   audio_timeline updated")
+                # Merge revised tracks by scene_id into the existing timeline.
+                re_tracks_by_scene = {
+                    t["scene_id"]: t
+                    for t in (re_audio.get("tracks") or [])
+                    if t.get("type") == "voiceover" and t.get("scene_id")
+                }
+                merged_tracks = [
+                    re_tracks_by_scene.get(t.get("scene_id"), t)
+                    if t.get("type") == "voiceover"
+                    else t
+                    for t in (audio_timeline.get("tracks") or [])
+                ]
+                audio_timeline = {**audio_timeline, "tracks": merged_tracks}
+                logger.debug("[orch]   audio_timeline merged scenes={}", list(re_tracks_by_scene.keys()))
             if image_scene_ids:
                 image_manifest = re_image
                 logger.debug("[orch]   image_manifest updated")

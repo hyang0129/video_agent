@@ -53,10 +53,13 @@ from .tools.tts_tools import (
     TTSError,
     AudioMixingError,
 )
+from .tools.chatterbox_backend import TTSRequest as ChatterboxTTSRequest
 from .config import (
     RESULTS_DIR,
     DEFAULT_MUSIC_PATH,
     AUDIO_SAMPLE_RATE,
+    TTS_BACKEND,
+    CHATTERBOX_SERVER_URL,
 )
 from .artifacts.io import ensure_run_dir
 
@@ -157,20 +160,26 @@ class AudioGenerationAgent:
         output_dir: Optional[Path] = None,
         voice_id: str = "narrator",
         music_volume_db: float = -18.0,
+        tts_backend=None,
     ):
         """Initialize audio generation agent.
-        
+
         Args:
             output_dir: Directory for output files. Creates temp dir if None.
             voice_id: Voice preset name or ElevenLabs voice ID.
             music_volume_db: Background music volume adjustment in dB.
+            tts_backend: Optional ChatterboxDirectBackend or ChatterboxServerBackend.
+                         When set, synthesis is delegated to this backend instead of
+                         ElevenLabs. Must implement synthesize(TTSRequest) -> bytes
+                         and close().
         """
         self.output_dir = output_dir or RESULTS_DIR / f"audio_{uuid.uuid4().hex[:6]}"
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.voice_id = get_voice_id(voice_id)
+
+        self._tts_backend = tts_backend
+        self.voice_id = "chatterbox" if tts_backend is not None else get_voice_id(voice_id)
         self.music_volume_db = music_volume_db
-        
+
         # Create subdirectories
         self.audio_segments_dir = self.output_dir / "audio_segments"
         self.audio_segments_dir.mkdir(exist_ok=True)
@@ -272,6 +281,17 @@ class AudioGenerationAgent:
                         duration_s=scene_duration,
                         sample_rate=AUDIO_SAMPLE_RATE,
                     )
+                elif self._tts_backend is not None:
+                    segment_path = self.audio_segments_dir / f"vo_{scene_id}.wav"
+                    wav_bytes = self._tts_backend.synthesize(ChatterboxTTSRequest(text=vo_line))
+                    segment_path.write_bytes(wav_bytes)
+                    audio_path = segment_path
+                    metadata = {
+                        "voice_id": "chatterbox",
+                        "character_count": len(vo_line),
+                        "file_size_bytes": segment_path.stat().st_size,
+                        "estimated_duration_s": None,
+                    }
                 else:
                     segment_path = self.audio_segments_dir / f"vo_{scene_id}.mp3"
                     audio_path, metadata = generate_voiceover(
@@ -322,8 +342,12 @@ class AudioGenerationAgent:
                 )
                 actual_duration_s = scene_duration
 
-            track_start_s = round(current_time_s, 3)
-            track_end_s = round(current_time_s + actual_duration_s, 3)
+            # Partial re-run: anchor to planned t_start_s so merge into full timeline works.
+            if scene_ids is not None:
+                track_start_s = round(float(scene.get("t_start_s", current_time_s)), 3)
+            else:
+                track_start_s = round(current_time_s, 3)
+            track_end_s = round(track_start_s + actual_duration_s, 3)
 
             tracks.append({
                 "type": "voiceover",
@@ -578,26 +602,27 @@ def create_audio_agent(
     music_volume_db: float = -18.0,
 ) -> AudioGenerationAgent:
     """Factory function for creating audio generation agent.
-    
-    Follows the factory pattern established in other agents.
-    
-    Args:
-        output_dir: Output directory for audio files.
-        voice: Voice preset name or ElevenLabs voice ID.
-        music_volume_db: Background music volume in dB.
-    
-    Returns:
-        Configured AudioGenerationAgent instance.
-    
-    Example:
-        >>> agent = create_audio_agent(
-        ...     output_dir=Path("results/run_001"),
-        ...     voice="energetic",
-        ... )
-        >>> timeline = agent.generate_audio_timeline(video_plan)
+
+    Reads TTS_BACKEND from config and wires the appropriate backend:
+      - "elevenlabs"        — existing ElevenLabs path (default)
+      - "chatterbox_server" — ChatterboxServerBackend via HTTP POST /tts
+      - "chatterbox_direct" — ChatterboxDirectBackend (in-process GPU, serial only)
     """
+    backend = None
+    if TTS_BACKEND == "chatterbox_server":
+        from .tools.chatterbox_backend import ChatterboxServerBackend
+        backend = ChatterboxServerBackend(base_url=CHATTERBOX_SERVER_URL)
+        print(f"[INFO] TTS backend: chatterbox_server ({CHATTERBOX_SERVER_URL})")
+    elif TTS_BACKEND == "chatterbox_direct":
+        from .tools.chatterbox_backend import ChatterboxDirectBackend
+        backend = ChatterboxDirectBackend()
+        print("[INFO] TTS backend: chatterbox_direct (in-process GPU)")
+    else:
+        print("[INFO] TTS backend: elevenlabs")
+
     return AudioGenerationAgent(
         output_dir=output_dir,
         voice_id=voice,
         music_volume_db=music_volume_db,
+        tts_backend=backend,
     )

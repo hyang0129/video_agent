@@ -44,12 +44,35 @@ def score_candidate_relevance(candidate: Dict[str, Any], query: str) -> float:
     overlap = query_tokens.intersection(alt_tokens)
     return round(len(overlap) / len(query_tokens), 3)
 
+import threading
+import time
+
 import requests
 
 from ..config import PEXELS_API_KEY
 
 _WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
+_WIKIMEDIA_HOST = "wikimedia.org"
 _IMAGE_EXT_RE = re.compile(r"\.(jpe?g|png|webp)$", re.IGNORECASE)
+
+
+class _ThreadLocalRateLimiter:
+    """Enforces a minimum interval between calls on a per-thread basis."""
+
+    def __init__(self, min_interval_s: float = 1.0) -> None:
+        self._local = threading.local()
+        self.min_interval_s = min_interval_s
+
+    def throttle(self) -> None:
+        now = time.monotonic()
+        last = getattr(self._local, "last_call", 0.0)
+        wait = self.min_interval_s - (now - last)
+        if wait > 0:
+            time.sleep(wait)
+        self._local.last_call = time.monotonic()
+
+
+wikimedia_rate_limiter = _ThreadLocalRateLimiter(min_interval_s=1.0)
 
 
 class ImageSearchError(Exception):
@@ -200,10 +223,11 @@ def search_wikimedia_images(
     }
 
     headers = {
-        "User-Agent": "VideoAgent/1.0 (https://github.com/example/video_agent; bot@example.com) python-requests",
+        "User-Agent": "VideoAgent/1.0",
     }
 
     try:
+        wikimedia_rate_limiter.throttle()
         resp = requests.get(_WIKIMEDIA_API, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
         payload = resp.json()
