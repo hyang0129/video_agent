@@ -1,5 +1,32 @@
 # Integration Testing Guide
 
+## Test Tiers
+
+The project uses a two-tier testing strategy:
+
+| Tier | Purpose | Location | Speed | API keys? |
+|------|---------|----------|-------|-----------|
+| **Unit tests** | Per-agent logic, mocked dependencies | `tests/test_*.py` | Fast (seconds) | None |
+| **Full-pipeline E2E** | MCP server integration, video output for human review | `tests/test_mcp_server_full_pipeline.py` | Slow (minutes) | Yes |
+
+**Run unit tests (fast, offline):**
+```bash
+pytest tests/test_*.py -v -k "not integration"
+```
+
+**Run full-pipeline E2E (MCP server, outputs video):**
+```bash
+pytest tests/test_mcp_server_full_pipeline.py -v -s
+```
+
+Stage-based integration tests (`tests/integration/test_stage_*.py`) remain available
+for targeted validation of individual pipeline stages.
+
+> **Deprecated tests** live in `tests/deprecated/`. They are excluded from collection
+> via `collect_ignore_glob` in `pytest.ini`. See `tests/deprecated/README.md` for details.
+
+---
+
 ## Overview
 
 The pipeline has 9 independently-testable stages. Each stage has a dedicated test
@@ -42,10 +69,9 @@ pytest tests/integration/test_stage_08_composition.py \
        tests/integration/test_stage_09_render.py -v -s -m integration
 ```
 
-### Multi-setting end-to-end (uses seeded facts, not stage fixtures)
+### Full-pipeline E2E (MCP server integration)
 ```bash
-pytest tests/test_settings_pipeline.py -v -s -m integration
-pytest tests/test_settings_pipeline.py -k ww2_tanks -v -s -m integration
+pytest tests/test_mcp_server_full_pipeline.py -v -s
 ```
 
 ---
