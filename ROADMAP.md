@@ -1,6 +1,6 @@
 # Video Agent Pipeline - Development Roadmap
 
-**Last Updated:** March 11, 2026
+**Last Updated:** March 12, 2026
 
 ## Planning Source of Truth
 
@@ -15,8 +15,8 @@ The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) wi
 - Market research → Topic identification
 - Script generation with timing
 - Video planning with scene structure
-- Audio generation (ElevenLabs TTS, 4 voice presets)
-- Visual assets (Pexels search + deterministic placeholder BMPs)
+- Audio generation (Chatterbox TTS local GPU default, ElevenLabs fallback)
+- Visual assets (Wikimedia + Pexels multi-source search with fallback)
 - Composition (Ken Burns effects, text overlay specs)
 - Rendering (FFmpeg slideshow: images + voiceover, with caveats)
 
@@ -26,7 +26,10 @@ The pipeline can produce end-to-end vertical short-form videos (9:16, 30-60s) wi
 - Added operational render helpers: `scripts/run_render.py` and `scripts/run_starwars_render_with_logs.py`.
 - Began Phase 1 audio-track integration: AudioTimeline now emits optional `audio_master.*`, composition forwards a `master` track, and render prefers master audio with segment fallback.
 - Verified at least one recent output MP4 has a valid AAC audio stream via `ffprobe`.
-- **MCP migration (serverless/in-process test pipeline):** Built two MCP servers with full stdio transport definitions — `src/mcp/screenwriting_server.py` (concept + screenplay tools) and `src/mcp/producer_server.py` (audio, image fetch, render, validate tools). The `ProductionOrchestrator` in `src/orchestrator.py` dispatches to these tool handlers in-process (`_call_tool_inprocess`) rather than via subprocess/stdio, giving a single-threaded-compatible test pipeline. Both parallel and serial execution modes are wired and tested. A full long-lived subprocess MCP server upgrade is planned under Tier 2.
+- **MCP HTTPS server (phases 1-3):** Unified `src/mcp/video_agent_server.py` with TLS support, streamable-http transport, health endpoint, and all tool handlers (concept, screenplay, audio, image, render, validate). Orchestrator connects via real HTTPS MCP client or in-process dispatch. Both server and serverless full-pipeline integration tests passing.
+- **Chatterbox TTS integration:** `vendor/chatterbox` submodule with `ChatterboxServerBackend` (HTTP) and `ChatterboxDirectBackend` (in-process GPU) as default TTS, replacing ElevenLabs dependency. Configurable via `TTS_BACKEND` env var.
+- **Image search resilience:** Wikimedia rate limiter, multi-candidate download fallback, Pexels retry for failed Wikimedia scenes, partial re-run merge for visual manifests.
+- **Pipeline merge fixes:** Audio tracks and visual assets merge by `scene_id` on partial re-runs instead of wholesale replacement. Composition falls back to available assets instead of hard error.
 
 **Working Command:**
 ```powershell
@@ -48,10 +51,9 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
   - **Next Fix:** pad/extend timeline with music bed or silence and enforce post-render duration checks.
 
 2. **Relevant Photo Coverage in Rendered Video**
-  - Scene visuals can still be generic placeholders or weakly matched stock images.
-  - Final render quality drops when photos are not semantically aligned to each `vo_line`.
-  - **Status:** Open (Phase 1 quality gap)
-  - **Need:** stronger scene-to-photo relevance checks before render.
+  - Multi-source retrieval (Wikimedia + Pexels) with per-scene `visual_queries` from screenplay now implemented.
+  - Fallback chain: Wikimedia -> Pexels -> placeholder BMP.
+  - **Status:** Substantially improved (March 2026). Remaining gap: no CLIP relevance scoring.
   - **Implementation Plan:** [script-image-video-integration-plan.md](docs/script-image-video-integration-plan.md)
 
 3. **No Background Music Mixing**
@@ -143,32 +145,27 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 0.7 MCP Full Server Mode (Architecture Showcase) 🔥
 - **Priority:** P0
-- **Status:** Open (serverless/in-process baseline complete)
-- **Why Tier 0:** Running tool handlers as real isolated subprocesses over stdio JSON-RPC is a significant architectural differentiator — directly demonstrable to a recruiter as a multi-process agent system, not just in-process function dispatch.
-- **Background:** `use_mcp=True` in `ProductionOrchestrator` currently calls tool handlers in-process via `_call_tool_inprocess()`, bypassing the stdio wire. The MCP servers (`screenwriting_server`, `producer_server`) are fully implemented and ready to be promoted.
-- **Implementation:**
-  - Spawn `src/mcp/screenwriting_server.py` and `src/mcp/producer_server.py` as long-lived subprocesses on orchestrator startup.
-  - Replace `_call_tool_inprocess` with a real MCP stdio client (JSON-RPC over pipes).
-  - Handle server lifecycle: startup, health check, graceful shutdown.
-- **Success Metric:** `use_mcp=True` calls traverse the actual stdio JSON-RPC wire; tool handlers execute in isolated subprocesses with no shared memory with the orchestrator.
-- **Dependencies:** `mcp` SDK already installed; no new dependencies required.
-- **Design doc:** [docs/mcp-server-architecture.md](docs/mcp-server-architecture.md)
-- **Owner:** TBD
-- **Effort:** 1-2 days
+- **Status:** ✅ Done (March 2026)
+- **Delivered:**
+  - Unified `src/mcp/video_agent_server.py` with HTTPS/TLS support (streamable-http transport).
+  - Orchestrator connects via real MCP HTTPS client (`streamable_http_client`) or in-process dispatch.
+  - TLS foundation with `src/mcp/cert_utils.py` and `src/mcp/https_server_base.py`.
+  - Health endpoint for server readiness checks.
+  - Full-pipeline integration tests for both MCP HTTPS server (`tests/test_mcp_server_full_pipeline.py`) and serverless (`tests/test_mcp_serverless_full_pipeline.py`) modes.
+- **Success Metric:** ✅ `use_mcp=True` calls traverse real HTTPS wire; tool handlers serve over TLS with health checks.
 
 #### 0.8 Integrate chatterbox as Vendor Submodule (TTS Upgrade) 🔥
 - **Priority:** P0
-- **Status:** Open
-- **Why Tier 0:** chatterbox provides a self-hosted 350M-parameter TTS model (ChatterboxTurboTTS) that replaces ElevenLabs dependency, eliminating free-tier character limits and enabling unlimited local voice generation — a strong architectural differentiator.
-- **Implementation:**
-  - Add `git submodule add https://github.com/hyang0129/chatterbox vendor/chatterbox`
-  - Add `-e vendor/chatterbox` to `requirements.txt`
-  - Add `make submodules-init` and `make submodules-update` targets to `Makefile`
-  - Document vendor layout in CLAUDE.md Key File Locations table
-- **Python API:** `from chatterbox.tts_turbo import ChatterboxTurboTTS`
-- **Success Metric:** `from chatterbox.tts_turbo import ChatterboxTurboTTS` importable; submodule pinned and updatable via `git submodule update --remote`
-- **Design doc:** [docs/submodule-integration-plan.md](docs/submodule-integration-plan.md)
-- **Effort:** 0.5 days
+- **Status:** ✅ Done (March 2026)
+- **Delivered:**
+  - `vendor/chatterbox` submodule added and pinned.
+  - `src/tools/chatterbox_backend.py` with two backends: `ChatterboxServerBackend` (HTTP to FastAPI server) and `ChatterboxDirectBackend` (in-process GPU).
+  - `TTS_BACKEND` config switch (default: `chatterbox_server`). ElevenLabs available via `TTS_BACKEND=elevenlabs`.
+  - `AudioGenerationAgent` and `create_audio_agent()` factory wired to backend selection.
+  - Devcontainer GPU passthrough and isolated Python 3.11 venv for chatterbox.
+  - `Makefile` targets: `submodules-init`, `submodules-update`.
+- **Success Metric:** ✅ Chatterbox TTS is the default backend; local GPU inference with zero API cost.
+- **Design doc:** [docs/chatterbox-integration-plan.md](docs/chatterbox-integration-plan.md)
 
 ---
 
@@ -271,28 +268,24 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 1.5 Script Image → Video Integration
 - **Priority:** P0/P1 (visual quality gate)
-- **Status:** In Progress
-- **Goal:** Feed beat-aligned script image retrieval into rendered output scenes.
+- **Status:** ✅ Done (March 2026)
+- **Delivered:**
+  - Per-scene `visual_queries` from screenplay flow through `script_package` beats into image search.
+  - Multi-source retrieval: Wikimedia (primary) + Pexels (fallback) with candidate-list download retry.
+  - Wikimedia rate limiter prevents 429 errors.
+  - Partial re-run merge: new visual assets merge by `scene_id` into existing manifest.
+  - Composition agent falls back to available assets instead of hard error on missing scenes.
 - **Plan:** [script-image-video-integration-plan.md](docs/script-image-video-integration-plan.md)
-- **Current Focus:** Step 3 (multi-source retrieval fallback scaffold) + Step 1 bridge wiring.
-- **Owner:** TBD
-- **Timeline:** Immediate
-- **Effort:** 1-2 days for first integrated pass
 
 #### 1.6 Integrate live2d as Vendor Submodule (Avatar Renderer)
 - **Priority:** P1
-- **Status:** Open
-- **Why Tier 1:** live2d is a C++ CMake binary project (not a Python package) — requires a build step. Adds `live2d-render` and `live2d-inspect` CLI tools for avatar animation rendering, extending the compositor stage.
-- **Implementation:**
-  - Add `git submodule add https://github.com/hyang0129/live2d vendor/live2d`
-  - Add `make live2d-build` target (CMake build → `vendor/live2d/build/bin/`)
-  - Add `vendor/live2d/build/` to `.gitignore`
-  - Document in CLAUDE.md Key File Locations table
+- **Status:** ✅ Done (March 2026)
+- **Delivered:**
+  - `vendor/live2d` submodule added with Linux build passing.
+  - `Makefile` target: `make live2d-build` (CMake build -> `vendor/live2d/build/bin/`).
+  - `vendor/live2d/build/` in `.gitignore`.
 - **CLI:** `live2d-render --scene scene.json`, `live2d-inspect --model <name>`
-- **Success Metric:** `vendor/live2d/build/bin/live2d-render --help` runs after `make live2d-build`
 - **Design doc:** [docs/submodule-integration-plan.md](docs/submodule-integration-plan.md)
-- **Dependencies:** CMake, C++ toolchain in dev environment
-- **Effort:** 0.5-1 day
 
 ---
 
@@ -538,8 +531,8 @@ winget install ImageMagick.ImageMagick
 - [ ] Per-run evaluation artifacts are generated (`evaluation.json`) from `run_pipeline.py`
 - [ ] Metrics summary exists with runtime + output-count evidence (`results/metrics_summary.json`)
 - [ ] Parallel execution benchmark is documented (wall-clock comparison logged)
-- [ ] MCP servers run as real long-lived subprocesses over stdio transport (not in-process)
-- [ ] chatterbox submodule integrated and importable (`vendor/chatterbox/`)
+- [x] MCP HTTPS server with TLS, health checks, and full-pipeline integration tests
+- [x] chatterbox submodule integrated as default TTS backend (`vendor/chatterbox/`)
 
 ### Tier 1 Complete When:
 - [x] Videos have on-screen text overlays rendered
@@ -548,7 +541,7 @@ winget install ImageMagick.ImageMagick
 - [ ] Voiceover is LUFS normalized (-16.0 ±1.0)
 - [ ] CI/CD runs tests on every PR
 - [ ] No P0/P1 bugs in issue tracker
-- [ ] live2d submodule integrated and buildable (`make live2d-build`)
+- [x] live2d submodule integrated and buildable (`make live2d-build`)
 
 ### Tier 2 Complete When:
 - [ ] LangChain upgraded to 1.x (branch ready, pending human review + merge)
@@ -631,4 +624,4 @@ Open an issue or start a discussion in the repo to:
 - Share use cases
 
 **Maintainer:** TBD  
-**Last Review:** March 11, 2026
+**Last Review:** March 12, 2026
