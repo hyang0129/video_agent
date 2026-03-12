@@ -224,6 +224,15 @@ class FfmpegRenderEngine(RenderEngine):
             filter_parts.append(f"[aout][amusic]amix=inputs=2:duration=first[amixed]")
             aout_label = "[amixed]"
 
+        # Pad audio with silence to match total video duration.
+        total_video_dur = sum(dur for _, dur in video_inputs)
+        if aout_label and total_video_dur > 0:
+            cur_label = aout_label.strip("[]")
+            filter_parts.append(
+                f"[{cur_label}]apad=whole_dur={total_video_dur:.3f}[apad]"
+            )
+            aout_label = "[apad]"
+
         filter_complex = ";".join(filter_parts)
         cmd.extend(["-filter_complex", filter_complex])
         cmd.extend(["-map", final_video_label])

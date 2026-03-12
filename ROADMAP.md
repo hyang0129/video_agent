@@ -100,12 +100,10 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Problem:** Some outputs have audio ending early vs video duration.
 - **Progress:**
   - `validate_output` tool in `producer_server.py` checks duration parity and writes `evaluation.json` ✅
-  - `run_pipeline.py` only validates video stream presence — no audio duration parity check ❌
-  - No hard fail on mismatch in the main pipeline runner ❌
+  - `run_pipeline.py` validates duration parity (<=0.25s) and hard-fails with `sys.exit(1)` on mismatch ✅
+  - Render engine pads audio with silence via `apad` filter to match video duration ✅
 - **Remaining work:**
-  - Wire duration-parity check (<=0.25s) into `run_pipeline.py` post-render step
-  - Fail run and write actionable error if parity check fails
-  - Enforce audio fill (silence or music bed) when voiceover ends before video duration
+  - End-to-end validation: run full pipeline and confirm parity passes on real output
 - **Success Metric:** `|audio_duration - video_duration| <= 0.25s` for all validation runs.
 
 #### 0.3 Show One Real Output Example (Public Artifact)
