@@ -68,9 +68,9 @@ class TestAudioGenerationAgent:
             voice_id="narrator",
             music_volume_db=-18.0
         )
-        
+
         assert agent.output_dir == temp_output_dir
-        assert agent.voice_id == "21m00Tcm4TlvDq8ikWAM"  # narrator preset
+        assert agent.voice_id == "JBFqnCBsd6RMkjVDRZzb"  # narrator preset
         assert agent.music_volume_db == -18.0
         assert agent.audio_segments_dir.exists()
     
@@ -245,24 +245,40 @@ class TestAudioGenerationAgent:
         timeline = agent.generate_audio_timeline(sample_video_plan)
         
         # Should use energetic voice, not narrator
-        assert timeline["voice_id"] == "pNInz6obpgDQGcFmaJgB"  # energetic preset
+        assert timeline["voice_id"] == "TX3LPaxmHKxFdv7VOQHJ"  # energetic preset
 
 
 class TestCreateAudioAgent:
     """Test factory function."""
-    
+
     def test_create_audio_agent(self, temp_output_dir):
-        """Test agent creation via factory."""
+        """Test agent creation via factory.
+
+        TTS_BACKEND defaults to chatterbox_server, so voice_id becomes
+        "chatterbox" regardless of the voice preset passed in.
+        """
         agent = create_audio_agent(
             output_dir=temp_output_dir,
             voice="calm",
             music_volume_db=-20.0
         )
-        
+
         assert isinstance(agent, AudioGenerationAgent)
         assert agent.output_dir == temp_output_dir
-        assert agent.voice_id == "EXAVITQu4vr4xnSDxMaL"  # calm preset
+        assert agent.voice_id == "chatterbox"
         assert agent.music_volume_db == -20.0
+
+    def test_create_audio_agent_elevenlabs(self, temp_output_dir):
+        """Test factory with elevenlabs backend resolves voice presets."""
+        with patch("src.audio_agent.TTS_BACKEND", "elevenlabs"):
+            agent = create_audio_agent(
+                output_dir=temp_output_dir,
+                voice="calm",
+                music_volume_db=-20.0
+            )
+
+        assert agent.voice_id == "EXAVITQu4vr4xnSDxMaL"  # calm preset
+        assert agent._tts_backend is None
 
 
 class TestIntegration:

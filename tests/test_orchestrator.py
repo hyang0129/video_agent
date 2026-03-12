@@ -127,10 +127,11 @@ class TestProductionReportSchema:
         self, tmp_run_dir, sample_video_plan
     ):
         """When TTS raises TTSError, audio_agent should write a degraded issue and continue."""
-        from src.audio_agent import create_audio_agent
+        from src.audio_agent import AudioGenerationAgent
         from src.tools.tts_tools import TTSError
 
-        agent = create_audio_agent(output_dir=tmp_run_dir, voice="narrator")
+        # Construct directly without tts_backend so the ElevenLabs code path is used
+        agent = AudioGenerationAgent(output_dir=tmp_run_dir, voice_id="narrator")
 
         with patch("src.audio_agent.generate_voiceover", side_effect=TTSError("API down")):
             timeline = agent.generate_audio_timeline(sample_video_plan)
@@ -156,14 +157,15 @@ class TestProductionReportSchema:
 
     def test_audio_agent_reports_duration_overshoot(self, tmp_run_dir, sample_video_plan):
         """vo_too_long is flagged when TTS duration exceeds target * 1.2."""
-        from src.audio_agent import create_audio_agent
+        from src.audio_agent import AudioGenerationAgent
 
         def _fake_voiceover(text, voice_id, output_path):
             # Write a real file so ffprobe can't be used; metadata drives duration
             Path(output_path).write_bytes(b"\xff\xfb" * 100)
             return Path(output_path), {"estimated_duration_s": 10.0, "character_count": len(text)}
 
-        agent = create_audio_agent(output_dir=tmp_run_dir, voice="narrator")
+        # Construct directly without tts_backend so the ElevenLabs code path is used
+        agent = AudioGenerationAgent(output_dir=tmp_run_dir, voice_id="narrator")
 
         with patch("src.audio_agent.generate_voiceover", side_effect=_fake_voiceover):
             timeline = agent.generate_audio_timeline(sample_video_plan)
@@ -218,11 +220,12 @@ class TestProductionReportSchema:
         self, tmp_run_dir, sample_video_plan, sample_script_package
     ):
         """Both agents write to production_report.json; issues accumulate."""
-        from src.audio_agent import create_audio_agent
+        from src.audio_agent import AudioGenerationAgent
         from src.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
         from src.tools.tts_tools import TTSError
 
-        audio_agent = create_audio_agent(output_dir=tmp_run_dir, voice="narrator")
+        # Construct directly without tts_backend so the ElevenLabs code path is used
+        audio_agent = AudioGenerationAgent(output_dir=tmp_run_dir, voice_id="narrator")
         image_agent = ScriptImageRetrievalAgent(
             ScriptImageConfig(output_dir=tmp_run_dir, min_candidates_per_segment=1)
         )
