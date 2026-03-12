@@ -120,7 +120,27 @@ TTS_BACKEND = os.getenv("TTS_BACKEND", "chatterbox_server")
 CHATTERBOX_SERVER_URL = os.getenv("CHATTERBOX_SERVER_URL", "http://localhost:8000")
 
 # Rhubarb Lip Sync
-RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", r"C:\tools\rhubarb\rhubarb.exe")
+_RHUBARB_DEFAULT = "/workspaces/hub/tools/bin/rhubarb"
+RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", _RHUBARB_DEFAULT)
 RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)
 RHUBARB_OUTPUT_FORMAT = "json"
 RHUBARB_WAV_SAMPLE_RATE = 22050   # Hz — 22050 mono is sufficient and faster to process
+
+# Live2D Renderer
+LIVE2D_RENDER_EXECUTABLE = os.getenv("LIVE2D_RENDER_PATH", "/workspaces/hub/tools/bin/live2d-render")
+LIVE2D_MODEL_ID = os.getenv("LIVE2D_MODEL_ID", "majo")
+LIVE2D_MODEL_PATH = os.getenv("LIVE2D_MODEL_PATH", "/workspaces/hub/repos/live2d/assets/models/majo/majo.model3.json")
+
+# Avatar overlay position and render size within the final video canvas.
+# Render at full production resolution so the live2d model fills the frame
+# at proper scale.  A crop is applied in FFmpeg to show only head+shoulders.
+# AVATAR_CROP_HEIGHT: how many pixels to keep from the TOP of the rendered
+#   avatar (head+shoulders region).  860 ≈ top 45% of 1920px.
+# AVATAR_OVERLAY_Y: y position of the cropped avatar on the final canvas;
+#   set to VIDEO_HEIGHT - CROP_HEIGHT so it sits flush at the bottom.
+# All values are overridable via environment variables for production tuning.
+AVATAR_RENDER_WIDTH = int(os.getenv("AVATAR_RENDER_WIDTH", str(VIDEO_RESOLUTION[0])))
+AVATAR_RENDER_HEIGHT = int(os.getenv("AVATAR_RENDER_HEIGHT", str(VIDEO_RESOLUTION[1])))
+AVATAR_CROP_HEIGHT = int(os.getenv("AVATAR_CROP_HEIGHT", "860"))
+AVATAR_OVERLAY_X = int(os.getenv("AVATAR_OVERLAY_X", "0"))
+AVATAR_OVERLAY_Y = int(os.getenv("AVATAR_OVERLAY_Y", str(VIDEO_RESOLUTION[1] - 860)))

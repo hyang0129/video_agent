@@ -20,7 +20,15 @@ from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
 from .artifacts.io import write_json
-from .config import VIDEO_FPS, VIDEO_RESOLUTION
+from .config import (
+    AVATAR_CROP_HEIGHT,
+    AVATAR_OVERLAY_X,
+    AVATAR_OVERLAY_Y,
+    AVATAR_RENDER_HEIGHT,
+    AVATAR_RENDER_WIDTH,
+    VIDEO_FPS,
+    VIDEO_RESOLUTION,
+)
 
 
 class CompositionError(Exception):
@@ -70,6 +78,7 @@ class CompositionAgent:
         audio_timeline: Dict[str, Any],
         visual_manifest: Dict[str, Any],
         music_selection: Optional[Dict[str, Any]] = None,
+        avatar_manifest: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a RenderSpecification.
 
@@ -100,6 +109,49 @@ class CompositionAgent:
             # Fallback: max t_end_s across voiceover segments.
             duration_seconds = max((float(c.get("t_end_s") or 0.0) for c in clips), default=0.0)
 
+        layers: List[Dict[str, Any]] = [
+            {
+                "layer_id": "layer_video",
+                "type": "video",
+                "z_index": 0,
+                "clips": clips,
+            },
+        ]
+
+        if avatar_manifest is not None:
+            avatar_src = str(avatar_manifest.get("output", "")).replace("\\", "/")
+            layers.append({
+                "layer_id": "layer_avatar",
+                "type": "avatar",
+                "z_index": 1,
+                "source_file": avatar_src,
+                "overlay": {
+                    "x": AVATAR_OVERLAY_X,
+                    "y": AVATAR_OVERLAY_Y,
+                    "width": AVATAR_RENDER_WIDTH,
+                    "height": AVATAR_RENDER_HEIGHT,
+                    "crop_height": AVATAR_CROP_HEIGHT,
+                },
+            })
+
+        layers.extend([
+            {
+                "layer_id": "layer_subtitles",
+                "type": "text",
+                "z_index": 2,
+                "elements": text_elements,
+            },
+            {
+                "layer_id": "layer_audio",
+                "type": "audio",
+                "z_index": -1,
+                "tracks": self._audio_tracks_from_timeline(
+                    audio_timeline=audio_timeline,
+                    music_selection=music_selection,
+                ),
+            },
+        ])
+
         render_spec: Dict[str, Any] = {
             "schema_version": "1.0.0",
             "render_spec_id": render_spec_id,
@@ -114,29 +166,7 @@ class CompositionAgent:
                 "codec": "h264",
                 "duration_seconds": round(duration_seconds, 2),
             },
-            "layers": [
-                {
-                    "layer_id": "layer_video",
-                    "type": "video",
-                    "z_index": 0,
-                    "clips": clips,
-                },
-                {
-                    "layer_id": "layer_subtitles",
-                    "type": "text",
-                    "z_index": 2,
-                    "elements": text_elements,
-                },
-                {
-                    "layer_id": "layer_audio",
-                    "type": "audio",
-                    "z_index": -1,
-                    "tracks": self._audio_tracks_from_timeline(
-                        audio_timeline=audio_timeline,
-                        music_selection=music_selection,
-                    ),
-                },
-            ],
+            "layers": layers,
         }
 
         if self.output_dir is not None:
@@ -260,7 +290,7 @@ class CompositionAgent:
                     "text": text,
                     "t_start_s": round(start, 2),
                     "t_end_s": round(end, 2),
-                    "position": {"x": "center", "y": 0.75},
+                    "position": {"x": "center", "y": 0.40},
                     "style": {
                         "font": "Montserrat-Bold",
                         "size": 72,
@@ -355,7 +385,7 @@ def create_composition_agent(
     resolution: Tuple[int, int] = VIDEO_RESOLUTION,
     fps: int = VIDEO_FPS,
     transition_duration_s: float = 0.3,
-) -> CompositionAgent:
+) -> "CompositionAgent":
     """Factory for CompositionAgent."""
     return CompositionAgent(
         output_dir=output_dir,

@@ -152,6 +152,19 @@ class FfmpegRenderEngine(RenderEngine):
                 music_volume_db = float(track.get("volume_db") or -18.0)
                 break
 
+        # Resolve avatar layer (optional).
+        avatar_layer = _find_layer(render_spec, "avatar")
+        avatar_path: Optional[Path] = None
+        avatar_overlay: Dict[str, Any] = {}
+        if isinstance(avatar_layer, dict) and avatar_layer:
+            src = str(avatar_layer.get("source_file") or "")
+            candidate = Path(src) if Path(src).is_absolute() else work_dir / src
+            if candidate.exists() and candidate.stat().st_size > 0:
+                avatar_path = candidate
+                avatar_overlay = avatar_layer.get("overlay") or {}
+            else:
+                print(f"[WARN] avatar layer source not found: {candidate} — skipping overlay")
+
         # Build ffmpeg inputs.
         cmd: List[str] = [ffmpeg_path, "-y", "-hide_banner"]
 
@@ -164,6 +177,10 @@ class FfmpegRenderEngine(RenderEngine):
         if music_path is not None:
             # -stream_loop -1 loops the music indefinitely; duration capped by amix later.
             cmd.extend(["-stream_loop", "-1", "-i", str(music_path)])
+
+        # Avatar video input added last so image/audio index math stays unchanged.
+        if avatar_path is not None:
+            cmd.extend(["-i", str(avatar_path)])
 
         filter_parts: List[str] = []
 
@@ -179,12 +196,32 @@ class FfmpegRenderEngine(RenderEngine):
 
         filter_parts.append("".join(v_labels) + f"concat=n={len(v_labels)}:v=1:a=0[vout]")
 
-        final_video_label = "[vout]"
+        # Avatar overlay: composite transparent avatar video over the background.
+        # Placed before text overlays so subtitles render on top of the avatar.
+        pre_text_label = "vout"
+        if avatar_path is not None:
+            av_idx = len(video_inputs) + len(audio_inputs) + (1 if music_path else 0)
+            ov_x = int(avatar_overlay.get("x", 0))
+            ov_y = int(avatar_overlay.get("y", 0))
+            crop_h = int(avatar_overlay.get("crop_height", 0))
+            if crop_h > 0:
+                # Crop to head+shoulders region (top crop_h pixels), then overlay.
+                filter_parts.append(
+                    f"[{av_idx}:v]crop=iw:{crop_h}:0:0[avatar_crop];"
+                    f"[vout][avatar_crop]overlay=x={ov_x}:y={ov_y}:format=auto[vavatar]"
+                )
+            else:
+                filter_parts.append(
+                    f"[vout][{av_idx}:v]overlay=x={ov_x}:y={ov_y}:format=auto[vavatar]"
+                )
+            pre_text_label = "vavatar"
+
+        final_video_label = f"[{pre_text_label}]"
 
         # Text overlays: drawtext chain from text layer elements.
         text_filters, text_out_label = _build_drawtext_filters(
             text_layer=text_layer,
-            in_label="vout",
+            in_label=pre_text_label,
             width=width,
             height=height,
             work_dir=work_dir,

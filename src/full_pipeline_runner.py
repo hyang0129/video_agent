@@ -9,12 +9,16 @@ from typing import Any, Dict, List, Optional
 
 from .artifacts.io import slugify, write_json
 from .audio_agent import create_audio_agent
+from .avatar_cue_agent import AvatarCueAgent
+from .avatar_packaging_agent import AvatarPackagingAgent
+from .avatar_render_agent import AvatarRenderAgent
 from .composition_agent import create_composition_agent
 from .config import ELEVENLABS_API_KEY, RESULTS_DIR
 from .facts.caption_cache import CaptionCache
 from .facts.fact_miner import FactMiner
 from .facts.fact_store import FactStore
 from .render_agent import create_render_agent
+from .rhubarb_agent import RhubarbAgent
 from .script_agent import ScriptGenerationAgent
 from .video_planner import script_package_to_video_plan
 from .visual_agent import create_visual_agent
@@ -38,6 +42,7 @@ class FullPipelineConfig:
     output_prefix: str = "full_pipeline"
     voice_mode: str = "auto"  # auto|real|silent|<voice preset/id>
     render_engine: str = "ffmpeg"  # ffmpeg|dry_run
+    enable_avatar: bool = True  # include Live2D avatar overlay
 
 
 class FullPipelineRunner:
@@ -176,11 +181,43 @@ class FullPipelineRunner:
         )
         visual_manifest = visual_agent.generate_visual_manifest(video_plan=video_plan)
 
+        # Avatar pipeline: rhubarb → cues → package (full continuous) → render.
+        # Non-blocking: if any stage fails, avatar_manifest stays None and
+        # the compositor skips the avatar overlay layer.
+        avatar_manifest = None
+        avatar_mov_path: Optional[Path] = None
+        if config.enable_avatar:
+            try:
+                lipsync_manifest = RhubarbAgent().generate_lipsync_manifest(audio_timeline, run_dir)
+                write_json(run_dir / "lipsync_manifest.json", lipsync_manifest)
+
+                cues_by_scene = AvatarCueAgent().generate_cues(audio_timeline)
+
+                pkg_agent = AvatarPackagingAgent()
+                avatar_manifest = pkg_agent.package_full(
+                    lipsync_manifest=lipsync_manifest,
+                    audio_timeline=audio_timeline,
+                    run_dir=run_dir,
+                    cues_by_scene=cues_by_scene,
+                )
+                write_json(run_dir / "avatar_full_manifest.json", avatar_manifest)
+
+                avatar_mov_path = AvatarRenderAgent().render(avatar_manifest, run_dir)
+                if avatar_mov_path is None:
+                    print("[WARN] avatar render failed; final video will have no avatar overlay")
+                    avatar_manifest = None
+            except Exception as exc:
+                print(f"[WARN] avatar pipeline error: {exc}; continuing without avatar")
+                avatar_manifest = None
+        else:
+            print("[INFO] avatar pipeline disabled (enable_avatar=False)")
+
         composition_agent = create_composition_agent(output_dir=run_dir)
         render_spec = composition_agent.create_render_specification(
             video_plan=video_plan,
             audio_timeline=audio_timeline,
             visual_manifest=visual_manifest,
+            avatar_manifest=avatar_manifest,
         )
 
         render_agent = create_render_agent(output_dir=run_dir, engine=config.render_engine)
@@ -193,6 +230,8 @@ class FullPipelineRunner:
         write_json(run_dir / "visual_manifest.json", visual_manifest)
         write_json(run_dir / "render_spec.json", render_spec)
         write_json(run_dir / "final_video.json", final_video)
+        # lipsync_manifest.json and avatar_full_manifest.json already written
+        # inside the avatar pipeline block above.
 
         final_mp4 = run_dir / "final_video.mp4"
         return {
@@ -205,6 +244,9 @@ class FullPipelineRunner:
             "voice_mode": selected_voice,
             "topic_id": safe_topic_id,
             "subtopic_id": config.subtopic_id,
+            "avatar_enabled": config.enable_avatar,
+            "avatar_mov": str(avatar_mov_path) if avatar_mov_path else None,
+            "avatar_mov_exists": avatar_mov_path is not None and avatar_mov_path.exists(),
         }
 
     def _select_voice(self, voice_mode: str) -> str:

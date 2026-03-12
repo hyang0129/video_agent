@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip mining and use fallback seeded facts.",
     )
+    parser.add_argument(
+        "--no-avatar",
+        action="store_true",
+        help="Disable the Live2D avatar overlay pipeline.",
+    )
     return parser.parse_args()
 
 
@@ -61,6 +66,7 @@ def main() -> None:
         force_fallback_facts=bool(args.force_fallback_facts),
         voice_mode=args.voice_mode,
         render_engine=args.render_engine,
+        enable_avatar=not args.no_avatar,
         output_prefix="full_pipeline",
     )
 
@@ -73,6 +79,9 @@ def main() -> None:
     print(f"FACTS_COUNT={result['facts_count']}")
     print(f"SEEDED_FALLBACK={result['seeded_fallback']}")
     print(f"VOICE_MODE={result['voice_mode']}")
+    print(f"AVATAR_ENABLED={result['avatar_enabled']}")
+    print(f"AVATAR_MOV={result['avatar_mov']}")
+    print(f"AVATAR_MOV_EXISTS={result['avatar_mov_exists']}")
 
 
 if __name__ == "__main__":
