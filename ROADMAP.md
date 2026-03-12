@@ -181,18 +181,39 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 **Goal:** Make the MVP fully production-complete with high-quality output
 
-#### 1.0 Consolidate onto MCP-Only Pipeline (Remove Legacy Direct Execution Paths)
+#### 1.0a Complete MCP Tool Coverage (All Pipeline Stages)
 - **Priority:** P1
 - **Status:** Open
 - **Depends on:** 0.7 (MCP server already done)
+- **Problem:** The MCP server currently exposes 10 tools but only covers stages 2-4 and 6-10. Five pipeline stages are only reachable via direct Python imports, meaning the MCP server cannot serve as a complete pipeline router. The E2E test and `main.py` screenplay mode call these stages as direct imports, bypassing MCP entirely.
+- **Missing tools:**
+  | Tool to add | Wraps | Stage |
+  |---|---|---|
+  | `research_topic` | `create_agent().research_category_artifacts()` | 0 (market research) |
+  | `mine_facts` | `FactMiner().mine_top_videos()` | 1 (fact mining) |
+  | `generate_script` | `create_script_agent().generate_script_package()` | 2 (direct topic->script, non-screenplay path) |
+  | `create_video_plan` | `create_video_agent().create_video_plan()` | 3 (video planning) |
+  | `select_music` | `create_music_agent().select_music()` | 5 (music selection) |
+- **Scope:**
+  - Add 5 MCP tools to `video_agent_server.py` (~120 lines, thin wrappers around existing agent factories following the same pattern as the existing 10 tools).
+  - Register tool schemas in `list_tools()`.
+  - Add unit tests for each new tool.
+  - Update E2E test (`test_mcp_server_full_pipeline.py`) to route all stages through MCP tools instead of direct Python calls.
+- **Success Metric:** All 15 MCP tools callable. E2E test exercises every stage via MCP dispatch. `elapsed_seconds` timing available for all stages.
+
+#### 1.0b Remove Legacy Execution Paths
+- **Priority:** P1
+- **Status:** Open
+- **Depends on:** 1.0a (full MCP tool coverage)
 - **Problem:** The codebase has two parallel execution paths — MCP server dispatch and direct agent invocation — with duplicated orchestration logic. The direct paths (`mvp`, `mvp_offline`, individual-stage modes, `run_pipeline.py`) are legacy code predating the MCP server and offer no additional capability. This adds maintenance burden, splits metrics instrumentation, and muddies the architecture story.
 - **Scope:**
-  - Delete `run_pipeline.py` (375 lines), `full_pipeline_runner.py` (238 lines), and `run_star_wars_*.py` — legacy pipelines fully superseded by MCP tools.
+  - Delete `run_pipeline.py` (375 lines), `full_pipeline_runner.py` (238 lines), and `run_star_wars_*.py` — legacy pipelines fully superseded by MCP.
   - Delete `mvp`, `mvp_offline`, and individual-stage modes from `main.py` — these are pre-MCP hardcoded sequencing.
-  - Collapse `main.py` to a thin MCP client CLI that routes commands through the MCP server.
+  - Collapse `main.py` to a thin MCP client CLI that routes all commands through MCP tools.
   - Remove dual-mode branching in `orchestrator.py` (`use_mcp` flag, `_produce_parallel()` / `_produce_serial()` direct paths) — orchestrator always dispatches via MCP.
-  - Update tests: stage integration tests call MCP tools directly; remove direct-agent test fixtures that duplicate MCP test coverage.
+  - Delete `tests/deprecated/` and remove direct-agent test fixtures that duplicate MCP test coverage.
 - **Estimated removal:** ~1,200 lines of legacy pipeline code + ~140 lines of dual-mode branching in orchestrator.
+- **Design doc:** [plan-mcp-consolidation.md](docs/plan-mcp-consolidation.md)
 - **Success Metric:** Single execution path (MCP) for all pipeline modes. `main.py` is a CLI client, not an agent orchestrator. Zero `use_mcp` branching remains.
 
 #### 1.1 Text Overlay Rendering 🔥 CRITICAL
@@ -219,6 +240,26 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Recommended:** Option A first (unblock production), then Option B (quality improvement)
 - **Owner:** TBD
 - **Timeline:** Week 1
+
+#### 1.1b AI Music Generation
+- **Priority:** P1 (content quality)
+- **Status:** Open
+- **Problem:** The pipeline currently uses a single placeholder music track. Background music is not dynamically matched to content mood/tempo, and there is no original music generation — any track used must be royalty-free or licensed.
+- **Investigation:**
+  - Evaluate open-source music generation models: MusicGen (Meta), Stable Audio Open, Riffusion
+  - Key criteria: license (commercial use OK), quality, generation speed, GPU requirements, controllability (mood/tempo/duration prompts)
+  - Determine integration pattern: local GPU inference (like Chatterbox TTS) vs. hosted API
+  - Prototype: generate a 30-60s background track from a mood/genre prompt and mix under voiceover
+- **Candidate models:**
+  | Model | License | Notes |
+  |-------|---------|-------|
+  | MusicGen (Meta) | MIT | Text-to-music, melody conditioning, multiple sizes |
+  | Stable Audio Open | Open | Text-to-music, variable length |
+  | Riffusion | MIT | Spectogram diffusion, real-time capable |
+- **Integration point:** `MusicAgent.select_music()` (currently a stub) would call the chosen model instead of returning a default file
+- **Owner:** TBD
+- **Timeline:** Week 1-2
+- **Effort:** 2-3 days (investigation + prototype)
 
 #### 1.2 Background Music Mixing
 - **Priority:** P1 (quality improvement)
@@ -360,7 +401,23 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Timeline:** Week 3-4
 - **Effort:** 1-2 days
 
-#### 2.4 Enhanced Error Recovery
+#### 2.4 Multi-Source Fact Mining
+- **Priority:** P2 (content quality)
+- **Status:** Open
+- **Problem:** The fact miner (`src/facts/fact_miner.py`) currently sources facts exclusively from YouTube video captions. This limits fact coverage to what exists on YouTube and biases content toward video-friendly topics. Topics with rich written sources (history, science, geography) are underserved.
+- **Implementation:**
+  - Add Wikipedia API source: fetch and extract relevant article sections via `wikipedia` or `mediawiki` API
+  - Add web article source: use search API (e.g., Google Custom Search, Brave Search) to find top articles, then extract content with `trafilatura` or `newspaper3k`
+  - Refactor `FactMiner` to accept pluggable source backends (YouTube, Wikipedia, web articles)
+  - Merge and deduplicate facts across sources in `facts.db` before scoring
+  - Weight sources by reliability (Wikipedia > established publications > YouTube captions)
+- **Dependencies:** `wikipedia-api` or `mediawiki`, `trafilatura` or `newspaper3k`, optional search API key
+- **Benefits:** Broader fact coverage, higher factual accuracy, less YouTube bias, better content for text-heavy topics
+- **Owner:** TBD
+- **Timeline:** Week 3-4
+- **Effort:** 3-5 days
+
+#### 2.5 Enhanced Error Recovery
 - **Priority:** P2 (reliability)
 - **Implementation:**
   - Add exponential backoff to ElevenLabs TTS retries
@@ -557,6 +614,8 @@ winget install ImageMagick.ImageMagick
 - [x] chatterbox submodule integrated as default TTS backend (`vendor/chatterbox/`)
 
 ### Tier 1 Complete When:
+- [ ] All 15 MCP tools implemented and tested (1.0a)
+- [ ] Legacy execution paths removed; single MCP pipeline (1.0b)
 - [x] Videos have on-screen text overlays rendered
 - [x] Final MP4 has audible voiceover track in validation runs
 - [ ] Audio has background music mixed in
