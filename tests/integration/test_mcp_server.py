@@ -37,7 +37,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_estimate_tts_duration_narrator(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("estimate_tts_duration", {
             "text": "Hello world. This is a test sentence for TTS duration estimation.",
@@ -52,7 +52,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_estimate_tts_duration_calm_preset(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("estimate_tts_duration", {
             "text": "calm voice test",
@@ -64,7 +64,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_estimate_tts_duration_unknown_preset_fallback(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("estimate_tts_duration", {
             "text": "test",
@@ -75,7 +75,7 @@ class TestProducerServerLightweightTools:
 
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("does_not_exist", {})
         data = _parse(result)
@@ -87,7 +87,7 @@ class TestProducerServerLightweightTools:
         reason="PEXELS_API_KEY not set",
     )
     async def test_check_asset_availability_live(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("check_asset_availability", {
             "query": "World War II tank battlefield",
@@ -102,8 +102,8 @@ class TestProducerServerLightweightTools:
     @pytest.mark.asyncio
     async def test_check_asset_availability_no_pexels_key(self, monkeypatch):
         """When PEXELS_API_KEY is empty, returns unknown availability."""
-        monkeypatch.setattr("src.config.PEXELS_API_KEY", "")
-        from src.mcp.video_agent_server import call_tool
+        monkeypatch.setattr("video_agent.config.PEXELS_API_KEY", "")
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("check_asset_availability", {"query": "test query"})
         data = _parse(result)
@@ -118,7 +118,7 @@ class TestProducerServerLightweightTools:
 class TestVideoAgentServerListTools:
     @pytest.mark.asyncio
     async def test_list_tools_returns_all_tools(self):
-        from src.mcp.video_agent_server import list_tools
+        from video_agent.mcp.video_agent_server import list_tools
 
         tools = await list_tools()
         names = {t.name for t in tools}
@@ -142,7 +142,7 @@ class TestVideoAgentServerListTools:
 
     @pytest.mark.asyncio
     async def test_all_tools_have_required_inputschema(self):
-        from src.mcp.video_agent_server import list_tools
+        from video_agent.mcp.video_agent_server import list_tools
 
         tools = await list_tools()
         for tool in tools:
@@ -157,7 +157,7 @@ class TestVideoAgentServerListTools:
 class TestScreenwritingServerReviewFeasibility:
     @pytest.mark.asyncio
     async def test_review_valid_screenplay(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         screenplay = {
             "screenplay_id": "sp_test",
@@ -188,7 +188,7 @@ class TestScreenwritingServerReviewFeasibility:
 
     @pytest.mark.asyncio
     async def test_review_empty_screenplay(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("review_feasibility", {"screenplay": {"scenes": []}})
         data = _parse(result)
@@ -197,7 +197,7 @@ class TestScreenwritingServerReviewFeasibility:
 
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self):
-        from src.mcp.video_agent_server import call_tool
+        from video_agent.mcp.video_agent_server import call_tool
 
         result = await call_tool("nonexistent_tool", {})
         data = _parse(result)
@@ -210,47 +210,47 @@ class TestScreenwritingServerReviewFeasibility:
 
 class TestTtsUtils:
     def test_estimate_duration_narrator(self):
-        from src.utils.tts_utils import estimate_duration_s
+        from video_agent.utils.tts_utils import estimate_duration_s
         dur = estimate_duration_s("word " * 150, "narrator")
         assert pytest.approx(dur, abs=0.1) == 60.0  # 150 words at 150 WPM = 60s
 
     def test_estimate_duration_calm_slower(self):
-        from src.utils.tts_utils import estimate_duration_s
+        from video_agent.utils.tts_utils import estimate_duration_s
         calm = estimate_duration_s("test sentence", "calm")
         narrator = estimate_duration_s("test sentence", "narrator")
         assert calm > narrator  # calm is slower (130 WPM vs 150 WPM)
 
     def test_wpm_table_has_all_presets(self):
-        from src.utils.tts_utils import _WPM_BY_PRESET
+        from video_agent.utils.tts_utils import _WPM_BY_PRESET
         assert set(_WPM_BY_PRESET) >= {"calm", "narrator", "energetic", "authoritative"}
 
 
 class TestFfprobeUtils:
     def test_probe_missing_file_returns_empty(self, tmp_path):
-        from src.utils.ffprobe_utils import probe_video_info
+        from video_agent.utils.ffprobe_utils import probe_video_info
         result = probe_video_info(tmp_path / "nonexistent.mp4")
         assert result["has_video"] is False
         assert result["has_audio"] is False
 
     def test_validate_video_missing_file_returns_false(self, tmp_path):
-        from src.utils.ffprobe_utils import validate_video
+        from video_agent.utils.ffprobe_utils import validate_video
         assert validate_video(tmp_path / "nonexistent.mp4") is False
 
 
 class TestScoreCandidateRelevance:
     def test_exact_match(self):
-        from src.tools.image_search_tools import score_candidate_relevance
+        from video_agent.tools.image_search_tools import score_candidate_relevance
         candidate = {"metadata": {"alt": "World War II tank battlefield Germany"}}
         score = score_candidate_relevance(candidate, "World War II tank")
         assert score > 0.5
 
     def test_no_overlap(self):
-        from src.tools.image_search_tools import score_candidate_relevance
+        from video_agent.tools.image_search_tools import score_candidate_relevance
         candidate = {"metadata": {"alt": "sunset beach ocean waves"}}
         score = score_candidate_relevance(candidate, "tank warfare military")
         assert score == 0.0
 
     def test_missing_alt_returns_zero(self):
-        from src.tools.image_search_tools import score_candidate_relevance
+        from video_agent.tools.image_search_tools import score_candidate_relevance
         candidate = {"metadata": {}}
         assert score_candidate_relevance(candidate, "tank") == 0.0

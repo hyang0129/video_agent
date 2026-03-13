@@ -5,7 +5,7 @@ Run with: pytest tests/test_video_planner.py -v
 
 import pytest
 
-from src.video_planner import script_package_to_video_plan
+from video_agent.video_planner import script_package_to_video_plan
 
 
 def _make_script_package(**overrides):

@@ -63,15 +63,19 @@ ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"
 CACHE_EXPIRE_HOURS = int(os.getenv("CACHE_EXPIRE_HOURS", "24"))
 
 # Paths
-PROJECT_ROOT = Path(__file__).parent.parent
-CACHE_DIR = PROJECT_ROOT / ".cache"
-RESULTS_DIR = PROJECT_ROOT / "results"
-ASSETS_DIR = PROJECT_ROOT / "assets"
+import os as _os
 
-# Create directories if they don't exist
-CACHE_DIR.mkdir(exist_ok=True)
-RESULTS_DIR.mkdir(exist_ok=True)
-ASSETS_DIR.mkdir(exist_ok=True)
+CACHE_DIR = Path(_os.environ.get("VIDEO_AGENT_CACHE_DIR", ".cache"))
+RESULTS_DIR = Path(_os.environ.get("VIDEO_AGENT_RESULTS_DIR", "results"))
+ASSETS_DIR = Path(_os.environ.get("VIDEO_AGENT_ASSETS_DIR", "assets"))
+
+
+# Directories are created on first use by agents, not at import time.
+# Call these only when needed, not at module level.
+def _ensure_dirs() -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 # YouTube API limits
 YOUTUBE_QUOTA_COST = {
@@ -121,16 +125,15 @@ CHATTERBOX_SERVER_URL = os.getenv("CHATTERBOX_SERVER_URL", "http://localhost:800
 CHATTERBOX_VOICE = os.getenv("CHATTERBOX_VOICE", "kronimi7030")
 
 # Rhubarb Lip Sync
-_RHUBARB_DEFAULT = "/workspaces/hub/tools/bin/rhubarb"
-RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", _RHUBARB_DEFAULT)
+RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", "")
 RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)
 RHUBARB_OUTPUT_FORMAT = "json"
 RHUBARB_WAV_SAMPLE_RATE = 22050   # Hz — 22050 mono is sufficient and faster to process
 
 # Live2D Renderer
-LIVE2D_RENDER_EXECUTABLE = os.getenv("LIVE2D_RENDER_PATH", "/workspaces/hub/tools/bin/live2d-render")
+LIVE2D_RENDER_EXECUTABLE = os.getenv("LIVE2D_RENDER_PATH", "")
 LIVE2D_MODEL_ID = os.getenv("LIVE2D_MODEL_ID", "majo")
-LIVE2D_MODEL_PATH = os.getenv("LIVE2D_MODEL_PATH", "/workspaces/hub/repos/live2d/assets/models/majo/majo.model3.json")
+LIVE2D_MODEL_PATH = os.getenv("LIVE2D_MODEL_PATH", "")
 
 # Avatar overlay position and render size within the final video canvas.
 # Render at full production resolution so the live2d model fills the frame

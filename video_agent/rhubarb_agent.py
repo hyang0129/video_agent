@@ -7,7 +7,7 @@ Rhubarb only accepts WAV/OGG input, so each MP3 segment is converted to a
 temporary WAV via FFmpeg before processing, then deleted.
 
 Usage:
-    from src.rhubarb_agent import RhubarbAgent
+    from video_agent.rhubarb_agent import RhubarbAgent
     manifest = RhubarbAgent().generate_lipsync_manifest(audio_timeline, run_dir)
 """
 
@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.config import (
+from video_agent.config import (
     RHUBARB_EXECUTABLE,
     RHUBARB_OUTPUT_FORMAT,
     RHUBARB_RECOGNIZER,
@@ -68,8 +68,11 @@ class RhubarbAgent:
             cues = self._process_segment(audio_path, cue_path, scene_id)
 
             if cues is None:
-                notes.append(f"[ERROR] {scene_id}: rhubarb processing failed")
-                continue
+                # Rhubarb unavailable or failed — include scene with silent default
+                # cues so package_avatar can still convert the MP3 to WAV.
+                notes.append(f"rhubarb_unavailable: {scene_id}: using default silent cues")
+                cues = [{"start": 0.0, "end": 0.1, "value": "X"}]
+                print(f"[WARN] lipsync {scene_id}: rhubarb failed, using silent default")
 
             scene_results.append({
                 "scene_id": scene_id,

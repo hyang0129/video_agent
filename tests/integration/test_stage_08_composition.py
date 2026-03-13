@@ -32,12 +32,12 @@ from pathlib import Path
 
 import pytest
 
-from src.artifacts.io import write_json
-from src.audio_agent import create_audio_agent
-from src.composition_agent import create_composition_agent
-from src.music_agent import create_music_agent
-from src.video_planner import script_package_to_video_plan
-from src.visual_agent import create_visual_agent
+from video_agent.artifacts.io import write_json
+from video_agent.audio_agent import create_audio_agent
+from video_agent.composition_agent import create_composition_agent
+from video_agent.music_agent import create_music_agent
+from video_agent.video_planner import script_package_to_video_plan
+from video_agent.visual_agent import create_visual_agent
 from .helpers import load_fixture, copy_to_review
 
 

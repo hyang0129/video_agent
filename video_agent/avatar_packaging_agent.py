@@ -6,7 +6,7 @@ emits one AvatarSceneManifest.json per voiceover scene into avatar_takes/.
 Each manifest is the direct input for the live2d-render CLI.
 
 Usage:
-    from src.avatar_packaging_agent import AvatarPackagingAgent
+    from video_agent.avatar_packaging_agent import AvatarPackagingAgent
     agent = AvatarPackagingAgent(model_id="shiori")
     manifests = agent.package(lipsync_manifest, audio_timeline, run_dir)
 """
@@ -16,7 +16,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from src.config import (
+from video_agent.config import (
     AUDIO_SAMPLE_RATE,
     LIVE2D_MODEL_ID,
     LIVE2D_MODEL_PATH,

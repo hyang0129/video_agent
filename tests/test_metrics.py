@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.metrics import update_metrics_summary
+from video_agent.metrics import update_metrics_summary
 
 
 @pytest.fixture

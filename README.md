@@ -49,7 +49,7 @@ AudioAgent and VisualAgent both consume `VideoPlan.json` independently — the n
 
 ## Quickstart
 
-**Prerequisites:** Python 3.10+, FFmpeg on PATH ([Windows install](https://www.gyan.dev/ffmpeg/builds/))
+**Prerequisites:** Python 3.10+, FFmpeg on PATH
 
 ### 1. Install
 
@@ -57,16 +57,15 @@ AudioAgent and VisualAgent both consume `VideoPlan.json` independently — the n
 git clone <repo-url>
 cd video_agent
 python -m venv venv
-source venv/Scripts/activate   # Windows Git Bash
-# .\venv\Scripts\Activate.ps1  # PowerShell
-pip install -r requirements.txt
+source venv/bin/activate
+pip install -e .
 ```
 
-### 2. Configure API keys
+### 2. Configure API keys and tool paths
 
 ```bash
 cp .env.example .env
-# Edit .env and fill in your keys (see API Keys section below)
+# Fill in API keys and tool paths (see sections below)
 ```
 
 ### 3. Preflight check
@@ -78,16 +77,14 @@ python main.py preflight
 ### 4. Run the full pipeline
 
 ```bash
-python run_pipeline.py "cheese facts" --engine ffmpeg
+# Full MCP pipeline test (exercises all 18 tools)
+python scripts/run_full_mcp_pipeline.py
+
+# Or run with a specific topic brief
+python main.py pipeline tests/fixtures/topic_brief_cheese_facts.json --engine ffmpeg
 ```
 
-Output lands in `results/sample_<date>_cheese_facts_<id>/final_video.mp4`.
-
-**No API keys yet?** Run with the dry-run engine to validate pipeline wiring without rendering:
-
-```bash
-python run_pipeline.py "cheese facts" --engine dry_run
-```
+Output lands in `results/test/full_mcp_pipeline/final_video.mp4`.
 
 ---
 
@@ -121,50 +118,54 @@ Target format: faceless, caption-first, Chatterbox TTS voiceover (local GPU, no 
 
 ## API Keys
 
-| Key | Required For | Where to Get |
-|-----|-------------|--------------|
-| `YOUTUBE_API_KEY` | Stage 0 (market research) | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) — enable YouTube Data API v3 |
-| `ANTHROPIC_API_KEY` | Stages 2-3 (script, video plan) | [Anthropic Console](https://console.anthropic.com/settings/keys) |
-| `GOOGLE_API_KEY` | Alternative to Anthropic | [AI Studio](https://aistudio.google.com/app/apikey) — free tier |
-| `ELEVENLABS_API_KEY` | Stage 4 (TTS voiceover, ElevenLabs backend only) | [ElevenLabs](https://elevenlabs.io/app/settings/api-keys) — free tier: 10k chars/month. Not required when using Chatterbox TTS (default). |
-| `PEXELS_API_KEY` | Stage 6 (image search) | [Pexels](https://www.pexels.com/api/) — falls back to placeholder BMPs if absent |
+| Variable | Required For | Where to Get |
+|----------|-------------|--------------|
+| `YOUTUBE_API_KEY` | Market research | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) — enable YouTube Data API v3 |
+| `ANTHROPIC_API_KEY` | Script + screenplay (default LLM) | [Anthropic Console](https://console.anthropic.com/settings/keys) |
+| `GOOGLE_API_KEY` | Alternative LLM | [AI Studio](https://aistudio.google.com/app/apikey) — free tier |
+| `ELEVENLABS_API_KEY` | TTS (ElevenLabs backend only) | [ElevenLabs](https://elevenlabs.io/app/settings/api-keys) — not needed with Chatterbox |
+| `PEXELS_API_KEY` | Image retrieval | [Pexels](https://www.pexels.com/api/) — falls back to placeholder BMPs if absent |
 
-Set `LLM_PROVIDER=claude` (default) or `LLM_PROVIDER=google` in `.env` to choose the LLM backend.
+Set `LLM_PROVIDER=claude` (default) or `LLM_PROVIDER=google` in `.env` to select the LLM backend.
 
 ---
 
-## Stage-by-Stage CLI
+## Tool Paths
 
-Each stage is independently invokable via `main.py`:
+These paths are **environment-specific** and must be set in `.env`. No defaults are baked into source code — an unset path fails loudly rather than silently using a wrong location.
+
+| Variable | Used By | Notes |
+|----------|---------|-------|
+| `CHATTERBOX_APP_DIR` | `chatterbox_server_manager` | Root of the chatterbox repo (contains `app/main.py`). TTS degrades to silence if absent. |
+| `CHATTERBOX_UVICORN` | `chatterbox_server_manager` | Path to `uvicorn` in the chatterbox venv. Only needed for auto-start. |
+| `RHUBARB_PATH` | `rhubarb_agent` | Rhubarb Lip Sync binary. Lip-sync degrades to silent neutral pose if absent. |
+| `LIVE2D_RENDER_PATH` | `avatar_render_agent` | `live2d-render` binary (built from `repos/live2d`). Avatar render fails if absent. |
+| `LIVE2D_REPO_ROOT` | `avatar_render_agent` | Root of the live2d repo — the binary's working directory for asset resolution. |
+| `LIVE2D_MODEL_PATH` | `avatar_packaging_agent` | Full path to the `.model3.json` model file. |
+
+**Run `python scripts/run_full_mcp_pipeline.py`** to get an immediate availability report for all three external tools before the pipeline runs.
+
+See **[docs/setup-external-tools.md](docs/setup-external-tools.md)** for build/install instructions for each tool.
+
+---
+
+## CLI
 
 ```bash
-# Market research only
-python main.py example1
+# Preflight: check API keys and tool paths
+python main.py preflight
 
-# Script from an existing TopicBrief
-python main.py script results/<mr_run>/topicbrief_*.json
+# Screenplay mode: interactive concept selection, then full production
+python main.py screenplay tests/fixtures/topic_brief_cheese_facts.json
 
-# Video plan from a ScriptPackage
-python main.py videoplan results/<sg_run>/script_package.json
+# Pipeline mode: non-interactive, topic brief → final_video.mp4
+python main.py pipeline tests/fixtures/topic_brief_cheese_facts.json --engine ffmpeg
 
-# Audio (TTS voiceover) from a VideoPlan
-python main.py audio results/<vp_run>/video_plan.json
-
-# Image retrieval from a ScriptPackage (beat-aligned candidates)
-python main.py scriptimages results/<sg_run>/script_package.json
-
-# Visual manifest from a VideoPlan
-python main.py visualmanifest results/<vp_run>/video_plan.json
-
-# Render spec from plan + audio + visuals
-python main.py renderspec <video_plan.json> <audio_timeline.json> <visual_manifest.json>
-
-# Render to MP4
-python main.py render results/<run>/render_spec.json ffmpeg
-
-# Full MVP from TopicBrief (stages 2-8)
-python main.py mvp results/<mr_run>/topicbrief_*.json ffmpeg
+# Full MCP pipeline test (all 18 tools, with pre-flight availability report)
+python scripts/run_full_mcp_pipeline.py
 ```
+
+Individual pipeline stages can also be called via the MCP tools directly using `_call_tool_inprocess` — see `scripts/run_full_mcp_pipeline.py` for examples.
 
 ---
 
@@ -188,33 +189,39 @@ Canonical test fixture: `tests/fixtures/script_package_ww2_tanks.json`
 
 ```
 video_agent/
-    src/
+    video_agent/           # Installable package (pip install -e .)
         agent.py                 # Market research agent
         script_agent.py          # Script generation agent
         video_planner.py         # Video planning logic
-        video_agent.py           # Video planning agent wrapper
         audio_agent.py           # TTS audio generation agent
-        music_agent.py           # Background music selection
-        visual_agent.py          # Image retrieval agent
-        script_image_agent.py    # Beat-aligned image retrieval
         composition_agent.py     # Render spec compositor
         render_agent.py          # FFmpeg render engine
-        config.py                # All configuration and thresholds
-        creative_spec.py         # Channel-level creative defaults
-        tools/                   # YouTube API, TTS, image search tool implementations
+        rhubarb_agent.py         # Lip-sync cue generation (Rhubarb)
+        avatar_cue_agent.py      # Emotion/reaction cue generation
+        avatar_packaging_agent.py # AvatarSceneManifest builder
+        avatar_render_agent.py   # live2d-render subprocess wrapper
+        orchestrator.py          # ProductionOrchestrator (parallel audio+image)
+        config.py                # All configuration (paths from .env)
+        mcp/
+            video_agent_server.py  # MCP server — 18 tools over HTTPS
+        tools/                   # YouTube API, TTS, image search, chatterbox
         facts/                   # Fact miner (YouTube caption extraction)
         artifacts/               # JSON artifact I/O utilities
+        screenwriting/           # Concept, screenplay, feasibility agents
     tests/
         fixtures/                # Cached JSON artifacts for offline testing
         integration/             # Per-stage integration tests
+    scripts/
+        run_full_mcp_pipeline.py # Full 18-tool pipeline test with pre-flight check
+        benchmark_parallel.py    # Serial vs parallel execution benchmark
     docs/                        # Architecture and design docs
     results/                     # Per-run output artifacts (gitignored)
     assets/                      # Static assets (default music track, etc.)
-    main.py                      # Stage-by-stage CLI entry point
-    run_pipeline.py              # Full pipeline runner (topic string -> MP4)
+    main.py                      # Shim → video_agent/main.py
+    video_agent/main.py          # CLI entry point (preflight, screenplay, pipeline)
+    pyproject.toml               # Package build config (hatchling)
     requirements.txt
-    .env.example
-    creative_spec.example.json   # Channel defaults template
+    .env                         # API keys + tool paths (not committed)
     ROADMAP.md                   # Canonical task and priority tracking
 ```
 
@@ -236,16 +243,19 @@ video_agent/
 
 ---
 
-## Live2D Avatar Integration *(experimental — not required for core pipeline)*
+## Live2D Avatar Integration *(optional — requires local GPU build)*
 
-The pipeline has an optional avatar rendering stage under active development.
-When mature, video_agent will act as the director: running [Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync)
-on each audio segment, generating emotion/reaction cues from the script via LLM,
-and writing an `AvatarSceneManifest.json` per scene. The live2d renderer would then
-be invoked as a subprocess and its transparent-background output composited over
-scene imagery by FFmpeg.
+The pipeline has a working avatar rendering stage wired into the full MCP pipeline. It adds three MCP tools after audio generation:
 
-**Status:** Interface specified, components stubbed (`src/rhubarb_agent.py`, `src/avatar_packaging_agent.py`). Not wired into the main pipeline. Faceless voiceover output works without this.
+| Tool | What it does |
+|------|-------------|
+| `generate_lipsync` | Runs [Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync) on each voiceover MP3. Degrades gracefully to silent-pose cues if Rhubarb is not installed. |
+| `package_avatar` | Converts lipsync cues + emotion cues into a single continuous `AvatarSceneManifest.json` with concatenated audio. |
+| `render_avatar` | Invokes `live2d-render` (built from `repos/live2d`) to produce `avatar_takes/avatar_full.mov` with transparent background. |
+
+`render_video` accepts an optional `avatar_manifest` parameter — when provided, the `.mov` is composited over scene imagery by FFmpeg (head+shoulders crop, bottom overlay).
+
+**Requirements:** Set `LIVE2D_RENDER_PATH`, `LIVE2D_REPO_ROOT`, and `LIVE2D_MODEL_PATH` in `.env`. The `live2d-render` binary requires OpenGL/EGL (Mesa or GPU). Faceless voiceover output works without this.
 
 The full interface spec is in [docs/live2d-avatar-api-contract.md](docs/live2d-avatar-api-contract.md).
 

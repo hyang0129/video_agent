@@ -7,12 +7,12 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-from src.music_agent import MusicAgent, MusicAgentError, create_music_agent, _probe_duration_seconds
+from video_agent.music_agent import MusicAgent, MusicAgentError, create_music_agent, _probe_duration_seconds
 
 
 class TestSelectMusicBasic:
-    @patch("src.music_agent.shutil.which", return_value="/usr/bin/ffprobe")
-    @patch("src.music_agent.subprocess.run")
+    @patch("video_agent.music_agent.shutil.which", return_value="/usr/bin/ffprobe")
+    @patch("video_agent.music_agent.subprocess.run")
     def test_select_music_basic(self, mock_run, mock_which, tmp_path):
         mock_run.return_value = MagicMock(returncode=0, stdout="45.0\n")
         music_file = tmp_path / "test.mp3"
@@ -35,8 +35,8 @@ class TestSelectMusicMissingFile:
 
 
 class TestSelectByTone:
-    @patch("src.music_agent.shutil.which", return_value="/usr/bin/ffprobe")
-    @patch("src.music_agent.subprocess.run")
+    @patch("video_agent.music_agent.shutil.which", return_value="/usr/bin/ffprobe")
+    @patch("video_agent.music_agent.subprocess.run")
     def test_select_by_tone_delegates(self, mock_run, mock_which, tmp_path):
         mock_run.return_value = MagicMock(returncode=0, stdout="60.0\n")
         music_file = tmp_path / "test.mp3"
@@ -56,7 +56,7 @@ class TestCreateMusicAgentFactory:
 
 
 class TestProbeDuration:
-    @patch("src.music_agent.shutil.which", return_value=None)
+    @patch("video_agent.music_agent.shutil.which", return_value=None)
     def test_probe_duration_no_ffprobe(self, mock_which, tmp_path):
         music_file = tmp_path / "test.mp3"
         music_file.write_bytes(b"\x00" * 100)

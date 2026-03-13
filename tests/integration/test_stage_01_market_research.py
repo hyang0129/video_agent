@@ -28,8 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from src.agent import create_agent
-from src.artifacts.io import write_json
+from video_agent.agent import create_agent
+from video_agent.artifacts.io import write_json
 from .helpers import copy_to_review
 
 CATEGORY = "world war 2 tanks"

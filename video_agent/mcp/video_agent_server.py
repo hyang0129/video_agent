@@ -1,4 +1,4 @@
-"""MCP Video Agent Server — all 15 tools over HTTPS Streamable HTTP transport.
+"""MCP Video Agent Server — all 18 tools over HTTPS Streamable HTTP transport.
 
 Tools exposed:
   Screenwriting (4):
@@ -19,8 +19,13 @@ Tools exposed:
     6. estimate_tts_duration    -- heuristic, no API call
     7. generate_audio           -- wraps AudioGenerationAgent
     8. fetch_assets             -- wraps ScriptImageRetrievalAgent
-    9. render_video             -- wraps CompositorAgent + RenderAgent
+    9. render_video             -- wraps CompositorAgent + RenderAgent (avatar_manifest optional)
    10. validate_output          -- ffprobe validation + evaluation.json
+
+  Avatar / Live2D (3):
+   16. generate_lipsync         -- Rhubarb lip-sync from AudioTimeline MP3 segments
+   17. package_avatar           -- build AvatarSceneManifest (full-timeline, one manifest)
+   18. render_avatar            -- invoke live2d-render binary, produce avatar_full.mov
 
 Run as:
     MCP_SERVER_TOKEN=<token> python -m src.mcp.video_agent_server --port 8443
@@ -43,6 +48,10 @@ from mcp.types import TextContent, Tool
 from ..artifacts.io import write_json
 from ..artifacts.screenplay import screenplay_to_script_package
 from ..audio_agent import create_audio_agent
+from ..avatar_cue_agent import AvatarCueAgent
+from ..avatar_packaging_agent import AvatarPackagingAgent
+from ..avatar_render_agent import AvatarRenderAgent
+from ..rhubarb_agent import RhubarbAgent
 from ..composition_agent import create_composition_agent
 from ..render_agent import create_render_agent
 from ..screenwriting.concept_agent import ConceptAgent
@@ -356,7 +365,7 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="render_video",
-            description="Compositor + FFmpeg render from completed visual manifest and audio timeline.",
+            description="Compositor + FFmpeg render from completed visual manifest and audio timeline. Pass avatar_manifest to composite a Live2D avatar overlay.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -365,6 +374,7 @@ async def list_tools() -> List[Tool]:
                     "video_plan": {"type": "object", "description": "VideoPlan dict (required by CompositionAgent)"},
                     "run_dir": {"type": "string"},
                     "engine": {"type": "string", "default": "ffmpeg"},
+                    "avatar_manifest": {"type": "object", "description": "Optional AvatarSceneManifest dict. When provided, the Live2D avatar video is composited into the final render."},
                 },
                 "required": ["visual_manifest", "audio_timeline", "video_plan", "run_dir"],
             },
@@ -380,6 +390,45 @@ async def list_tools() -> List[Tool]:
                     "run_dir": {"type": "string"},
                 },
                 "required": ["mp4_path", "run_dir"],
+            },
+        ),
+        # -- Avatar / Live2D tools (3) --
+        Tool(
+            name="generate_lipsync",
+            description="Run Rhubarb lip-sync on voiceover MP3 segments from an AudioTimeline. Produces lipsync_manifest.json. Degrades gracefully if Rhubarb is unavailable.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "audio_timeline": {"type": "object", "description": "AudioTimeline dict"},
+                    "run_dir": {"type": "string", "description": "Pipeline run directory containing MP3 segments"},
+                },
+                "required": ["audio_timeline", "run_dir"],
+            },
+        ),
+        Tool(
+            name="package_avatar",
+            description="Build a single continuous AvatarSceneManifest from lipsync_manifest and audio_timeline. Writes avatar_full_manifest.json and WAV segments to avatar_takes/.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "lipsync_manifest": {"type": "object", "description": "LipSyncManifest dict from generate_lipsync"},
+                    "audio_timeline": {"type": "object", "description": "AudioTimeline dict"},
+                    "run_dir": {"type": "string", "description": "Pipeline run directory"},
+                    "model_id": {"type": "string", "description": "Live2D model ID (default: from config)"},
+                },
+                "required": ["lipsync_manifest", "audio_timeline", "run_dir"],
+            },
+        ),
+        Tool(
+            name="render_avatar",
+            description="Invoke live2d-render to produce avatar_full.mov from the AvatarSceneManifest. Returns path to the rendered .mov file.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "avatar_manifest": {"type": "object", "description": "AvatarSceneManifest dict from package_avatar"},
+                    "run_dir": {"type": "string", "description": "Pipeline run directory"},
+                },
+                "required": ["avatar_manifest", "run_dir"],
             },
         ),
     ]
@@ -565,6 +614,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 results = search_pexels_images(query, per_page=n, orientation="portrait")
             except ImageSearchError as exc:
                 return _json({
+                    "status": "error",
                     "query": query,
                     "error": str(exc),
                     "availability": "unknown",
@@ -573,6 +623,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
 
             if not results:
                 return _json({
+                    "status": "ok",
                     "query": query,
                     "result_count": 0,
                     "top_relevance_score": 0.0,
@@ -588,6 +639,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
 
             ranked = sorted(zip(results, scores), key=lambda x: -x[1])
             return _json({
+                "status": "ok",
                 "query": query,
                 "result_count": len(results),
                 "top_relevance_score": round(top_score, 3),
@@ -608,6 +660,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             wpm = _WPM_BY_PRESET.get(preset, 150)
             duration = estimate_duration_s(text, voice_preset=preset)
             return _json({
+                "status": "ok",
                 "text_length_chars": len(text),
                 "word_count": len(text.split()),
                 "estimated_duration_s": round(duration, 2),
@@ -661,10 +714,14 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 if t.get("type") == "voiceover"
             ]
 
+            degraded_count = sum(1 for s in segments if s.get("status") == "degraded")
+            all_degraded = len(segments) > 0 and degraded_count == len(segments)
+            audio_status = "degraded" if all_degraded else ("ok" if degraded_count == 0 else "partial")
             return _json({
-                "status": "ok",
+                "status": audio_status,
                 "audio_timeline": audio_timeline,
                 "segments": segments,
+                "degraded_count": degraded_count,
                 "production_issues": [i for i in production_issues if i.get("agent") == "AudioAgent"],
             })
 
@@ -787,6 +844,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             audio_timeline: Dict[str, Any] = arguments["audio_timeline"]
             video_plan_arg: Dict[str, Any] = arguments["video_plan"]
             run_dir = Path(str(arguments["run_dir"]))
+            avatar_manifest_arg: Optional[Dict[str, Any]] = arguments.get("avatar_manifest")
 
             run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -795,6 +853,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 video_plan=video_plan_arg,
                 visual_manifest=visual_manifest,
                 audio_timeline=audio_timeline,
+                avatar_manifest=avatar_manifest_arg,
             )
             write_json(run_dir / "render_spec.json", render_spec)
 
@@ -884,7 +943,9 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             evaluation_path = run_dir / "evaluation.json"
             write_json(evaluation_path, evaluation)
 
+            validate_status = "ok" if len(failures) == 0 else ("warn" if parity_ok else "fail")
             return _json({
+                "status": validate_status,
                 "mp4_exists": mp4_path.exists(),
                 "has_audio_stream": info["has_audio"],
                 "video_duration_s": round(video_duration_s, 3),
@@ -896,6 +957,82 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 "failures": failures,
                 "render_health": render_health,
             })
+
+        # ------------------------------------------------------------------
+        # 16. generate_lipsync
+        # ------------------------------------------------------------------
+        elif name == "generate_lipsync":
+            audio_timeline_arg: Dict[str, Any] = arguments["audio_timeline"]
+            run_dir = Path(str(arguments["run_dir"]))
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            agent = RhubarbAgent()
+            lipsync_manifest = agent.generate_lipsync_manifest(audio_timeline_arg, run_dir)
+            scenes_ok = len(lipsync_manifest.get("scenes", []))
+            notes = " ".join(lipsync_manifest.get("processing_notes", []))
+            degraded = "rhubarb_unavailable" in notes
+            lipsync_status = "degraded" if degraded else "ok"
+
+            return _json({
+                "status": lipsync_status,
+                "lipsync_manifest": lipsync_manifest,
+                "scenes_processed": scenes_ok,
+                "degraded": degraded,
+                "rhubarb_version": lipsync_manifest.get("rhubarb_version", "unknown"),
+            })
+
+        # ------------------------------------------------------------------
+        # 17. package_avatar
+        # ------------------------------------------------------------------
+        elif name == "package_avatar":
+            lipsync_manifest_arg: Dict[str, Any] = arguments["lipsync_manifest"]
+            audio_timeline_arg: Dict[str, Any] = arguments["audio_timeline"]
+            run_dir = Path(str(arguments["run_dir"]))
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            cue_agent = AvatarCueAgent()
+            cues_by_scene = cue_agent.generate_cues(audio_timeline_arg)
+
+            pkg_agent = AvatarPackagingAgent()
+            avatar_manifest = pkg_agent.package_full(
+                lipsync_manifest=lipsync_manifest_arg,
+                audio_timeline=audio_timeline_arg,
+                run_dir=run_dir,
+                cues_by_scene=cues_by_scene,
+            )
+            scenes_packaged = len(lipsync_manifest_arg.get("scenes", []))
+
+            return _json({
+                "status": "ok",
+                "avatar_manifest": avatar_manifest,
+                "scenes_packaged": scenes_packaged,
+                "manifest_path": str(run_dir / "avatar_takes" / "avatar_full_manifest.json"),
+            })
+
+        # ------------------------------------------------------------------
+        # 18. render_avatar
+        # ------------------------------------------------------------------
+        elif name == "render_avatar":
+            avatar_manifest_arg: Dict[str, Any] = arguments["avatar_manifest"]
+            run_dir = Path(str(arguments["run_dir"]))
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            render_agent_av = AvatarRenderAgent()
+            mov_path = render_agent_av.render(avatar_manifest_arg, run_dir)
+
+            if mov_path and mov_path.exists():
+                size_bytes = mov_path.stat().st_size
+                return _json({
+                    "status": "ok",
+                    "mov_path": str(mov_path),
+                    "size_bytes": size_bytes,
+                })
+            else:
+                return _json({
+                    "status": "error",
+                    "error": "live2d-render produced no output; check LIVE2D_RENDER_PATH and LIVE2D_REPO_ROOT env vars",
+                    "mov_path": None,
+                })
 
         else:
             return _json({"error": f"Unknown tool: {name}"})

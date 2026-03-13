@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from src.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
+from video_agent.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def test_generate_script_image_manifest_returns_beat_candidates(
             },
         ]
 
-    monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", _fake_search)
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(
@@ -98,8 +98,8 @@ def test_insufficient_candidates_status_when_provider_returns_empty(
     sample_script_package: Dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("src.script_image_agent.search_pexels_images", lambda query, per_page, orientation: [])
-    monkeypatch.setattr("src.script_image_agent.search_wikimedia_images", lambda query, per_page, orientation: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda query, per_page, orientation: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda query, per_page, orientation: [])
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(
@@ -136,7 +136,7 @@ def test_world_war_tanks_fixture_queries_are_tank_focused(
             }
         ]
 
-    monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", _fake_search)
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(
@@ -191,8 +191,8 @@ def test_candidates_reranked_by_alt_relevance(
             },
         ]
 
-    monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
-    monkeypatch.setattr("src.script_image_agent.search_wikimedia_images", lambda query, per_page, orientation: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", _fake_search)
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda query, per_page, orientation: [])
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(
@@ -231,7 +231,7 @@ def test_multi_source_fallback_uses_next_provider_when_first_is_unavailable(
             }
         ]
 
-    monkeypatch.setattr("src.script_image_agent.search_pexels_images", _fake_search)
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", _fake_search)
 
     agent = ScriptImageRetrievalAgent(
         config=ScriptImageConfig(

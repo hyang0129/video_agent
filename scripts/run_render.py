@@ -16,8 +16,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from src.artifacts.io import write_json
-from src.render_agent import RenderError, create_render_agent
+from video_agent.artifacts.io import write_json
+from video_agent.render_agent import RenderError, create_render_agent
 
 
 def parse_args() -> argparse.Namespace:

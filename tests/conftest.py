@@ -2,7 +2,7 @@ collect_ignore_glob = ["deprecated/*"]
 
 import pytest
 
-from src.tools.chatterbox_server_manager import (
+from video_agent.tools.chatterbox_server_manager import (
     start_chatterbox_server,
     stop_chatterbox_server,
 )

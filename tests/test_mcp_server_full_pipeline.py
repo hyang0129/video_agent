@@ -4,7 +4,7 @@ Starts the video-agent MCP HTTPS server in a subprocess, then runs the full
 screenwriting pipeline using real HTTP/TLS MCP tool calls via the orchestrator.
 
 Conditions:
-  - use_mcp=True, serial=True
+  - serial=True
   - MCP transport: HTTPS (streamable-http) via subprocess server on port 8443
   - TTS backend: chatterbox_server (requires chatterbox at CHATTERBOX_SERVER_URL)
   - No artifact reuse -- fresh tmp_path each run
@@ -36,12 +36,12 @@ from pathlib import Path
 import pytest
 import requests
 
-from src.artifacts.io import write_json
-from src.artifacts.screenplay import screenplay_to_script_package
-from src.composition_agent import create_composition_agent
-from src.orchestrator import ProductionOrchestrator, _call_tool_inprocess
-from src.render_agent import create_render_agent
-from src.screenwriting.screenplay_agent import ScreenplayAgent
+from video_agent.artifacts.io import write_json
+from video_agent.artifacts.screenplay import screenplay_to_script_package
+from video_agent.composition_agent import create_composition_agent
+from video_agent.orchestrator import ProductionOrchestrator, _call_tool_inprocess
+from video_agent.render_agent import create_render_agent
+from video_agent.screenwriting.screenplay_agent import ScreenplayAgent
 
 def _mcp_call(tool_name: str, arguments: dict) -> dict:
     """Call an MCP tool in-process (exercises same handler code as the HTTPS server)."""
@@ -88,7 +88,7 @@ def mcp_server_proc():
 
     env = {**os.environ, "MCP_SERVER_TOKEN": _MCP_TOKEN}
     cmd = [
-        sys.executable, "-m", "src.mcp.video_agent_server",
+        sys.executable, "-m", "video_agent.mcp.video_agent_server",
         "--port", str(_MCP_PORT),
         "--cert", "certs/server.crt",
         "--key", "certs/server.key",
@@ -200,9 +200,8 @@ def test_mcp_server_full_pipeline(tmp_path: Path, mcp_server_proc) -> None:
         script_package=script_package,
         video_plan=video_plan,
         run_dir=run_dir,
-        screenplay_agent=screenplay_agent,
+        screenplay_agent=ScreenplayAgent(),
         voice="narrator",
-        use_mcp=True,
         serial=True,
     )
     write_json(run_dir / "audio_timeline.json", audio_timeline)

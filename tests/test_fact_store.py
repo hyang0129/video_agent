@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.facts.fact_store import FactStore
+from video_agent.facts.fact_store import FactStore
 
 
 @pytest.fixture

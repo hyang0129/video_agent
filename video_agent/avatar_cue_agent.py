@@ -9,7 +9,7 @@ Stage 2 (future): LLM-driven cue generation derived from vo_line /
 on_screen_text, adding emotion shifts and reaction beats within each scene.
 
 Usage:
-    from src.avatar_cue_agent import AvatarCueAgent
+    from video_agent.avatar_cue_agent import AvatarCueAgent
     cues_by_scene = AvatarCueAgent().generate_cues(audio_timeline)
 """
 

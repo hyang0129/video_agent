@@ -3,7 +3,7 @@
 Run with: pytest tests/test_text_sanitizer.py -v
 """
 
-from src.utils.text_sanitizer import sanitize_text, has_unsafe_characters
+from video_agent.utils.text_sanitizer import sanitize_text, has_unsafe_characters
 
 
 class TestSanitizeText:

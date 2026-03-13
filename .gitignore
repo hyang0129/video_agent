@@ -12,6 +12,12 @@ certs/
 # Transient devcontainer file (git identity relay)
 .devcontainer/.gituser.tmp
 
+# Packaging
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+
 # Python
 __pycache__/
 *.py[cod]

@@ -8,7 +8,7 @@ Outputs written to run_dir:
 - production_report.json  - combined structured failures from all agents
 - scene_results.json      - per-scene production status after final round
 
-MCP mode (use_mcp=True):
+MCP mode:
     Calls produce tools from video_agent_server in-process (no subprocess).
     This avoids network overhead and is sufficient for local debugging.
     For HTTPS transport, use _mcp_session() + VIDEO_AGENT_SERVER_URL instead.
@@ -25,7 +25,6 @@ import asyncio
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -36,9 +35,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from .artifacts.io import write_json
 from .artifacts.screenplay import screenplay_to_script_package
-from .audio_agent import AudioGenerationAgent, create_audio_agent
 from .config import TTS_BACKEND
-from .script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
 from .video_planner import script_package_to_video_plan
 
 MAX_REVISION_ROUNDS = 2
@@ -89,7 +86,7 @@ async def _call_tool_inprocess(tool_name: str, arguments: dict) -> dict:
     return parsed
 
 
-async def _produce_parallel_mcp(
+async def _produce_parallel(
     screenplay: Dict[str, Any],
     script_package: Dict[str, Any],
     run_dir: Path,
@@ -139,7 +136,7 @@ async def _produce_parallel_mcp(
     return audio_timeline, image_manifest, tool_timings
 
 
-async def _produce_serial_mcp(
+async def _produce_serial(
     screenplay: Dict[str, Any],
     script_package: Dict[str, Any],
     run_dir: Path,
@@ -194,78 +191,6 @@ async def _produce_serial_mcp(
     return audio_timeline, image_manifest, tool_timings
 
 
-async def _produce_parallel(
-    audio_agent: AudioGenerationAgent,
-    image_agent: ScriptImageRetrievalAgent,
-    video_plan: Dict[str, Any],
-    script_package: Dict[str, Any],
-    run_id: str,
-    audio_scene_ids: Optional[List[str]] = None,
-    image_scene_ids: Optional[List[str]] = None,
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    """Run audio and image fetch concurrently using a thread pool."""
-    logger.info(
-        "[orch] direct parallel: audio scenes={} | image scenes={}",
-        audio_scene_ids or "all",
-        image_scene_ids or "all",
-    )
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        audio_fut = loop.run_in_executor(
-            pool,
-            lambda: audio_agent.generate_audio_timeline(video_plan, scene_ids=audio_scene_ids),
-        )
-        image_fut = loop.run_in_executor(
-            pool,
-            lambda: image_agent.generate_script_image_manifest(
-                script_package, scene_ids=image_scene_ids, run_id=run_id
-            ),
-        )
-        audio_result, image_result = await asyncio.gather(audio_fut, image_fut)
-    logger.debug(
-        "[orch] direct parallel done: audio_tracks={} image_segments={}",
-        len(audio_result.get("tracks") or []),
-        len(image_result.get("segments") or []),
-    )
-    return audio_result, image_result
-
-
-async def _produce_serial(
-    audio_agent: AudioGenerationAgent,
-    image_agent: ScriptImageRetrievalAgent,
-    video_plan: Dict[str, Any],
-    script_package: Dict[str, Any],
-    run_id: str,
-    audio_scene_ids: Optional[List[str]] = None,
-    image_scene_ids: Optional[List[str]] = None,
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    """Run audio then image fetch sequentially (serial mode for deterministic test runs)."""
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        logger.info(
-            "[orch] direct serial: step 1/2 audio scenes={}",
-            audio_scene_ids or "all",
-        )
-        audio_result = await loop.run_in_executor(
-            pool,
-            lambda: audio_agent.generate_audio_timeline(video_plan, scene_ids=audio_scene_ids),
-        )
-        logger.debug("[orch] direct serial: audio done tracks={}", len(audio_result.get("tracks") or []))
-
-        logger.info(
-            "[orch] direct serial: step 2/2 image scenes={}",
-            image_scene_ids or "all",
-        )
-        image_result = await loop.run_in_executor(
-            pool,
-            lambda: image_agent.generate_script_image_manifest(
-                script_package, scene_ids=image_scene_ids, run_id=run_id
-            ),
-        )
-        logger.debug("[orch] direct serial: image done segments={}", len(image_result.get("segments") or []))
-    return audio_result, image_result
-
-
 class ProductionOrchestrator:
     """Run audio + image production with a structured revision loop.
 
@@ -290,7 +215,6 @@ class ProductionOrchestrator:
         run_dir: Path,
         screenplay_agent: Any,
         voice: str = "narrator",
-        use_mcp: bool = False,
         serial: bool = False,
     ) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """Execute production with up to MAX_REVISION_ROUNDS revision passes.
@@ -302,7 +226,6 @@ class ProductionOrchestrator:
             run_dir: Run output directory.
             screenplay_agent: ScreenplayAgent instance with a revise_scene() method.
             voice: TTS voice preset name.
-            use_mcp: If True, delegate audio+image to the producer-server MCP process.
             serial: If True, run audio then image sequentially instead of in parallel.
                     Useful for debugging and deterministic test runs.
 
@@ -310,7 +233,7 @@ class ProductionOrchestrator:
             Tuple of (audio_timeline, revised_screenplay, revised_video_plan).
         """
         run_id = str(video_plan.get("video_plan_id") or "unknown")
-        mode = ("mcp-serial" if serial else "mcp-parallel") if use_mcp else ("serial" if serial else "parallel")
+        mode = "mcp-serial" if serial else "mcp-parallel"
 
         log_path = Path(run_dir) / "orchestrator.log"
         log_id = logger.add(str(log_path), level="DEBUG", encoding="utf-8")
@@ -323,28 +246,12 @@ class ProductionOrchestrator:
         revision_timings: List[Dict[str, Any]] = []
 
         production_t0 = time.monotonic()
-        if use_mcp:
-            logger.info("[orch] MCP client mode -- delegating to producer-server")
-            _mcp_fn = _produce_serial_mcp if serial else _produce_parallel_mcp
-            audio_timeline, image_manifest, tool_timings = asyncio.run(
-                _mcp_fn(screenplay, script_package, run_dir, run_id, voice)
-            )
-        else:
-            if TTS_BACKEND == "chatterbox_direct" and not serial:
-                raise RuntimeError(
-                    "[ERROR] chatterbox_direct backend requires serial=True "
-                    "(GPU model is not safe for concurrent inference)"
-                )
-            audio_agent = create_audio_agent(output_dir=run_dir, voice=voice)
-            image_agent = ScriptImageRetrievalAgent(ScriptImageConfig(output_dir=run_dir))
-
-            logger.info("[orch] round 0 -- full production pass ({})", mode)
-            self._reset_production_report(run_dir, run_id)
-
-            _direct_fn = _produce_serial if serial else _produce_parallel
-            audio_timeline, image_manifest = asyncio.run(
-                _direct_fn(audio_agent, image_agent, video_plan, script_package, run_id)
-            )
+        _produce_fn = _produce_serial if serial else _produce_parallel
+        logger.info("[orch] round 0 -- full production pass ({})", mode)
+        self._reset_production_report(run_dir, run_id)
+        audio_timeline, image_manifest, tool_timings = asyncio.run(
+            _produce_fn(screenplay, script_package, run_dir, run_id, voice)
+        )
         production_elapsed_s = round(time.monotonic() - production_t0, 2)
 
         logger.info(
@@ -411,32 +318,17 @@ class ProductionOrchestrator:
             )
             self._reset_production_report(run_dir, run_id)
 
-            if use_mcp:
-                _mcp_fn = _produce_serial_mcp if serial else _produce_parallel_mcp
-                re_audio, re_image, _rev_timings = asyncio.run(
-                    _mcp_fn(
-                        screenplay,
-                        script_package,
-                        run_dir,
-                        run_id,
-                        voice,
-                        audio_scene_ids=audio_scene_ids or None,
-                        image_scene_ids=image_scene_ids or None,
-                    )
+            re_audio, re_image, _rev_timings = asyncio.run(
+                _produce_fn(
+                    screenplay,
+                    script_package,
+                    run_dir,
+                    run_id,
+                    voice,
+                    audio_scene_ids=audio_scene_ids or None,
+                    image_scene_ids=image_scene_ids or None,
                 )
-            else:
-                _direct_fn = _produce_serial if serial else _produce_parallel
-                re_audio, re_image = asyncio.run(
-                    _direct_fn(
-                        audio_agent,
-                        image_agent,
-                        video_plan,
-                        script_package,
-                        run_id,
-                        audio_scene_ids=audio_scene_ids or None,
-                        image_scene_ids=image_scene_ids or None,
-                    )
-                )
+            )
 
             if audio_scene_ids:
                 # Merge revised tracks by scene_id into the existing timeline.

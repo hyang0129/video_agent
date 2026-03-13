@@ -35,10 +35,10 @@ from pathlib import Path
 
 import pytest
 
-from src.artifacts.io import write_json
-from src.facts.caption_cache import CaptionCache
-from src.facts.fact_miner import FactMiner
-from src.facts.fact_store import FactStore
+from video_agent.artifacts.io import write_json
+from video_agent.facts.caption_cache import CaptionCache
+from video_agent.facts.fact_miner import FactMiner
+from video_agent.facts.fact_store import FactStore
 from .helpers import load_fixture, copy_to_review
 
 MIN_FACTS_EXPECTED = 3

@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from src.utils.json_utils import extract_json_object, safe_json_loads
+from video_agent.utils.json_utils import extract_json_object, safe_json_loads
 
 
 class TestExtractJsonObject:

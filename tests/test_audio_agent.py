@@ -8,12 +8,12 @@ from pathlib import Path
 import json
 from unittest.mock import Mock, patch, MagicMock
 
-from src.audio_agent import (
+from video_agent.audio_agent import (
     AudioGenerationAgent,
     create_audio_agent,
     AudioGenerationError,
 )
-from src.tools.tts_tools import TTSError
+from video_agent.tools.tts_tools import TTSError
 
 
 @pytest.fixture
@@ -114,7 +114,7 @@ class TestAudioGenerationAgent:
         with pytest.raises(AudioGenerationError, match="missing required field"):
             agent._validate_video_plan(invalid_plan)
     
-    @patch('src.audio_agent.generate_voiceover')
+    @patch('video_agent.audio_agent.generate_voiceover')
     def test_generate_audio_timeline(
         self,
         mock_generate_voiceover,
@@ -160,7 +160,7 @@ class TestAudioGenerationAgent:
         # Verify TTS was called correctly
         assert mock_generate_voiceover.call_count == 2
     
-    @patch('src.audio_agent.generate_voiceover')
+    @patch('video_agent.audio_agent.generate_voiceover')
     def test_generate_audio_timeline_tts_error(
         self,
         mock_generate_voiceover,
@@ -196,7 +196,7 @@ class TestAudioGenerationAgent:
         with pytest.raises(AudioGenerationError, match="contains no scenes"):
             agent.generate_audio_timeline(invalid_plan)
     
-    @patch('src.audio_agent.generate_voiceover')
+    @patch('video_agent.audio_agent.generate_voiceover')
     def test_get_audio_stats(
         self,
         mock_generate_voiceover,
@@ -225,7 +225,7 @@ class TestAudioGenerationAgent:
         assert stats["voiceover_tracks"] == 2
         assert stats["total_characters"] == 200  # 100 chars * 2 scenes
     
-    @patch('src.audio_agent.generate_voiceover')
+    @patch('video_agent.audio_agent.generate_voiceover')
     def test_voice_override_from_video_plan(
         self,
         mock_generate_voiceover,
@@ -270,7 +270,7 @@ class TestCreateAudioAgent:
 
     def test_create_audio_agent_elevenlabs(self, temp_output_dir):
         """Test factory with elevenlabs backend resolves voice presets."""
-        with patch("src.audio_agent.TTS_BACKEND", "elevenlabs"):
+        with patch("video_agent.audio_agent.TTS_BACKEND", "elevenlabs"):
             agent = create_audio_agent(
                 output_dir=temp_output_dir,
                 voice="calm",

@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.mcp.video_agent_server import call_tool
+from video_agent.mcp.video_agent_server import call_tool
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -37,7 +37,7 @@ def _call(name: str, arguments: dict) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 class TestResearchTopic:
-    @patch("src.mcp.video_agent_server.call_tool.__module__", new="test")
+    @patch("video_agent.mcp.video_agent_server.call_tool.__module__", new="test")
     def test_research_topic_returns_topic_brief(self, tmp_path: Path):
         brief = {"topic_id": "cheese", "title": "Cheese Facts", "score": 0.9}
         brief_path = tmp_path / "topic_brief_0.json"
@@ -50,7 +50,7 @@ class TestResearchTopic:
             "report_path": str(tmp_path / "report.json"),
         }
 
-        with patch("src.agent.create_agent", return_value=mock_agent):
+        with patch("video_agent.agent.create_agent", return_value=mock_agent):
             result = _call("research_topic", {"setting": "cheese facts"})
 
         assert result["status"] == "ok"
@@ -67,7 +67,7 @@ class TestResearchTopic:
             "report_path": "",
         }
 
-        with patch("src.agent.create_agent", return_value=mock_agent):
+        with patch("video_agent.agent.create_agent", return_value=mock_agent):
             result = _call("research_topic", {"setting": "nonexistent"})
 
         assert result["status"] == "no_results"
@@ -87,7 +87,7 @@ class TestMineFacts:
             "videos_mined": 4,
         }
 
-        with patch("src.facts.fact_miner.FactMiner", return_value=mock_miner):
+        with patch("video_agent.facts.fact_miner.FactMiner", return_value=mock_miner):
             result = _call("mine_facts", {
                 "topic_query": "cheese facts",
                 "topic_id": "cheese",
@@ -123,7 +123,7 @@ class TestGenerateScript:
         mock_agent = MagicMock()
         mock_agent.generate_script_package.return_value = fake_package
 
-        with patch("src.script_agent.create_script_agent", return_value=mock_agent):
+        with patch("video_agent.script_agent.create_script_agent", return_value=mock_agent):
             result = _call("generate_script", {"topic_brief": topic_brief})
 
         assert result["status"] == "ok"
@@ -171,7 +171,7 @@ class TestSelectMusic:
 
         audio_timeline = {"duration_seconds": 45.0, "tracks": []}
 
-        with patch("src.music_agent.DEFAULT_MUSIC_PATH", music_file):
+        with patch("video_agent.music_agent.DEFAULT_MUSIC_PATH", music_file):
             result = _call("select_music", {"audio_timeline": audio_timeline})
 
         assert result["status"] == "ok"
@@ -183,7 +183,7 @@ class TestSelectMusic:
     def test_select_music_missing_file_returns_error(self):
         audio_timeline = {"duration_seconds": 30.0, "tracks": []}
 
-        with patch("src.music_agent.DEFAULT_MUSIC_PATH", Path("/nonexistent/music.mp3")):
+        with patch("video_agent.music_agent.DEFAULT_MUSIC_PATH", Path("/nonexistent/music.mp3")):
             result = _call("select_music", {"audio_timeline": audio_timeline})
 
         # Should return error (MusicAgentError caught by top-level handler)
