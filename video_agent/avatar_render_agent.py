@@ -6,14 +6,14 @@ working directory because it resolves assets/models/registry.json relative
 to its CWD.
 
 Usage:
-    from src.avatar_render_agent import AvatarRenderAgent
+    from video_agent.avatar_render_agent import AvatarRenderAgent
     mov_path = AvatarRenderAgent().render(avatar_full_manifest, run_dir)
 """
 
 import subprocess
 from pathlib import Path
 
-from src.config import LIVE2D_RENDER_EXECUTABLE
+from video_agent.config import LIVE2D_RENDER_EXECUTABLE
 
 
 # The live2d-render binary resolves registry.json and model paths relative

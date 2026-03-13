@@ -8,7 +8,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.screenwriting.screenplay_agent import ScreenplayAgent, _coerce_scenes
+from video_agent.screenwriting.screenplay_agent import ScreenplayAgent, _coerce_scenes
 
 
 class TestCoerceScenes:
@@ -33,7 +33,7 @@ class TestCoerceScenes:
         assert _coerce_scenes(42, target_duration_s=30) == []
 
 
-@patch("src.screenwriting.screenplay_agent.make_llm")
+@patch("video_agent.screenwriting.screenplay_agent.make_llm")
 def test_write_screenplay_mocked_llm(mock_make_llm):
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(content=json.dumps({
@@ -78,7 +78,7 @@ def test_write_screenplay_mocked_llm(mock_make_llm):
     assert result["target_duration_s"] == 30
 
 
-@patch("src.screenwriting.screenplay_agent.make_llm")
+@patch("video_agent.screenwriting.screenplay_agent.make_llm")
 def test_revise_scene_missing_scene(mock_make_llm):
     mock_make_llm.return_value = MagicMock()
 

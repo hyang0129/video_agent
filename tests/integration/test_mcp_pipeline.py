@@ -52,8 +52,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from src.artifacts.io import write_json
-from src.video_planner import script_package_to_video_plan
+from video_agent.artifacts.io import write_json
+from video_agent.video_planner import script_package_to_video_plan
 from .helpers import copy_to_review, load_fixture
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ async def test_generate_audio_tool(tmp_path: Path, ww2_video_plan: Dict[str, Any
         - audio_segments/*.wav (or *.mp3 if ElevenLabs key present)
         - production_report.json — should have 0 degraded scenes for clean input
     """
-    from src.mcp.video_agent_server import call_tool
+    from video_agent.mcp.video_agent_server import call_tool
 
     has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
     voice = "narrator" if has_elevenlabs else "silent"
@@ -161,7 +161,7 @@ async def test_fetch_assets_tool(tmp_path: Path, ww2_script_package: Dict[str, A
         - visual_manifest.json — inspect per-scene images, check relevance scores
         - production_report.json — degraded scenes should list low-relevance issues
     """
-    from src.mcp.video_agent_server import call_tool
+    from video_agent.mcp.video_agent_server import call_tool
 
     has_pexels = bool(os.getenv("PEXELS_API_KEY"))
 
@@ -221,7 +221,7 @@ async def test_parallel_production(
     - production_report.json contains merged issues from AudioAgent + ScriptImageAgent
     - No file-level race conditions from concurrent writes
     """
-    from src.mcp.video_agent_server import call_tool
+    from video_agent.mcp.video_agent_server import call_tool
 
     has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
     voice = "narrator" if has_elevenlabs else "silent"
@@ -298,7 +298,7 @@ async def test_full_producer_pipeline(
         - final_video.mp4  (if ffmpeg available — watch for sync issues)
         - evaluation.json  (if ffmpeg available — check duration_parity_ok)
     """
-    from src.mcp.video_agent_server import call_tool
+    from video_agent.mcp.video_agent_server import call_tool
 
     has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
     has_ffmpeg = _ffmpeg_available()
@@ -444,7 +444,7 @@ async def test_validate_output_writes_evaluation_json(tmp_path: Path) -> None:
     - Writes evaluation.json with the correct schema
     - Correctly reports duration_parity_ok when parity is within threshold
     """
-    from src.mcp.video_agent_server import call_tool
+    from video_agent.mcp.video_agent_server import call_tool
 
     # Build a minimal 5-second MP4 (black video + silent audio) via ffmpeg
     mp4_path = tmp_path / "synthetic.mp4"

@@ -20,12 +20,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.artifacts.io import ensure_run_dir, new_run_id
-from src.artifacts.screenplay import screenplay_to_script_package
-from src.config import RESULTS_DIR
-from src.orchestrator import ProductionOrchestrator
-from src.screenwriting.screenplay_agent import ScreenplayAgent
-from src.video_planner import script_package_to_video_plan
+from video_agent.artifacts.io import ensure_run_dir, new_run_id
+from video_agent.artifacts.screenplay import screenplay_to_script_package
+from video_agent.config import RESULTS_DIR
+from video_agent.orchestrator import ProductionOrchestrator
+from video_agent.screenwriting.screenplay_agent import ScreenplayAgent
+from video_agent.video_planner import script_package_to_video_plan
 
 
 DEFAULT_FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "script_package_ww2_tanks.json"

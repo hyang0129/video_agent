@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from src.facts.caption_cache import CaptionCache
+from video_agent.facts.caption_cache import CaptionCache
 
 
 @pytest.fixture

@@ -14,10 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from src.artifacts.io import write_json
-from src.composition_agent import create_composition_agent
-from src.render_agent import create_render_agent
-from src.visual_agent import create_visual_agent
+from video_agent.artifacts.io import write_json
+from video_agent.composition_agent import create_composition_agent
+from video_agent.render_agent import create_render_agent
+from video_agent.visual_agent import create_visual_agent
 
 
 def parse_args() -> argparse.Namespace:

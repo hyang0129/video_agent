@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.artifacts.io import ensure_run_dir, new_run_id, write_json
-from src.config import (
+from video_agent.artifacts.io import ensure_run_dir, new_run_id, write_json
+from video_agent.config import (
     ANTHROPIC_API_KEY,
     ELEVENLABS_API_KEY,
     GOOGLE_API_KEY,
@@ -31,7 +31,7 @@ from src.config import (
 # ---------------------------------------------------------------------------
 
 async def _call_tool_inprocess(tool_name: str, arguments: dict) -> dict:
-    from src.mcp.video_agent_server import call_tool
+    from video_agent.mcp.video_agent_server import call_tool
     result = await call_tool(tool_name, arguments)
     text = result[0].text if result else "{}"
     return json.loads(text)
@@ -95,11 +95,11 @@ def check_tts_key():
 
 def run_screenplay(args) -> None:
     """Screenwriting pipeline: concepts -> screenplay -> review -> production."""
-    from src.screenwriting.concept_agent import ConceptAgent
-    from src.screenwriting.screenplay_agent import ScreenplayAgent
-    from src.screenwriting.screenplay_reviewer import ScreenplayReviewer
-    from src.artifacts.screenplay import screenplay_to_script_package
-    from src.orchestrator import ProductionOrchestrator
+    from video_agent.screenwriting.concept_agent import ConceptAgent
+    from video_agent.screenwriting.screenplay_agent import ScreenplayAgent
+    from video_agent.screenwriting.screenplay_reviewer import ScreenplayReviewer
+    from video_agent.artifacts.screenplay import screenplay_to_script_package
+    from video_agent.orchestrator import ProductionOrchestrator
 
     check_api_keys()
     check_tts_key()
@@ -327,7 +327,7 @@ def run_pipeline(args) -> None:
 
     # 5) create_video_plan
     print("[INFO] Step 5/10: create_video_plan")
-    from src.artifacts.screenplay import screenplay_to_script_package
+    from video_agent.artifacts.screenplay import screenplay_to_script_package
     script_package = screenplay_to_script_package(screenplay)
     write_json(run_dir / "script_package.json", script_package)
 
@@ -340,8 +340,8 @@ def run_pipeline(args) -> None:
 
     # 6+7) generate_audio + fetch_assets (via orchestrator)
     print("[INFO] Step 6+7/10: generate_audio + fetch_assets (orchestrator)")
-    from src.orchestrator import ProductionOrchestrator
-    from src.screenwriting.screenplay_agent import ScreenplayAgent
+    from video_agent.orchestrator import ProductionOrchestrator
+    from video_agent.screenwriting.screenplay_agent import ScreenplayAgent
     voice = str(script_package.get("audio", {}).get("tts", {}).get("voice") or "narrator")
     screenplay_agent_inst = ScreenplayAgent()
     orch = ProductionOrchestrator()

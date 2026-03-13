@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.composition_agent import CompositionAgent, CompositionError
+from video_agent.composition_agent import CompositionAgent, CompositionError
 
 
 def test_create_render_specification_basic(tmp_path: Path) -> None:

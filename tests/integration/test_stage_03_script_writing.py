@@ -36,9 +36,9 @@ from typing import List
 
 import pytest
 
-from src.artifacts.io import write_json
-from src.facts.fact_store import FactStore
-from src.script_agent import ScriptGenerationAgent
+from video_agent.artifacts.io import write_json
+from video_agent.facts.fact_store import FactStore
+from video_agent.script_agent import ScriptGenerationAgent
 from .helpers import load_fixture, copy_to_review
 
 SEEDED_FACTS: List[str] = [

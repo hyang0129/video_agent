@@ -6,7 +6,7 @@ Run with: pytest tests/test_concept_agent.py -v
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.screenwriting.concept_agent import _estimate_hook_strength, ConceptAgent
+from video_agent.screenwriting.concept_agent import _estimate_hook_strength, ConceptAgent
 
 
 class TestEstimateHookStrength:
@@ -35,7 +35,7 @@ class TestEstimateHookStrength:
         assert score <= 1.0
 
 
-@patch("src.screenwriting.concept_agent.make_llm")
+@patch("video_agent.screenwriting.concept_agent.make_llm")
 def test_generate_concepts_mocked_llm(mock_make_llm):
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(

@@ -5,7 +5,7 @@ Run with: pytest tests/test_script_agent.py -v
 
 import pytest
 
-from src.script_agent import (
+from video_agent.script_agent import (
     _target_duration_seconds,
     _normalize_beats,
     _is_generic_placeholder_beats,

@@ -8,8 +8,8 @@ Verifies:
 Run with: pytest tests/test_text_flow.py -v
 """
 
-from src.screenwriting.screenplay_agent import _coerce_scenes
-from src.screenwriting.screenplay_reviewer import ScreenplayReviewer
+from video_agent.screenwriting.screenplay_agent import _coerce_scenes
+from video_agent.screenwriting.screenplay_reviewer import ScreenplayReviewer
 
 
 class TestCoerceScenesSanitization:
@@ -64,7 +64,7 @@ class TestCompositionTextPriority:
     """Verify that on_screen_text is preferred over vo_line for text overlays."""
 
     def test_on_screen_text_preferred(self):
-        from src.composition_agent import CompositionAgent
+        from video_agent.composition_agent import CompositionAgent
 
         agent = CompositionAgent()
         video_plan = {
@@ -93,7 +93,7 @@ class TestCompositionTextPriority:
         assert elements[0]["text"] == "Tiger Tank"
 
     def test_vo_line_fallback_when_no_on_screen_text(self):
-        from src.composition_agent import CompositionAgent
+        from video_agent.composition_agent import CompositionAgent
 
         agent = CompositionAgent()
         video_plan = {

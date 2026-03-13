@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 # In-process MCP dispatch (same handler code as the HTTPS server)
-from src.orchestrator import _call_tool_inprocess
+from video_agent.orchestrator import _call_tool_inprocess
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_BRIEF = _PROJECT_ROOT / "tests" / "fixtures" / "topic_brief_cheese_facts.json"
@@ -144,7 +144,7 @@ def main():
     # Step 8: create_video_plan (deterministic, no API)
     # ---------------------------------------------------------------
     # Convert screenplay to script_package first (not a tool, pure conversion)
-    from src.artifacts.screenplay import screenplay_to_script_package
+    from video_agent.artifacts.screenplay import screenplay_to_script_package
     script_package = screenplay_to_script_package(screenplay)
     beats = (script_package.get("script") or {}).get("beats") or []
     print(f"\n-- Production Pipeline (screenplay path, {len(beats)} beats) --")
@@ -283,7 +283,7 @@ def main():
 
 
 if __name__ == "__main__":
-    from src.tools.chatterbox_server_manager import (
+    from video_agent.tools.chatterbox_server_manager import (
         start_chatterbox_server,
         stop_chatterbox_server,
     )

@@ -33,9 +33,9 @@ from pathlib import Path
 
 import pytest
 
-from src.artifacts.io import write_json
-from src.audio_agent import create_audio_agent
-from src.video_planner import script_package_to_video_plan
+from video_agent.artifacts.io import write_json
+from video_agent.audio_agent import create_audio_agent
+from video_agent.video_planner import script_package_to_video_plan
 from .helpers import load_fixture, copy_to_review
 
 

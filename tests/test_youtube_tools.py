@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 import pytest
 
-from src.tools.youtube_tools import (
+from video_agent.tools.youtube_tools import (
     _videos_to_public_dicts,
     compute_content_gap_metrics,
 )
@@ -135,19 +135,19 @@ class TestComputeContentGapMetrics:
         mock.search_videos.side_effect = search_videos
         return mock
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_returns_viable_true_with_longform_content(self, mock_get_client):
         mock_get_client.return_value = self._mock_client()
         result = compute_content_gap_metrics("sci-fi")
         assert result["viable"] is True
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_topic_field_matches_input(self, mock_get_client):
         mock_get_client.return_value = self._mock_client()
         result = compute_content_gap_metrics("space travel")
         assert result["topic"] == "space travel"
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_longform_stats_computed_correctly(self, mock_get_client):
         mock_get_client.return_value = self._mock_client()
         result = compute_content_gap_metrics("topic")
@@ -157,7 +157,7 @@ class TestComputeContentGapMetrics:
         assert lf["avg_engagement"] == pytest.approx(0.03)
         assert lf["top_channel"] == "BigChannel"
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_shortform_stats_filter_over_60s(self, mock_get_client):
         mock_get_client.return_value = self._mock_client()
         result = compute_content_gap_metrics("topic")
@@ -166,7 +166,7 @@ class TestComputeContentGapMetrics:
         assert sf["shorts_found"] == 2
         assert sf["total_views"] == 80_000
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_scores_are_present_and_in_range(self, mock_get_client):
         mock_get_client.return_value = self._mock_client()
         result = compute_content_gap_metrics("topic")
@@ -175,14 +175,14 @@ class TestComputeContentGapMetrics:
             assert key in scores
             assert 0.0 <= scores[key] <= 10.0
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_returns_not_viable_when_no_longform(self, mock_get_client):
         mock_get_client.return_value = self._mock_client(longform=[], shortform=[])
         result = compute_content_gap_metrics("empty_topic")
         assert result["viable"] is False
         assert result["reason"] == "insufficient_longform"
 
-    @patch("src.tools.youtube_tools.get_youtube_client")
+    @patch("video_agent.tools.youtube_tools.get_youtube_client")
     def test_demand_score_capped_at_10(self, mock_get_client):
         massive_views = [_make_video(id=f"lf{i}", views=100_000_000) for i in range(3)]
         mock_get_client.return_value = self._mock_client(longform=massive_views)

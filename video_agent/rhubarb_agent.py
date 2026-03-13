@@ -7,7 +7,7 @@ Rhubarb only accepts WAV/OGG input, so each MP3 segment is converted to a
 temporary WAV via FFmpeg before processing, then deleted.
 
 Usage:
-    from src.rhubarb_agent import RhubarbAgent
+    from video_agent.rhubarb_agent import RhubarbAgent
     manifest = RhubarbAgent().generate_lipsync_manifest(audio_timeline, run_dir)
 """
 
@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.config import (
+from video_agent.config import (
     RHUBARB_EXECUTABLE,
     RHUBARB_OUTPUT_FORMAT,
     RHUBARB_RECOGNIZER,

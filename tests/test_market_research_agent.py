@@ -6,13 +6,13 @@ Run with: pytest tests/test_market_research_agent.py -v
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.agent import MarketResearchAgent
+from video_agent.agent import MarketResearchAgent
 
 
 class TestAgentCreation:
-    @patch("src.agent.make_llm")
-    @patch("src.agent.create_tool_calling_agent")
-    @patch("src.agent.AgentExecutor")
+    @patch("video_agent.agent.make_llm")
+    @patch("video_agent.agent.create_tool_calling_agent")
+    @patch("video_agent.agent.AgentExecutor")
     def test_agent_creation(self, mock_executor_cls, mock_create_agent, mock_make_llm):
         mock_make_llm.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
@@ -24,9 +24,9 @@ class TestAgentCreation:
 
 
 class TestResearchCategory:
-    @patch("src.agent.make_llm")
-    @patch("src.agent.create_tool_calling_agent")
-    @patch("src.agent.AgentExecutor")
+    @patch("video_agent.agent.make_llm")
+    @patch("video_agent.agent.create_tool_calling_agent")
+    @patch("video_agent.agent.AgentExecutor")
     def test_research_category_calls_executor(self, mock_executor_cls, mock_create_agent, mock_make_llm):
         mock_make_llm.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
@@ -40,9 +40,9 @@ class TestResearchCategory:
 
 
 class TestAgentTools:
-    @patch("src.agent.make_llm")
-    @patch("src.agent.create_tool_calling_agent")
-    @patch("src.agent.AgentExecutor")
+    @patch("video_agent.agent.make_llm")
+    @patch("video_agent.agent.create_tool_calling_agent")
+    @patch("video_agent.agent.AgentExecutor")
     def test_agent_has_expected_tools(self, mock_executor_cls, mock_create_agent, mock_make_llm):
         mock_make_llm.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()

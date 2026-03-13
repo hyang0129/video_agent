@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.render_agent import (
+from video_agent.render_agent import (
     _build_drawtext_filters,
     _fit_subtitle_text,
     _escape_drawtext_text,

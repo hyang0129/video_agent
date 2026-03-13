@@ -6,11 +6,11 @@ Run with: pytest tests/test_fact_miner.py -v
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.facts.fact_miner import FactMiner
+from video_agent.facts.fact_miner import FactMiner
 
 
-@patch("src.facts.fact_miner.get_youtube_client")
-@patch("src.facts.fact_miner.make_llm")
+@patch("video_agent.facts.fact_miner.get_youtube_client")
+@patch("video_agent.facts.fact_miner.make_llm")
 def test_extract_facts_short_text_returns_empty(mock_make_llm, mock_yt):
     mock_make_llm.return_value = MagicMock()
     mock_yt.return_value = MagicMock()
@@ -20,8 +20,8 @@ def test_extract_facts_short_text_returns_empty(mock_make_llm, mock_yt):
     assert facts == []
 
 
-@patch("src.facts.fact_miner.get_youtube_client")
-@patch("src.facts.fact_miner.make_llm")
+@patch("video_agent.facts.fact_miner.get_youtube_client")
+@patch("video_agent.facts.fact_miner.make_llm")
 def test_extract_facts_from_text_success(mock_make_llm, mock_yt):
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(
@@ -38,8 +38,8 @@ def test_extract_facts_from_text_success(mock_make_llm, mock_yt):
     assert facts[0]["confidence"] == "high"
 
 
-@patch("src.facts.fact_miner.get_youtube_client")
-@patch("src.facts.fact_miner.make_llm")
+@patch("video_agent.facts.fact_miner.get_youtube_client")
+@patch("video_agent.facts.fact_miner.make_llm")
 def test_extract_facts_truncates_long_text(mock_make_llm, mock_yt):
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(
@@ -58,8 +58,8 @@ def test_extract_facts_truncates_long_text(mock_make_llm, mock_yt):
     assert len(facts) == 1
 
 
-@patch("src.facts.fact_miner.get_youtube_client")
-@patch("src.facts.fact_miner.make_llm")
+@patch("video_agent.facts.fact_miner.get_youtube_client")
+@patch("video_agent.facts.fact_miner.make_llm")
 def test_mine_video_captions_cached(mock_make_llm, mock_yt):
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(
@@ -84,8 +84,8 @@ def test_mine_video_captions_cached(mock_make_llm, mock_yt):
     mock_yt_client.get_video_captions.assert_not_called()
 
 
-@patch("src.facts.fact_miner.get_youtube_client")
-@patch("src.facts.fact_miner.make_llm")
+@patch("video_agent.facts.fact_miner.get_youtube_client")
+@patch("video_agent.facts.fact_miner.make_llm")
 def test_mine_video_captions_unavailable(mock_make_llm, mock_yt):
     mock_make_llm.return_value = MagicMock()
     mock_yt_client = MagicMock()

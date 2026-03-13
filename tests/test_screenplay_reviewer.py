@@ -5,7 +5,7 @@ Run with: pytest tests/test_screenplay_reviewer.py -v
 
 import pytest
 
-from src.screenwriting.screenplay_reviewer import ScreenplayReviewer, _is_generic_visual
+from video_agent.screenwriting.screenplay_reviewer import ScreenplayReviewer, _is_generic_visual
 
 
 def _valid_screenplay():

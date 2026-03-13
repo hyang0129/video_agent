@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.visual_agent import VisualAssetAgent
+from video_agent.visual_agent import VisualAssetAgent
 
 
 @pytest.fixture

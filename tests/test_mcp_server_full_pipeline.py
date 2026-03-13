@@ -36,12 +36,12 @@ from pathlib import Path
 import pytest
 import requests
 
-from src.artifacts.io import write_json
-from src.artifacts.screenplay import screenplay_to_script_package
-from src.composition_agent import create_composition_agent
-from src.orchestrator import ProductionOrchestrator, _call_tool_inprocess
-from src.render_agent import create_render_agent
-from src.screenwriting.screenplay_agent import ScreenplayAgent
+from video_agent.artifacts.io import write_json
+from video_agent.artifacts.screenplay import screenplay_to_script_package
+from video_agent.composition_agent import create_composition_agent
+from video_agent.orchestrator import ProductionOrchestrator, _call_tool_inprocess
+from video_agent.render_agent import create_render_agent
+from video_agent.screenwriting.screenplay_agent import ScreenplayAgent
 
 def _mcp_call(tool_name: str, arguments: dict) -> dict:
     """Call an MCP tool in-process (exercises same handler code as the HTTPS server)."""
@@ -88,7 +88,7 @@ def mcp_server_proc():
 
     env = {**os.environ, "MCP_SERVER_TOKEN": _MCP_TOKEN}
     cmd = [
-        sys.executable, "-m", "src.mcp.video_agent_server",
+        sys.executable, "-m", "video_agent.mcp.video_agent_server",
         "--port", str(_MCP_PORT),
         "--cert", "certs/server.crt",
         "--key", "certs/server.key",

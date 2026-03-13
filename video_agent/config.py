@@ -63,15 +63,19 @@ ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"
 CACHE_EXPIRE_HOURS = int(os.getenv("CACHE_EXPIRE_HOURS", "24"))
 
 # Paths
-PROJECT_ROOT = Path(__file__).parent.parent
-CACHE_DIR = PROJECT_ROOT / ".cache"
-RESULTS_DIR = PROJECT_ROOT / "results"
-ASSETS_DIR = PROJECT_ROOT / "assets"
+import os as _os
 
-# Create directories if they don't exist
-CACHE_DIR.mkdir(exist_ok=True)
-RESULTS_DIR.mkdir(exist_ok=True)
-ASSETS_DIR.mkdir(exist_ok=True)
+CACHE_DIR = Path(_os.environ.get("VIDEO_AGENT_CACHE_DIR", ".cache"))
+RESULTS_DIR = Path(_os.environ.get("VIDEO_AGENT_RESULTS_DIR", "results"))
+ASSETS_DIR = Path(_os.environ.get("VIDEO_AGENT_ASSETS_DIR", "assets"))
+
+
+# Directories are created on first use by agents, not at import time.
+# Call these only when needed, not at module level.
+def _ensure_dirs() -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 # YouTube API limits
 YOUTUBE_QUOTA_COST = {

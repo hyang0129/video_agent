@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.orchestrator import ProductionOrchestrator, _produce_parallel
+from video_agent.orchestrator import ProductionOrchestrator, _produce_parallel
 
 
 # ---------------------------------------------------------------------------
@@ -127,13 +127,13 @@ class TestProductionReportSchema:
         self, tmp_run_dir, sample_video_plan
     ):
         """When TTS raises TTSError, audio_agent should write a degraded issue and continue."""
-        from src.audio_agent import AudioGenerationAgent
-        from src.tools.tts_tools import TTSError
+        from video_agent.audio_agent import AudioGenerationAgent
+        from video_agent.tools.tts_tools import TTSError
 
         # Construct directly without tts_backend so the ElevenLabs code path is used
         agent = AudioGenerationAgent(output_dir=tmp_run_dir, voice_id="narrator")
 
-        with patch("src.audio_agent.generate_voiceover", side_effect=TTSError("API down")):
+        with patch("video_agent.audio_agent.generate_voiceover", side_effect=TTSError("API down")):
             timeline = agent.generate_audio_timeline(sample_video_plan)
 
         # Timeline still has tracks (silent fallback)
@@ -157,7 +157,7 @@ class TestProductionReportSchema:
 
     def test_audio_agent_reports_duration_overshoot(self, tmp_run_dir, sample_video_plan):
         """vo_too_long is flagged when TTS duration exceeds target * 1.2."""
-        from src.audio_agent import AudioGenerationAgent
+        from video_agent.audio_agent import AudioGenerationAgent
 
         def _fake_voiceover(text, voice_id, output_path):
             # Write a real file so ffprobe can't be used; metadata drives duration
@@ -167,7 +167,7 @@ class TestProductionReportSchema:
         # Construct directly without tts_backend so the ElevenLabs code path is used
         agent = AudioGenerationAgent(output_dir=tmp_run_dir, voice_id="narrator")
 
-        with patch("src.audio_agent.generate_voiceover", side_effect=_fake_voiceover):
+        with patch("video_agent.audio_agent.generate_voiceover", side_effect=_fake_voiceover):
             timeline = agent.generate_audio_timeline(sample_video_plan)
 
         report_path = tmp_run_dir / "production_report.json"
@@ -181,7 +181,7 @@ class TestProductionReportSchema:
 
     def test_audio_agent_scene_ids_filter(self, tmp_run_dir, sample_video_plan):
         """Passing scene_ids skips unmatched scenes."""
-        from src.audio_agent import create_audio_agent
+        from video_agent.audio_agent import create_audio_agent
 
         agent = create_audio_agent(output_dir=tmp_run_dir, voice="silent")
         timeline = agent.generate_audio_timeline(sample_video_plan, scene_ids=["scene_01"])
@@ -194,14 +194,14 @@ class TestProductionReportSchema:
         self, tmp_run_dir, sample_script_package
     ):
         """When no images are found, ScriptImageAgent writes a degraded issue."""
-        from src.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
+        from video_agent.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
 
         agent = ScriptImageRetrievalAgent(
             ScriptImageConfig(output_dir=tmp_run_dir, min_candidates_per_segment=1)
         )
 
-        with patch("src.script_image_agent.search_pexels_images", return_value=[]):
-            with patch("src.script_image_agent.search_wikimedia_images", return_value=[]):
+        with patch("video_agent.script_image_agent.search_pexels_images", return_value=[]):
+            with patch("video_agent.script_image_agent.search_wikimedia_images", return_value=[]):
                 manifest = agent.generate_script_image_manifest(
                     sample_script_package, run_id="vp_test_001"
                 )
@@ -220,9 +220,9 @@ class TestProductionReportSchema:
         self, tmp_run_dir, sample_video_plan, sample_script_package
     ):
         """Both agents write to production_report.json; issues accumulate."""
-        from src.audio_agent import AudioGenerationAgent
-        from src.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
-        from src.tools.tts_tools import TTSError
+        from video_agent.audio_agent import AudioGenerationAgent
+        from video_agent.script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
+        from video_agent.tools.tts_tools import TTSError
 
         # Construct directly without tts_backend so the ElevenLabs code path is used
         audio_agent = AudioGenerationAgent(output_dir=tmp_run_dir, voice_id="narrator")
@@ -230,11 +230,11 @@ class TestProductionReportSchema:
             ScriptImageConfig(output_dir=tmp_run_dir, min_candidates_per_segment=1)
         )
 
-        with patch("src.audio_agent.generate_voiceover", side_effect=TTSError("fail")):
+        with patch("video_agent.audio_agent.generate_voiceover", side_effect=TTSError("fail")):
             audio_agent.generate_audio_timeline(sample_video_plan)
 
-        with patch("src.script_image_agent.search_pexels_images", return_value=[]):
-            with patch("src.script_image_agent.search_wikimedia_images", return_value=[]):
+        with patch("video_agent.script_image_agent.search_pexels_images", return_value=[]):
+            with patch("video_agent.script_image_agent.search_wikimedia_images", return_value=[]):
                 image_agent.generate_script_image_manifest(
                     sample_script_package, run_id="vp_test_001"
                 )
@@ -280,7 +280,7 @@ class TestOrchestratorRevisionLoop:
         audio_timeline = self._make_audio_timeline()
         image_manifest = self._make_image_manifest()
 
-        with patch("src.orchestrator._produce_parallel") as mock_parallel:
+        with patch("video_agent.orchestrator._produce_parallel") as mock_parallel:
             import asyncio as _asyncio
 
             async def _ok(*a, **kw):
@@ -322,7 +322,7 @@ class TestOrchestratorRevisionLoop:
             call_count["n"] += 1
             if call_count["n"] == 1:
                 # After round 0, inject a degraded issue
-                from src.artifacts.io import write_json
+                from video_agent.artifacts.io import write_json
                 write_json(tmp_run_dir / "production_report.json", {
                     "schema_version": "1.0.0",
                     "run_id": "vp_test_001",
@@ -340,7 +340,7 @@ class TestOrchestratorRevisionLoop:
                 })
             return audio_timeline, image_manifest, {}
 
-        with patch("src.orchestrator._produce_parallel", side_effect=_parallel_side_effect):
+        with patch("video_agent.orchestrator._produce_parallel", side_effect=_parallel_side_effect):
             result_timeline, result_sp, result_vp = orch.run(
                 screenplay=sample_screenplay,
                 script_package=sample_script_package,
@@ -369,7 +369,7 @@ class TestOrchestratorRevisionLoop:
         async def _ok(*a, **kw):
             return audio_timeline, image_manifest, {}
 
-        with patch("src.orchestrator._produce_parallel", side_effect=_ok):
+        with patch("video_agent.orchestrator._produce_parallel", side_effect=_ok):
             orch.run(
                 screenplay=sample_screenplay,
                 script_package=sample_script_package,
@@ -395,7 +395,7 @@ class TestOrchestratorRevisionLoop:
 
 class TestSceneIdPropagation:
     def test_screenplay_to_script_package_preserves_scene_id(self):
-        from src.artifacts.screenplay import screenplay_to_script_package
+        from video_agent.artifacts.screenplay import screenplay_to_script_package
 
         sp = {
             "screenplay_id": "sp_x",
@@ -418,7 +418,7 @@ class TestSceneIdPropagation:
         assert beats[0]["scene_id"] == "scene_01"
 
     def test_video_planner_preserves_scene_id_from_beat(self):
-        from src.video_planner import script_package_to_video_plan
+        from video_agent.video_planner import script_package_to_video_plan
 
         pkg = {
             "script_package_id": "sg_test",

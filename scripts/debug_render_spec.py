@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from src.render_agent import RenderError, create_render_agent
+from video_agent.render_agent import RenderError, create_render_agent
 
 
 def main() -> None:
