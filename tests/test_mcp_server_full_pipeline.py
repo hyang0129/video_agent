@@ -200,7 +200,7 @@ def test_mcp_server_full_pipeline(tmp_path: Path, mcp_server_proc) -> None:
         script_package=script_package,
         video_plan=video_plan,
         run_dir=run_dir,
-        screenplay_agent=screenplay_agent,
+        screenplay_agent=ScreenplayAgent(),
         voice="narrator",
         serial=True,
     )

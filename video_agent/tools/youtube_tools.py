@@ -71,8 +71,7 @@ class YouTubeClient:
         
         # Try default cookie location if not provided
         if not self.cookies:
-            from ..config import PROJECT_ROOT
-            default_cookies = PROJECT_ROOT / "youtube_cookies.txt"
+            default_cookies = Path("youtube_cookies.txt")
             if default_cookies.exists():
                 self.cookies = MozillaCookieJar(str(default_cookies))
                 try:

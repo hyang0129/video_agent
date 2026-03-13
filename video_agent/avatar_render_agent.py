@@ -10,6 +10,7 @@ Usage:
     mov_path = AvatarRenderAgent().render(avatar_full_manifest, run_dir)
 """
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from video_agent.config import LIVE2D_RENDER_EXECUTABLE
 
 # The live2d-render binary resolves registry.json and model paths relative
 # to its CWD.  This must point to the root of the live2d repo.
-_LIVE2D_REPO_ROOT = "/workspaces/hub/repos/live2d"
+_LIVE2D_REPO_ROOT = os.environ.get("LIVE2D_REPO_ROOT", "")
 
 
 class AvatarRenderAgent:

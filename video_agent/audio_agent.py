@@ -29,21 +29,13 @@ from .artifacts.io import write_json as _write_json
 
 
 def _write_production_report(run_dir: Path, run_id: str, new_issues: List[Dict[str, Any]]) -> None:
-    """Append new_issues to production_report.json, creating the file if absent."""
+    """Write new_issues to production_report.json, overwriting any previous run's data."""
     report_path = run_dir / "production_report.json"
-    if report_path.exists():
-        try:
-            existing = json.loads(report_path.read_text(encoding="utf-8"))
-            all_issues: List[Dict[str, Any]] = list(existing.get("issues") or []) + new_issues
-        except Exception:
-            all_issues = new_issues
-    else:
-        all_issues = new_issues
     _write_json(report_path, {
         "schema_version": "1.0.0",
         "run_id": run_id,
-        "issues": all_issues,
-        "degraded_scene_count": sum(1 for i in all_issues if i.get("status") == "degraded"),
+        "issues": new_issues,
+        "degraded_scene_count": sum(1 for i in new_issues if i.get("status") == "degraded"),
     })
 
 from .tools.tts_tools import (

@@ -125,16 +125,15 @@ CHATTERBOX_SERVER_URL = os.getenv("CHATTERBOX_SERVER_URL", "http://localhost:800
 CHATTERBOX_VOICE = os.getenv("CHATTERBOX_VOICE", "kronimi7030")
 
 # Rhubarb Lip Sync
-_RHUBARB_DEFAULT = "/workspaces/hub/tools/bin/rhubarb"
-RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", _RHUBARB_DEFAULT)
+RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", "")
 RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)
 RHUBARB_OUTPUT_FORMAT = "json"
 RHUBARB_WAV_SAMPLE_RATE = 22050   # Hz — 22050 mono is sufficient and faster to process
 
 # Live2D Renderer
-LIVE2D_RENDER_EXECUTABLE = os.getenv("LIVE2D_RENDER_PATH", "/workspaces/hub/tools/bin/live2d-render")
+LIVE2D_RENDER_EXECUTABLE = os.getenv("LIVE2D_RENDER_PATH", "")
 LIVE2D_MODEL_ID = os.getenv("LIVE2D_MODEL_ID", "majo")
-LIVE2D_MODEL_PATH = os.getenv("LIVE2D_MODEL_PATH", "/workspaces/hub/repos/live2d/assets/models/majo/majo.model3.json")
+LIVE2D_MODEL_PATH = os.getenv("LIVE2D_MODEL_PATH", "")
 
 # Avatar overlay position and render size within the final video canvas.
 # Render at full production resolution so the live2d model fills the frame
