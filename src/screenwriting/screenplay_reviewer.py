@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..artifacts.screenplay import new_feasibility_report
+from ..utils.text_sanitizer import has_unsafe_characters
 
 from ..utils.tts_utils import estimate_duration_s as _estimate_duration_s, _WPM_BY_PRESET
 
@@ -146,6 +147,22 @@ class ScreenplayReviewer:
                     ),
                     "severity": "warn",
                 })
+
+            # Check: non-ASCII / unsafe characters in text fields
+            for field_name, field_value in [("vo_line", vo), ("on_screen_text", on_screen)]:
+                char_issues = has_unsafe_characters(field_value)
+                if char_issues:
+                    issues.append({
+                        "scene_id": scene_id,
+                        "issue": "unsafe_characters",
+                        "detail": f"{field_name}: {'; '.join(char_issues)}",
+                        "suggestion": (
+                            "Replace non-ASCII punctuation with ASCII equivalents "
+                            "(em-dash -> hyphen, curly quotes -> straight quotes). "
+                            "Remove emoji."
+                        ),
+                        "severity": "warn",
+                    })
 
         # Check 2: total duration
         scene_total = sum(float(sc.get("target_duration_s") or 0) for sc in scenes if isinstance(sc, dict))

@@ -98,7 +98,7 @@ def screenplay_to_script_package(screenplay: dict[str, Any]) -> dict[str, Any]:
     beats: list[dict[str, Any]] = []
     asset_prompts: list[str] = []
 
-    current_t = 0.0
+    current_t = 0.5  # 0.5s lead-in before first scene starts
     for scene in scenes:
         dur = float(scene.get("target_duration_s") or 5.0)
         t_start = round(current_t, 2)

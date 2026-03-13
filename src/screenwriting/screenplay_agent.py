@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ..config import make_llm
 from ..utils.json_utils import safe_json_loads
+from ..utils.text_sanitizer import sanitize_text
 from ..artifacts.screenplay import new_screenplay
 
 _FORMAT_LIBRARY_DIR = Path(__file__).parent / "format_library"
@@ -83,7 +84,7 @@ def _coerce_scenes(raw_scenes: Any, target_duration_s: int) -> list[dict[str, An
         if not isinstance(s, dict):
             continue
         scene_id = str(s.get("scene_id") or f"scene_{i+1:02d}")
-        vo = str(s.get("vo_line") or "").strip()
+        vo = sanitize_text(str(s.get("vo_line") or ""))
         dur = float(s.get("target_duration_s") or 5.0)
         visual_raw = s.get("visual") or {}
         visual: dict[str, Any] = {
@@ -96,7 +97,7 @@ def _coerce_scenes(raw_scenes: Any, target_duration_s: int) -> list[dict[str, An
             "vo_line": vo,
             "target_duration_s": dur,
             "visual": visual,
-            "on_screen_text": str(s.get("on_screen_text") or "").strip(),
+            "on_screen_text": sanitize_text(str(s.get("on_screen_text") or "")),
             "music_energy": str(s.get("music_energy") or "medium").strip(),
         })
 
@@ -233,7 +234,7 @@ class ScreenplayAgent:
                 continue
             patched = dict(scene)
             if "vo_line" in patch:
-                patched["vo_line"] = str(patch["vo_line"]).strip()
+                patched["vo_line"] = sanitize_text(str(patch["vo_line"]))
             if "visual" in patch and isinstance(patch["visual"], dict):
                 v = patch["visual"]
                 patched["visual"] = {

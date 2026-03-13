@@ -74,11 +74,9 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
    - Visual safety validation is passthrough (`provider="none"`)
    - No CLIP relevance scoring
 
-7. **Script Writer Emits Non-ASCII Characters (em-dashes, emoji)** 🔥
-   - The screenplay LLM outputs `\u2014` (em-dash) and potentially other non-ASCII/special characters in `vo_line` and `on_screen_text` fields.
-   - These cause rendering issues (FFmpeg `drawtext` font glyph errors) and break TTS reliability.
-   - **Priority:** P0 — fix before next pipeline run.
-   - **Fix:** Add a post-processing sanitizer in the screenplay writer that strips or replaces non-ASCII punctuation (em-dash -> hyphen, curly quotes -> straight quotes, etc.) before emitting the screenplay artifact. Also add a validation gate in `review_feasibility`.
+7. ~~**Script Writer Emits Non-ASCII Characters (em-dashes, emoji)**~~ **FIXED**
+   - **Status:** Resolved (March 2026). `sanitize_text()` in `src/utils/text_sanitizer.py` replaces em-dashes, curly quotes, emoji, zero-width chars, etc. with ASCII equivalents. Applied in `_coerce_scenes()` and `revise_scene()`. `ScreenplayReviewer` now flags any remaining unsafe characters.
+   - **Commit:** `fix/screenplay-sanitizer-and-text-flow` branch.
 
 8. **Script Writer Lacks VO Pacing / Pause Guidance**
    - The screenplay `vo_line` fields contain plain text with no pause markers, breath cues, or reading-speed annotations.
@@ -86,10 +84,17 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
    - **Priority:** P1 — quality improvement for voiceover naturalness.
    - **Fix:** Update the screenplay writer prompt to emit inline pause markers (e.g., `...` for short pauses, `[pause]` for beats) and pacing hints. Evaluate whether Chatterbox respects punctuation-based pauses or needs explicit SSML-like tags.
 
-9. **On-Screen Text Does Not Match What Is Rendered in Video** 🔥
-   - The screenplay's `on_screen_text` field defines intended captions, but the actual text rendered in the final video does not match — either wrong text is shown, text is truncated, or the screenplay text is ignored entirely by the render pipeline.
-   - **Priority:** P0 — the viewer sees text that doesn't correspond to what the script intended.
-   - **Fix:** Trace the on_screen_text flow from screenplay -> script_package -> video_plan -> render_spec -> FFmpeg drawtext and identify where the mismatch is introduced. Likely a mapping or field-name disconnect between pipeline stages.
+9. **Non-ASCII Sanitizer Silently Alters Script Content**
+   - The current `sanitize_text()` fix (item 7) strips/replaces non-ASCII characters after the LLM generates them. This can subtly change the script's structure, pacing, and meaning (e.g., an em-dash used for a dramatic pause becomes ` - `, changing rhythm; emoji removal may leave awkward gaps).
+   - **Priority:** P2 — the current sanitizer is a sufficient safety net, but a prompt-level fix is more principled.
+   - **Fix (two-pronged):**
+     1. **Prompt-level prevention:** Update `_WRITE_SYSTEM` and `_REVISE_SYSTEM` prompts in `screenplay_agent.py` to explicitly instruct the LLM to use only ASCII punctuation (hyphens not em-dashes, straight quotes not curly, `...` not ellipsis character, no emoji).
+     2. **Detect-and-rewrite:** In `_coerce_scenes()`, instead of silently sanitizing, check for non-ASCII via `has_unsafe_characters()`. If detected, request a full rewrite of the affected scene via `revise_scene()` so the LLM produces a clean version that preserves its intended pacing. Fall back to `sanitize_text()` only if the rewrite still contains violations (max 1 retry).
+   - Keep the existing `sanitize_text()` as a last-resort safety net in all paths.
+
+10. ~~**On-Screen Text Does Not Match What Is Rendered in Video**~~ **FIXED**
+    - **Status:** Resolved (March 2026). Root cause: `composition_agent.py:create_text_overlays()` preferred `vo_line` over `on_screen_text`, so the full voiceover narration was rendered as on-screen text instead of the intended brief caption. Fixed by inverting the priority: `on_screen_text` is now preferred, with `vo_line` as fallback only when `on_screen_text` is empty.
+    - **Commit:** `fix/screenplay-sanitizer-and-text-flow` branch.
 
 ---
 

@@ -96,8 +96,8 @@ def test_create_render_specification_basic(tmp_path: Path) -> None:
 
     text_layer = [l for l in spec["layers"] if l["type"] == "text"][0]
     assert len(text_layer["elements"]) == 2
-    assert text_layer["elements"][0]["text"] == "Hello world."
-    assert text_layer["elements"][1]["text"] == "Second line."
+    assert text_layer["elements"][0]["text"] == "HELLO"
+    assert text_layer["elements"][1]["text"] == "SECOND"
 
     audio_layer = [l for l in spec["layers"] if l["type"] == "audio"][0]
     assert len(audio_layer["tracks"]) == 2

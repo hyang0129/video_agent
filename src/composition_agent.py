@@ -270,9 +270,9 @@ class CompositionAgent:
             if not scene_id:
                 continue
 
-            text = str(scene.get("vo_line") or "").strip()
+            text = str(scene.get("on_screen_text") or "").strip()
             if not text:
-                text = str(scene.get("on_screen_text") or "").strip()
+                text = str(scene.get("vo_line") or "").strip()
             if not text:
                 continue
 
