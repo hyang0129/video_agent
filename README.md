@@ -14,16 +14,16 @@ Each agent consumes a typed JSON artifact from the previous stage and emits one 
 
 ```mermaid
 graph TD
-    A["MarketResearchAgent<br/>src/agent.py"] -->|TopicBrief.json| B["FactMiner<br/>src/facts/fact_miner.py"]
-    B -->|facts.db| C["ScriptAgent<br/>src/script_agent.py"]
-    C -->|ScriptPackage.json| D["VideoPlanner<br/>src/video_planner.py"]
-    D -->|VideoPlan.json| E["AudioAgent<br/>src/audio_agent.py"]
-    D -->|VideoPlan.json| F["VisualAgent<br/>src/visual_agent.py"]
-    E -->|AudioTimeline.json + MP3s| G["MusicAgent<br/>src/music_agent.py"]
-    E -->|AudioTimeline.json| H["CompositorAgent<br/>src/composition_agent.py"]
+    A["MarketResearchAgent<br/>video_agent/agent.py"] -->|TopicBrief.json| B["FactMiner<br/>video_agent/facts/fact_miner.py"]
+    B -->|facts.db| C["ScriptAgent<br/>video_agent/script_agent.py"]
+    C -->|ScriptPackage.json| D["VideoPlanner<br/>video_agent/video_planner.py"]
+    D -->|VideoPlan.json| E["AudioAgent<br/>video_agent/audio_agent.py"]
+    D -->|VideoPlan.json| F["VisualAgent<br/>video_agent/visual_agent.py"]
+    E -->|AudioTimeline.json + MP3s| G["MusicAgent<br/>video_agent/music_agent.py"]
+    E -->|AudioTimeline.json| H["CompositorAgent<br/>video_agent/composition_agent.py"]
     F -->|VisualManifest.json| H
     G -->|MusicSelection.json| H
-    H -->|RenderSpec.json| I["RenderAgent<br/>src/render_agent.py"]
+    H -->|RenderSpec.json| I["RenderAgent<br/>video_agent/render_agent.py"]
     I -->|final_video.mp4| J[("results/run_id/")]
 ```
 
@@ -33,17 +33,17 @@ AudioAgent and VisualAgent both consume `VideoPlan.json` independently — the n
 
 ## Pipeline Stages
 
-| # | Agent | Source File | Input | Output |
-|---|-------|------------|-------|--------|
-| 0 | MarketResearchAgent | `src/agent.py` | topic keyword | `TopicBrief.json` |
-| 1 | FactMiner | `src/facts/fact_miner.py` | `TopicBrief.json` | `facts.db` |
-| 2 | ScriptAgent | `src/script_agent.py` | `TopicBrief.json` + facts | `ScriptPackage.json` |
-| 3 | VideoPlanner | `src/video_planner.py` | `ScriptPackage.json` | `VideoPlan.json` |
-| 4 | AudioAgent | `src/audio_agent.py` | `VideoPlan.json` | `AudioTimeline.json` + MP3s |
-| 5 | MusicAgent | `src/music_agent.py` | `AudioTimeline.json` | `MusicSelection.json` |
-| 6 | VisualAgent | `src/visual_agent.py` | `VideoPlan.json` | `VisualManifest.json` |
-| 7 | CompositorAgent | `src/composition_agent.py` | VideoPlan + Audio + Visual + Music | `RenderSpec.json` |
-| 8 | RenderAgent | `src/render_agent.py` | `RenderSpec.json` | `final_video.mp4` |
+| # | Agent | Module | Input | Output |
+|---|-------|--------|-------|--------|
+| 0 | MarketResearchAgent | `video_agent.agent` | topic keyword | `TopicBrief.json` |
+| 1 | FactMiner | `video_agent.facts.fact_miner` | `TopicBrief.json` | `facts.db` |
+| 2 | ScriptAgent | `video_agent.script_agent` | `TopicBrief.json` + facts | `ScriptPackage.json` |
+| 3 | VideoPlanner | `video_agent.video_planner` | `ScriptPackage.json` | `VideoPlan.json` |
+| 4 | AudioAgent | `video_agent.audio_agent` | `VideoPlan.json` | `AudioTimeline.json` + WAVs |
+| 5 | MusicAgent | `video_agent.music_agent` | `AudioTimeline.json` | `MusicSelection.json` |
+| 6 | VisualAgent | `video_agent.visual_agent` | `VideoPlan.json` | `VisualManifest.json` |
+| 7 | CompositorAgent | `video_agent.composition_agent` | VideoPlan + Audio + Visual + Music | `RenderSpec.json` |
+| 8 | RenderAgent | `video_agent.render_agent` | `RenderSpec.json` | `final_video.mp4` |
 
 ---
 
@@ -169,6 +169,72 @@ Individual pipeline stages can also be called via the MCP tools directly using `
 
 ---
 
+## Usage as a Package
+
+The pipeline is installable as a standard Python package (`pip install -e .`) and all agents are importable directly.
+
+### Run the full orchestrated pipeline
+
+```python
+from video_agent.orchestrator import ProductionOrchestrator
+
+orchestrator = ProductionOrchestrator()
+result = orchestrator.run(topic="cheese facts")
+# result.run_dir / "final_video.mp4"
+```
+
+### Call individual agents
+
+```python
+from pathlib import Path
+from video_agent.audio_agent import AudioGenerationAgent
+from video_agent.artifacts.io import read_json
+
+screenplay = read_json(Path("results/my_run/screenplay.json"))
+agent = AudioGenerationAgent(output_dir=Path("results/my_run"))
+timeline = agent.generate(screenplay)
+```
+
+### Call MCP tools in-process
+
+Every MCP tool is callable without a running server via `_call_tool_inprocess`:
+
+```python
+import asyncio
+from video_agent.orchestrator import _call_tool_inprocess
+
+result = asyncio.run(_call_tool_inprocess("generate_audio", {
+    "screenplay": screenplay,
+    "run_dir": "results/my_run",
+    "voice_preset": "default",
+}))
+print(result["status"])  # "ok" | "degraded" | "partial"
+```
+
+### Public API surface
+
+Top-level package exports (stable, versioned):
+
+```python
+from video_agent import ProductionOrchestrator
+from video_agent import new_run_id, ensure_run_dir, write_json
+from video_agent import new_concept, new_screenplay, screenplay_to_script_package
+```
+
+Individual agents are importable from their submodules:
+
+```python
+from video_agent.audio_agent import AudioGenerationAgent
+from video_agent.render_agent import RenderAgent
+from video_agent.script_agent import ScriptGenerationAgent
+from video_agent.video_planner import script_package_to_video_plan
+from video_agent.orchestrator import _call_tool_inprocess
+```
+
+All agents accept a `run_dir: Path` and communicate exclusively through JSON artifacts — no shared state.
+
+---
+
 ## Running Tests
 
 ```bash
@@ -234,7 +300,7 @@ video_agent/
 | Agent orchestration | LangChain 0.3.x |
 | LLM (default) | Anthropic Claude (claude-sonnet) |
 | LLM (alternative) | Google Gemini (via langchain-google-genai) |
-| TTS voiceover | [Chatterbox Turbo TTS](vendor/chatterbox/) (local GPU, default) or ElevenLabs API (`TTS_BACKEND=elevenlabs`) |
+| TTS voiceover | [Chatterbox Turbo TTS](repos/chatterbox/) (local GPU, default) or ElevenLabs API (`TTS_BACKEND=elevenlabs`) |
 | Image retrieval | Pexels API |
 | Video rendering | FFmpeg (local, zero cloud cost) |
 | Artifact format | Typed JSON files |
