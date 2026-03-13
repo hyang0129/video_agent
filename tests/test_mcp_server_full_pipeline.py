@@ -4,7 +4,7 @@ Starts the video-agent MCP HTTPS server in a subprocess, then runs the full
 screenwriting pipeline using real HTTP/TLS MCP tool calls via the orchestrator.
 
 Conditions:
-  - use_mcp=True, serial=True
+  - serial=True
   - MCP transport: HTTPS (streamable-http) via subprocess server on port 8443
   - TTS backend: chatterbox_server (requires chatterbox at CHATTERBOX_SERVER_URL)
   - No artifact reuse -- fresh tmp_path each run
@@ -202,7 +202,6 @@ def test_mcp_server_full_pipeline(tmp_path: Path, mcp_server_proc) -> None:
         run_dir=run_dir,
         screenplay_agent=screenplay_agent,
         voice="narrator",
-        use_mcp=True,
         serial=True,
     )
     write_json(run_dir / "audio_timeline.json", audio_timeline)

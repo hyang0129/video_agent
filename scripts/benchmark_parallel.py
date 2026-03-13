@@ -73,7 +73,6 @@ def run_benchmark(fixture_path: Path) -> None:
                 run_dir=run_dir,
                 screenplay_agent=screenplay_agent,
                 voice="narrator",
-                use_mcp=True,
                 serial=serial_flag,
             )
         except Exception as exc:

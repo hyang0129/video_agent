@@ -284,7 +284,7 @@ class TestOrchestratorRevisionLoop:
             import asyncio as _asyncio
 
             async def _ok(*a, **kw):
-                return audio_timeline, image_manifest
+                return audio_timeline, image_manifest, {}
 
             mock_parallel.side_effect = _ok
 
@@ -338,7 +338,7 @@ class TestOrchestratorRevisionLoop:
                     }],
                     "degraded_scene_count": 1,
                 })
-            return audio_timeline, image_manifest
+            return audio_timeline, image_manifest, {}
 
         with patch("src.orchestrator._produce_parallel", side_effect=_parallel_side_effect):
             result_timeline, result_sp, result_vp = orch.run(
@@ -367,7 +367,7 @@ class TestOrchestratorRevisionLoop:
         image_manifest = self._make_image_manifest()
 
         async def _ok(*a, **kw):
-            return audio_timeline, image_manifest
+            return audio_timeline, image_manifest, {}
 
         with patch("src.orchestrator._produce_parallel", side_effect=_ok):
             orch.run(
