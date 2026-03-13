@@ -204,6 +204,18 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 **Goal:** Make the MVP fully production-complete with high-quality output
 
+#### 1.0 Minimal Happy Path (Lowest-Friction First Run)
+- **Priority:** P1
+- **Status:** Open
+- **Problem:** A new user cloning the repo cannot easily determine the cheapest way to see a working video. The full pipeline requires CUDA, a running Chatterbox server, YouTube API key, Pexels API key, and an LLM API key. If any of these are missing, the pipeline may fail or produce heavily degraded output without clear guidance on what's missing vs. what's optional.
+- **Goal:** Document and implement a "minimal happy path" — the smallest set of requirements that produces a watchable (even if degraded) video, with clear feedback at each step about what's present vs. missing.
+- **Scope:**
+  - Define the minimum viable set of credentials/services for a working run (e.g., just `ANTHROPIC_API_KEY` + FFmpeg → video with placeholder images and silent audio).
+  - Ensure `python main.py preflight` clearly reports which capabilities are available and which will degrade, with an overall go/no-go verdict.
+  - Add a "Minimal Happy Path" section to the README explaining what you get at each level of setup (LLM-only → +Chatterbox → +Pexels → full).
+  - Ensure graceful degradation: every missing optional service (Pexels, Chatterbox, Rhubarb, Live2D) produces a clear `[DEGRADED]` log message and a usable fallback, not a crash.
+- **Success Metric:** A user with only `ANTHROPIC_API_KEY` and FFmpeg installed can run the pipeline and get a playable MP4 (placeholder images, silent audio) within 5 minutes of cloning.
+
 #### 1.0a Complete MCP Tool Coverage (All Pipeline Stages)
 - **Priority:** P1
 - **Status:** Open

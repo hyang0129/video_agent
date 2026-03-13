@@ -6,6 +6,8 @@ An end-to-end multi-agent system that turns a topic string into a narrated YouTu
 "cheese facts"  -->  [9 agents]  -->  final_video.mp4
 ```
 
+**Platform:** Linux only (tested on Ubuntu 22.04 / WSL2). Requires **NVIDIA GPU with CUDA 12.x** for Chatterbox TTS voiceover generation.
+
 ---
 
 ## Architecture
@@ -49,32 +51,49 @@ AudioAgent and VisualAgent both consume `VideoPlan.json` independently — the n
 
 ## Quickstart
 
-**Prerequisites:** Python 3.10+, FFmpeg on PATH
+**Prerequisites:**
+- **Linux** (Ubuntu 22.04+ or WSL2)
+- **Python 3.10+**
+- **FFmpeg** (see install instructions below)
+- **NVIDIA GPU + CUDA 12.x** (for Chatterbox TTS)
+- **Chatterbox TTS server** running locally — see [repos/chatterbox](https://github.com/hyang0129/chatterbox) for setup
 
-### 1. Install
+### 1. Install FFmpeg
 
 ```bash
-git clone <repo-url>
+sudo apt update && sudo apt install -y ffmpeg
+ffmpeg -version   # verify install
+```
+
+### 2. Clone and install
+
+```bash
+git clone https://github.com/hyang0129/video_agent.git
 cd video_agent
 python -m venv venv
 source venv/bin/activate
 pip install -e .
 ```
 
-### 2. Configure API keys and tool paths
+### 3. Configure API keys and tool paths
 
 ```bash
 cp .env.example .env
-# Fill in API keys and tool paths (see sections below)
+# Fill in at minimum: ANTHROPIC_API_KEY and CHATTERBOX_SERVER_URL
+# See the API Keys and Tool Paths sections below for all options
 ```
 
-### 3. Preflight check
+### 4. Start the Chatterbox TTS server
+
+The pipeline requires a running [Chatterbox TTS](https://github.com/hyang0129/chatterbox) server for voiceover generation. Follow the Chatterbox repo README to start the server, then set `CHATTERBOX_SERVER_URL` in `.env` (defaults to `http://localhost:8000`).
+
+### 5. Preflight check
 
 ```bash
 python main.py preflight
 ```
 
-### 4. Run the full pipeline
+### 6. Run the full pipeline
 
 ```bash
 # Full MCP pipeline test (exercises all 18 tools)
@@ -92,7 +111,7 @@ Output lands in `results/test/full_mcp_pipeline/final_video.mp4`.
 
 **Cheese History Facts** — generated end-to-end by the pipeline (Chatterbox TTS voiceover, Pexels images, FFmpeg render):
 
-[![Sample video thumbnail](docs/sample_video_thumbnail.jpg)](https://github.com/hyang0129/video_agent/releases/download/v0.1.0-demo/final_video.mp4)
+<video src="samples/sample-cheese-video.mp4" controls width="270"></video>
 
 A successful pipeline run produces this artifact layout:
 
@@ -300,7 +319,7 @@ video_agent/
 | Agent orchestration | LangChain 0.3.x |
 | LLM (default) | Anthropic Claude (claude-sonnet) |
 | LLM (alternative) | Google Gemini (via langchain-google-genai) |
-| TTS voiceover | [Chatterbox Turbo TTS](repos/chatterbox/) (local GPU, default) or ElevenLabs API (`TTS_BACKEND=elevenlabs`) |
+| TTS voiceover | [Chatterbox Turbo TTS](https://github.com/hyang0129/chatterbox) (local GPU, CUDA required, default) or ElevenLabs API (`TTS_BACKEND=elevenlabs`) |
 | Image retrieval | Pexels API |
 | Video rendering | FFmpeg (local, zero cloud cost) |
 | Artifact format | Typed JSON files |
