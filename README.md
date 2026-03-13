@@ -6,6 +6,10 @@ An end-to-end multi-agent system that turns a topic string into a narrated YouTu
 "cheese facts"  -->  [9 agents]  -->  final_video.mp4
 ```
 
+<video src="https://github.com/user-attachments/assets/00ba6536-3c6d-4350-8636-7d90ada1055e" controls width="270"></video>
+
+*Sample output: Cheese History Facts — Chatterbox TTS voiceover, Pexels images, FFmpeg render.*
+
 **Platform:** Linux only (tested on Ubuntu 22.04 / WSL2). Requires **NVIDIA GPU with CUDA 12.x** for Chatterbox TTS voiceover generation.
 
 ---
@@ -108,10 +112,6 @@ Output lands in `results/test/full_mcp_pipeline/final_video.mp4`.
 ---
 
 ## Example Output
-
-**Cheese History Facts** — generated end-to-end by the pipeline (Chatterbox TTS voiceover, Pexels images, FFmpeg render):
-
-<video src="samples/sample-cheese-video.mp4" controls width="270"></video>
 
 A successful pipeline run produces this artifact layout:
 
