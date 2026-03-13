@@ -117,7 +117,7 @@ class TestProducerServerLightweightTools:
 
 class TestVideoAgentServerListTools:
     @pytest.mark.asyncio
-    async def test_list_tools_returns_ten_tools(self):
+    async def test_list_tools_returns_all_tools(self):
         from src.mcp.video_agent_server import list_tools
 
         tools = await list_tools()
@@ -133,6 +133,11 @@ class TestVideoAgentServerListTools:
             "write_screenplay",
             "review_feasibility",
             "revise_scene",
+            "research_topic",
+            "mine_facts",
+            "generate_script",
+            "create_video_plan",
+            "select_music",
         }
 
     @pytest.mark.asyncio

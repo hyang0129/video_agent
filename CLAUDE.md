@@ -166,6 +166,37 @@ When a change is ready for review:
 
 ---
 
+## Full Pipeline Test Reporting
+
+When running the full MCP pipeline test (`scripts/run_full_mcp_pipeline.py`) or
+any multi-stage pipeline run, **always report the outcome of every step** to the
+user, including:
+
+1. **Degradations:** Steps that completed but used a fallback (e.g., TTS returned
+   silence because Chatterbox server was unavailable, placeholder images used
+   because Pexels API key was missing). Report as `DEGRADED` with the reason.
+2. **Warnings:** Non-fatal issues (e.g., audio segment duration mismatch,
+   feasibility score below threshold, voiceover too long for scene timing).
+3. **Partial completions:** Steps that produced output but not full expected output
+   (e.g., 5 of 7 scenes got real TTS, 2 fell back to silence).
+4. **Errors:** Steps that failed entirely and what downstream impact that had.
+5. **Skips:** Steps that were skipped due to upstream failure or missing input.
+
+Format the report as a summary table after the run completes:
+
+```
+| Step | Tool              | Status   | Notes                              |
+|------|-------------------|----------|------------------------------------|
+| 1    | research_topic    | OK       |                                    |
+| 7    | generate_audio    | DEGRADED | 3/5 scenes silent (no TTS server)  |
+| 10   | validate_output   | WARN     | duration parity 0.4s (> 0.25s)     |
+```
+
+Do not silently swallow fallbacks or degradations — the user needs to know which
+parts of the output are placeholder/degraded to evaluate quality accurately.
+
+---
+
 ## Quality Gates
 
 A pipeline run is considered successful only if:

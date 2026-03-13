@@ -39,12 +39,17 @@ import requests
 from src.artifacts.io import write_json
 from src.artifacts.screenplay import screenplay_to_script_package
 from src.composition_agent import create_composition_agent
-from src.orchestrator import ProductionOrchestrator
+from src.orchestrator import ProductionOrchestrator, _call_tool_inprocess
 from src.render_agent import create_render_agent
-from src.screenwriting.concept_agent import ConceptAgent
 from src.screenwriting.screenplay_agent import ScreenplayAgent
-from src.screenwriting.screenplay_reviewer import ScreenplayReviewer
-from src.video_planner import script_package_to_video_plan
+
+def _mcp_call(tool_name: str, arguments: dict) -> dict:
+    """Call an MCP tool in-process (exercises same handler code as the HTTPS server)."""
+    import asyncio
+    return asyncio.get_event_loop().run_until_complete(
+        _call_tool_inprocess(tool_name, arguments)
+    )
+
 
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _TOPIC_BRIEF_PATH = Path(os.environ.get("TOPIC_BRIEF_PATH", str(_FIXTURES_DIR / "topic_brief_ww2_tanks.json")))
@@ -140,28 +145,34 @@ def test_mcp_server_full_pipeline(tmp_path: Path, mcp_server_proc) -> None:
     run_dir.mkdir()
     topic_brief = json.loads(_TOPIC_BRIEF_PATH.read_text(encoding="utf-8"))
 
-    # --- Stage 1: ConceptAgent ---
-    print("\n[INFO] Stage 1: Generating concepts...")
-    concept_agent = ConceptAgent()
-    concepts = concept_agent.generate_concepts(topic_brief=topic_brief, n_concepts=1)
-    assert concepts, "ConceptAgent returned no concepts"
+    # --- Stage 1: generate_concepts (MCP tool) ---
+    print("\n[INFO] Stage 1: Generating concepts via MCP...")
+    concepts_result = _mcp_call("generate_concepts", {
+        "topic_brief": topic_brief,
+        "n_concepts": 1,
+    })
+    assert concepts_result.get("status") == "ok", f"generate_concepts failed: {concepts_result}"
+    concepts = concepts_result["concepts"]
+    assert concepts, "generate_concepts returned no concepts"
     concept = concepts[0]
     write_json(run_dir / "concept.json", concept)
     print(f"[OK] Concept: format={concept.get('format')} title={concept.get('title', '')[:50]}")
 
-    # --- Stage 2: ScreenplayAgent ---
-    print("\n[INFO] Stage 2: Writing screenplay...")
-    screenplay_agent = ScreenplayAgent()
-    screenplay = screenplay_agent.write_screenplay(concept=concept, topic_brief=topic_brief)
-    assert screenplay, "ScreenplayAgent returned empty screenplay"
+    # --- Stage 2: write_screenplay (MCP tool) ---
+    print("\n[INFO] Stage 2: Writing screenplay via MCP...")
+    screenplay_result = _mcp_call("write_screenplay", {"concept": concept})
+    assert screenplay_result.get("status") == "ok", f"write_screenplay failed: {screenplay_result}"
+    screenplay = screenplay_result["screenplay"]
+    assert screenplay, "write_screenplay returned empty screenplay"
     write_json(run_dir / "screenplay.json", screenplay)
     scenes = screenplay.get("scenes") or []
     print(f"[OK] Screenplay: {len(scenes)} scene(s)")
 
-    # --- Stage 3: ScreenplayReviewer ---
-    print("\n[INFO] Stage 3: Reviewing feasibility...")
-    reviewer = ScreenplayReviewer()
-    report = reviewer.review(screenplay)
+    # --- Stage 3: review_feasibility (MCP tool) ---
+    print("\n[INFO] Stage 3: Reviewing feasibility via MCP...")
+    review_result = _mcp_call("review_feasibility", {"screenplay": screenplay})
+    assert review_result.get("status") == "ok", f"review_feasibility failed: {review_result}"
+    report = review_result["feasibility_report"]
     write_json(run_dir / "feasibility.json", report)
     print(f"[OK] Feasibility: score={report.get('overall_score', '?')} action={report.get('recommended_action', '?')}")
 
@@ -173,9 +184,11 @@ def test_mcp_server_full_pipeline(tmp_path: Path, mcp_server_proc) -> None:
     write_json(run_dir / "script_package.json", script_package)
     print(f"[OK] ScriptPackage: {len(beats)} beats")
 
-    # --- Stage 5: VideoPlanner ---
-    print("\n[INFO] Stage 5: Creating VideoPlan...")
-    video_plan = script_package_to_video_plan(script_package=script_package)
+    # --- Stage 5: create_video_plan (MCP tool) ---
+    print("\n[INFO] Stage 5: Creating VideoPlan via MCP...")
+    vp_result = _mcp_call("create_video_plan", {"script_package": script_package})
+    assert vp_result.get("status") == "ok", f"create_video_plan failed: {vp_result}"
+    video_plan = vp_result["video_plan"]
     write_json(run_dir / "video_plan.json", video_plan)
     print("[OK] VideoPlan written")
 

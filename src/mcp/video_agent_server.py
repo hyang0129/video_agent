@@ -1,7 +1,4 @@
-"""MCP Video Agent Server — all 10 tools over HTTPS Streamable HTTP transport.
-
-Merges the former producer_server.py (6 production tools) and
-screenwriting_server.py (4 screenwriting tools) into a single server.
+"""MCP Video Agent Server — all 15 tools over HTTPS Streamable HTTP transport.
 
 Tools exposed:
   Screenwriting (4):
@@ -9,6 +6,13 @@ Tools exposed:
     2. write_screenplay         -- write a Screenplay from a Concept
     3. review_feasibility       -- heuristic pre-flight validation (no API call)
     4. revise_scene             -- revise one scene given a structured issue
+
+  Research & planning (5):
+   11. research_topic           -- market research via YouTube API + LLM
+   12. mine_facts               -- fact mining from YouTube captions
+   13. generate_script          -- direct topic->script (non-screenplay path)
+   14. create_video_plan        -- ScriptPackage -> VideoPlan (deterministic)
+   15. select_music             -- background music selection
 
   Production (6):
     5. check_asset_availability -- Pexels probe, no download
@@ -218,6 +222,72 @@ async def list_tools() -> List[Tool]:
                 "required": ["screenplay", "scene_id"],
             },
         ),
+        # -- Research & planning tools (5) --
+        Tool(
+            name="research_topic",
+            description="Run market research for a category. Calls YouTube API + LLM analysis. Returns top topic brief.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "setting": {"type": "string", "description": "Category to research, e.g. 'cheese facts'"},
+                    "max_results": {"type": "integer", "default": 50, "description": "Max YouTube results to analyse"},
+                },
+                "required": ["setting"],
+            },
+        ),
+        Tool(
+            name="mine_facts",
+            description="Mine facts from top YouTube videos for a topic. Writes to facts.db.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic_query": {"type": "string", "description": "Search query for YouTube"},
+                    "topic_id": {"type": "string", "description": "Topic identifier for facts.db"},
+                    "subtopic_id": {"type": "string", "description": "Optional subtopic identifier"},
+                    "max_videos": {"type": "integer", "default": 5, "description": "Max videos to mine"},
+                    "use_captions": {"type": "boolean", "default": True, "description": "Extract facts from captions"},
+                },
+                "required": ["topic_query", "topic_id"],
+            },
+        ),
+        Tool(
+            name="generate_script",
+            description="Generate a ScriptPackage directly from a TopicBrief (non-screenplay path).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic_brief": {"type": "object", "description": "TopicBrief dict"},
+                    "creative_spec": {"type": "object", "description": "Optional CreativeSpec dict"},
+                },
+                "required": ["topic_brief"],
+            },
+        ),
+        Tool(
+            name="create_video_plan",
+            description="Convert a ScriptPackage into a VideoPlan. Deterministic, no LLM call.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "script_package": {"type": "object", "description": "ScriptPackage dict"},
+                    "creative_spec": {"type": "object", "description": "Optional CreativeSpec dict"},
+                },
+                "required": ["script_package"],
+            },
+        ),
+        Tool(
+            name="select_music",
+            description="Select background music for a video given its AudioTimeline.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "audio_timeline": {"type": "object", "description": "AudioTimeline dict"},
+                    "video_plan": {"type": "object", "description": "Optional VideoPlan dict"},
+                    "script_package": {"type": "object", "description": "Optional ScriptPackage dict"},
+                    "visual_manifest": {"type": "object", "description": "Optional VisualManifest dict"},
+                },
+                "required": ["audio_timeline"],
+            },
+        ),
         # -- Production tools (6) --
         Tool(
             name="check_asset_availability",
@@ -341,7 +411,6 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             concepts = agent.generate_concepts(
                 topic_brief=topic_brief,
                 n_concepts=n_concepts,
-                creative_spec=creative_spec,
             )
             return _json({"status": "ok", "concepts": concepts, "count": len(concepts)})
 
@@ -351,13 +420,18 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
         elif name == "write_screenplay":
             concept = arguments["concept"]
             creative_spec = arguments.get("creative_spec")
-            fmt = str(arguments.get("format", "facts"))
+
+            # ScreenplayAgent needs a topic_brief; derive from creative_spec or
+            # build a minimal one from the concept itself.
+            topic_brief_arg = creative_spec or {
+                "topic": {"name": concept.get("title", "")},
+                "subtopic": {"name": concept.get("subtitle", ""), "angle": concept.get("angle", "")},
+            }
 
             agent = ScreenplayAgent()
             screenplay = agent.write_screenplay(
                 concept=concept,
-                creative_spec=creative_spec,
-                format=fmt,
+                topic_brief=topic_brief_arg,
             )
             return _json({"status": "ok", "screenplay": screenplay})
 
@@ -389,6 +463,96 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 revision_field=revision_field,
             )
             return _json({"status": "ok", "screenplay": revised})
+
+        # ------------------------------------------------------------------
+        # 11. research_topic
+        # ------------------------------------------------------------------
+        elif name == "research_topic":
+            setting = str(arguments["setting"])
+            max_results = int(arguments.get("max_results", 50))
+
+            from ..agent import create_agent
+            agent = create_agent()
+            result = agent.research_category_artifacts(setting, max_results=max_results)
+
+            topic_brief_paths = result.get("topic_brief_paths") or []
+            topic_brief = None
+            if topic_brief_paths:
+                topic_brief = json.loads(Path(topic_brief_paths[0]).read_text(encoding="utf-8"))
+
+            return _json({
+                "status": "ok" if topic_brief else "no_results",
+                "run_id": result.get("run_id", ""),
+                "topic_brief": topic_brief,
+                "topic_brief_path": topic_brief_paths[0] if topic_brief_paths else None,
+                "report_path": result.get("report_path", ""),
+                "topic_brief_count": len(topic_brief_paths),
+            })
+
+        # ------------------------------------------------------------------
+        # 12. mine_facts
+        # ------------------------------------------------------------------
+        elif name == "mine_facts":
+            topic_query = str(arguments["topic_query"])
+            topic_id = str(arguments.get("topic_id", ""))
+            subtopic_id = str(arguments.get("subtopic_id", "")) or None
+            max_videos = int(arguments.get("max_videos", 5))
+            use_captions = bool(arguments.get("use_captions", True))
+
+            from ..facts.fact_miner import FactMiner
+            miner = FactMiner()
+            result = miner.mine_top_videos(
+                topic_query=topic_query,
+                topic_id=topic_id,
+                subtopic_id=subtopic_id,
+                max_videos=max_videos,
+                use_captions=use_captions,
+            )
+            return _json({"status": "ok", **result})
+
+        # ------------------------------------------------------------------
+        # 13. generate_script
+        # ------------------------------------------------------------------
+        elif name == "generate_script":
+            topic_brief = arguments["topic_brief"]
+            creative_spec = arguments.get("creative_spec")
+
+            from ..script_agent import create_script_agent
+            agent = create_script_agent()
+            script_package = agent.generate_script_package(
+                topic_brief=topic_brief,
+                creative_spec=creative_spec,
+            )
+            return _json({"status": "ok", "script_package": script_package})
+
+        # ------------------------------------------------------------------
+        # 14. create_video_plan
+        # ------------------------------------------------------------------
+        elif name == "create_video_plan":
+            sp = arguments["script_package"]
+            creative_spec = arguments.get("creative_spec")
+
+            video_plan = script_package_to_video_plan(
+                script_package=sp,
+                creative_spec=creative_spec,
+            )
+            return _json({"status": "ok", "video_plan": video_plan})
+
+        # ------------------------------------------------------------------
+        # 15. select_music
+        # ------------------------------------------------------------------
+        elif name == "select_music":
+            audio_timeline_arg: Dict[str, Any] = arguments["audio_timeline"]
+
+            from ..music_agent import create_music_agent
+            agent = create_music_agent()
+            music_selection = agent.select_music(
+                audio_timeline_arg,
+                video_plan=arguments.get("video_plan"),
+                script_package=arguments.get("script_package"),
+                visual_manifest=arguments.get("visual_manifest"),
+            )
+            return _json({"status": "ok", "music_selection": music_selection})
 
         # ------------------------------------------------------------------
         # 5. check_asset_availability
