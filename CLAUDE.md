@@ -88,11 +88,11 @@ Target format: faceless, caption-first, voiceover-narrated, 9:16 vertical, 15–
 
 ## Development Environment
 
-**Python:** 3.10.11 — venv is at `venv/` in the project root.
+**Python:** 3.10.11 — venv is at `/workspaces/.venvs/video_agent/`.
 
-Activate (Windows CMD): `venv\Scripts\activate`
-Activate (bash/Git Bash): `source venv/Scripts/activate`
-Run without activating: `venv/Scripts/python.exe main.py ...`
+Activate: `source /workspaces/.venvs/video_agent/bin/activate`
+
+This repo is also installable as a package: `pip install -e .`
 
 **Installed LangChain versions (as of 2026-03-06):**
 
@@ -104,7 +104,7 @@ Run without activating: `venv/Scripts/python.exe main.py ...`
 | `langchain-anthropic` | 0.3.22 |
 | `langchain-google-genai` | 2.1.12 |
 
-Install / sync dependencies: `venv/Scripts/python.exe -m pip install -r requirements.txt --upgrade`
+Install / sync dependencies: `pip install -r requirements.txt --upgrade`
 
 ---
 
@@ -112,18 +112,23 @@ Install / sync dependencies: `venv/Scripts/python.exe -m pip install -r requirem
 
 | File | Purpose |
 |------|---------|
-| `main.py` | CLI entry point for all pipeline stages |
-| `src/agent.py` | Market research agent |
-| `src/script_agent.py` | Script generation agent |
-| `src/video_planner.py` | Video planning agent |
-| `src/audio_agent.py` | Audio/TTS generation agent |
-| `src/render_agent.py` | FFmpeg render agent |
-| `src/config.py` | All configuration and thresholds |
-| `src/tools/` | Tool implementations (YouTube API, TTS, image search) |
+| `main.py` | Backward-compat shim; delegates to `video_agent/main.py` |
+| `video_agent/main.py` | CLI entry point (preflight, screenplay, pipeline modes) |
+| `video_agent/agent.py` | Market research agent |
+| `video_agent/script_agent.py` | Script generation agent |
+| `video_agent/video_planner.py` | Video planning agent |
+| `video_agent/audio_agent.py` | Audio/TTS generation agent |
+| `video_agent/render_agent.py` | FFmpeg render agent |
+| `video_agent/config.py` | All configuration and thresholds |
+| `video_agent/tools/` | Tool implementations (YouTube API, TTS, image search) |
+| `video_agent/mcp/video_agent_server.py` | MCP server exposing all 15 tools |
 | `results/` | Per-run output artifacts (gitignored) |
 | `results/metrics_summary.json` | Rolling pipeline metrics (output count, runtimes) |
 | `ROADMAP.md` | Canonical priority and task tracking — check before starting any work |
 | `docs/` | Architecture and design documentation |
+| `pyproject.toml` | Package metadata and build config (hatchling) |
+
+Import example: `from video_agent.orchestrator import ProductionOrchestrator`
 
 ---
 
