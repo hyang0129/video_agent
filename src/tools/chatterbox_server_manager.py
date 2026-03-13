@@ -29,15 +29,19 @@ import requests
 
 CHATTERBOX_PORT = int(os.getenv("CHATTERBOX_PORT", "8000"))
 CHATTERBOX_URL = os.getenv("CHATTERBOX_SERVER_URL", f"http://localhost:{CHATTERBOX_PORT}")
-CHATTERBOX_UVICORN = "/opt/chatterbox-venv/bin/uvicorn"
-CHATTERBOX_APP_DIR = str(Path(__file__).resolve().parents[2] / "vendor" / "chatterbox")
+CHATTERBOX_UVICORN = os.getenv(
+    "CHATTERBOX_UVICORN", "/workspaces/.venvs/chatterbox/bin/uvicorn"
+)
+CHATTERBOX_APP_DIR = os.getenv(
+    "CHATTERBOX_APP_DIR", "/workspaces/hub/repos/chatterbox"
+)
 CHATTERBOX_STARTUP_TIMEOUT = 120  # seconds; model loading can be slow
 
 
 def is_healthy(url: str = CHATTERBOX_URL) -> bool:
     """Return True if the Chatterbox server responds."""
     try:
-        r = requests.get(f"{url}/docs", timeout=3)
+        r = requests.get(f"{url}/health", timeout=3)
         return r.status_code == 200
     except Exception:
         return False

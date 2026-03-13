@@ -118,6 +118,7 @@ AUDIO_BITRATE = "192k"  # MP3 bitrate
 # Values: "elevenlabs" | "chatterbox_direct" | "chatterbox_server"
 TTS_BACKEND = os.getenv("TTS_BACKEND", "chatterbox_server")
 CHATTERBOX_SERVER_URL = os.getenv("CHATTERBOX_SERVER_URL", "http://localhost:8000")
+CHATTERBOX_VOICE = os.getenv("CHATTERBOX_VOICE", "kronimi7030")
 
 # Rhubarb Lip Sync
 _RHUBARB_DEFAULT = "/workspaces/hub/tools/bin/rhubarb"

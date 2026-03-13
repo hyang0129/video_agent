@@ -60,6 +60,7 @@ from .config import (
     AUDIO_SAMPLE_RATE,
     TTS_BACKEND,
     CHATTERBOX_SERVER_URL,
+    CHATTERBOX_VOICE,
 )
 from .artifacts.io import ensure_run_dir
 
@@ -283,11 +284,13 @@ class AudioGenerationAgent:
                     )
                 elif self._tts_backend is not None:
                     segment_path = self.audio_segments_dir / f"vo_{scene_id}.wav"
-                    wav_bytes = self._tts_backend.synthesize(ChatterboxTTSRequest(text=vo_line))
+                    wav_bytes = self._tts_backend.synthesize(
+                        ChatterboxTTSRequest(text=vo_line, voice=CHATTERBOX_VOICE)
+                    )
                     segment_path.write_bytes(wav_bytes)
                     audio_path = segment_path
                     metadata = {
-                        "voice_id": "chatterbox",
+                        "voice_id": CHATTERBOX_VOICE,
                         "character_count": len(vo_line),
                         "file_size_bytes": segment_path.stat().st_size,
                         "estimated_duration_s": None,
@@ -612,7 +615,7 @@ def create_audio_agent(
     if TTS_BACKEND == "chatterbox_server":
         from .tools.chatterbox_backend import ChatterboxServerBackend
         backend = ChatterboxServerBackend(base_url=CHATTERBOX_SERVER_URL)
-        print(f"[INFO] TTS backend: chatterbox_server ({CHATTERBOX_SERVER_URL})")
+        print(f"[INFO] TTS backend: chatterbox_server ({CHATTERBOX_SERVER_URL}), voice: {CHATTERBOX_VOICE}")
     elif TTS_BACKEND == "chatterbox_direct":
         from .tools.chatterbox_backend import ChatterboxDirectBackend
         backend = ChatterboxDirectBackend()

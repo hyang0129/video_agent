@@ -149,6 +149,13 @@ def main():
     beats = (script_package.get("script") or {}).get("beats") or []
     print(f"\n-- Production Pipeline (screenplay path, {len(beats)} beats) --")
 
+    # Persist screenplay and script_package as run artifacts
+    sp_path = run_dir / "screenplay.json"
+    sp_path.write_text(json.dumps(screenplay, indent=2), encoding="utf-8")
+    pkg_path = run_dir / "script_package.json"
+    pkg_path.write_text(json.dumps(script_package, indent=2), encoding="utf-8")
+    print(f"     Saved: screenplay.json, script_package.json")
+
     r8 = _call("create_video_plan", {"script_package": script_package})
     _status_line(8, "create_video_plan", r8, issues)
     video_plan = r8.get("video_plan") or {}
