@@ -74,6 +74,23 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
    - Visual safety validation is passthrough (`provider="none"`)
    - No CLIP relevance scoring
 
+7. **Script Writer Emits Non-ASCII Characters (em-dashes, emoji)** 🔥
+   - The screenplay LLM outputs `\u2014` (em-dash) and potentially other non-ASCII/special characters in `vo_line` and `on_screen_text` fields.
+   - These cause rendering issues (FFmpeg `drawtext` font glyph errors) and break TTS reliability.
+   - **Priority:** P0 — fix before next pipeline run.
+   - **Fix:** Add a post-processing sanitizer in the screenplay writer that strips or replaces non-ASCII punctuation (em-dash -> hyphen, curly quotes -> straight quotes, etc.) before emitting the screenplay artifact. Also add a validation gate in `review_feasibility`.
+
+8. **Script Writer Lacks VO Pacing / Pause Guidance**
+   - The screenplay `vo_line` fields contain plain text with no pause markers, breath cues, or reading-speed annotations.
+   - Chatterbox TTS reads everything at a uniform pace, which sounds robotic on longer lines and misses dramatic beats.
+   - **Priority:** P1 — quality improvement for voiceover naturalness.
+   - **Fix:** Update the screenplay writer prompt to emit inline pause markers (e.g., `...` for short pauses, `[pause]` for beats) and pacing hints. Evaluate whether Chatterbox respects punctuation-based pauses or needs explicit SSML-like tags.
+
+9. **On-Screen Text Does Not Match What Is Rendered in Video** 🔥
+   - The screenplay's `on_screen_text` field defines intended captions, but the actual text rendered in the final video does not match — either wrong text is shown, text is truncated, or the screenplay text is ignored entirely by the render pipeline.
+   - **Priority:** P0 — the viewer sees text that doesn't correspond to what the script intended.
+   - **Fix:** Trace the on_screen_text flow from screenplay -> script_package -> video_plan -> render_spec -> FFmpeg drawtext and identify where the mismatch is introduced. Likely a mapping or field-name disconnect between pipeline stages.
+
 ---
 
 ## Prioritized Action Items

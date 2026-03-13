@@ -33,6 +33,7 @@ class TTSRequest:
     """
 
     text: str
+    voice: str = "kronimi7030"
     temperature: float = 0.8
     top_p: float = 0.95
     top_k: int = 1000
@@ -41,6 +42,7 @@ class TTSRequest:
     def as_dict(self) -> dict:
         return {
             "text": self.text,
+            "voice": self.voice,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "top_k": self.top_k,
