@@ -1,6 +1,6 @@
 # Video Agent Pipeline - Development Roadmap
 
-**Last Updated:** March 12, 2026
+**Last Updated:** March 13, 2026
 
 ## Planning Source of Truth
 
@@ -53,8 +53,9 @@ python main.py mvp <topicbrief.json> [creative_spec.json] ffmpeg
 2. **Relevant Photo Coverage in Rendered Video**
   - Multi-source retrieval (Wikimedia + Pexels) with per-scene `visual_queries` from screenplay now implemented.
   - Fallback chain: Wikimedia -> Pexels -> placeholder BMP.
-  - **Status:** Substantially improved (March 2026). Remaining gap: no CLIP relevance scoring.
-  - **Implementation Plan:** [script-image-video-integration-plan.md](docs/script-image-video-integration-plan.md)
+  - **Status:** Substantially improved (March 2026). Remaining gaps: search queries lack specificity tiers, no image-script alignment scoring, no AI image generation.
+  - **Next steps:** Tiered search queries + generation prompts (1.7), alignment evaluation loop (2.6), AI image generation (3.5).
+  - **Implementation Plan:** [script-image-video-integration-plan.md](docs/script-image-video-integration-plan.md), [plan-image-generation.md](docs/plan-image-generation.md)
 
 3. **No Background Music Mixing**
    - Audio timeline references music tracks but doesn't mix
@@ -350,6 +351,52 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **CLI:** `live2d-render --scene scene.json`, `live2d-inspect --model <name>`
 - **Design doc:** [docs/submodule-integration-plan.md](docs/submodule-integration-plan.md)
 
+#### 1.7 Enhanced Screenplay Visual Queries + Multi-Candidate Image Retrieval
+- **Priority:** P1 (visual quality — improves image relevance without new dependencies)
+- **Status:** Open
+- **Depends on:** 1.5 (script-image integration, already done)
+- **Problem:** The screenplay agent writes `visual.search_queries` as a flat list of keyword phrases. These are often too specific (no results) or too generic (irrelevant results). The downstream pipeline retrieves candidates but has no structured way to collect multiple images per scene for later comparison — it takes the first adequate match.
+- **Scope:**
+  - **Tiered search queries:** Update the screenplay agent prompt to emit exactly 3 search queries per scene, ordered by specificity:
+    1. **Exact** — precisely what the scene depicts (e.g., "Sherman tank crossing a wooden bridge")
+    2. **General** — broader version that should return results (e.g., "WW2 tank crossing river")
+    3. **Fallback** — bare-minimum stock-friendly query (e.g., "military tank")
+  - **Generation prompts (unused for now):** Add a `generation_prompts` field to `scene.visual` with two prompts per scene:
+    1. **Precise** — a detailed image-generation prompt (e.g., "A Sherman M4 tank crossing a narrow wooden bridge over a river, overcast sky, WW2 European theater, photorealistic, vertical 9:16")
+    2. **General** — a simpler generation prompt (e.g., "Sherman tank, WW2, photorealistic")
+    These prompts are stored in the artifact but not consumed by any downstream agent yet. They prepare the schema for future AI image generation (see 3.6).
+  - **Multi-candidate collection:** Update `ScriptImageRetrievalAgent` to run all 3 tiered queries and collect candidates from each, deduplicating by image ID. This produces a richer candidate pool per scene.
+  - **Passthrough alignment evaluator:** Implement a minimal `ImageAlignmentEvaluator` with a `select_best()` method that simply returns the first available candidate (no scoring). This establishes the interface that 2.6 will implement with real scoring logic.
+- **Schema change to `scene.visual`:**
+  ```json
+  {
+    "description": "A Sherman tank crossing a wooden bridge",
+    "mood": "tense",
+    "search_queries": [
+      "Sherman tank crossing wooden bridge",
+      "WW2 tank crossing river",
+      "military tank"
+    ],
+    "generation_prompts": {
+      "precise": "A Sherman M4 tank crossing a narrow wooden bridge over a river, overcast sky, WW2 European theater, photorealistic, vertical 9:16",
+      "general": "Sherman tank, WW2, photorealistic"
+    }
+  }
+  ```
+- **Files to change:**
+  - `src/screenwriting/screenplay_agent.py` — Update `_WRITE_SYSTEM` and `_REVISE_SYSTEM` prompts for tiered queries + generation prompts
+  - `src/screenwriting/screenplay_agent.py` — Update `_coerce_scenes()` to preserve `generation_prompts`
+  - `src/screenwriting/screenplay_reviewer.py` — Validate that `search_queries` has 3 entries at different specificity levels
+  - `src/artifacts/screenplay.py` — Forward `generation_prompts` through `screenplay_to_script_package()`
+  - `src/script_image_agent.py` — Run all tiered queries, collect + deduplicate candidates
+  - `src/tools/image_alignment_tools.py` — New file: `ImageAlignmentEvaluator` with passthrough `select_best()`
+  - `src/visual_agent.py` — Use `ImageAlignmentEvaluator.select_best()` instead of current ad-hoc selection
+- **Success Metric:** Each scene collects 3-10 candidate images from tiered queries. `generation_prompts` present in screenplay artifacts. Passthrough evaluator selects first candidate without regression.
+- **Design doc:** [plan-image-generation.md](docs/plan-image-generation.md)
+- **Owner:** TBD
+- **Timeline:** Week 1-2
+- **Effort:** 4-6 hours
+
 ---
 
 ### 🚀 Tier 2: Scale & Reliability (2-4 weeks)
@@ -433,6 +480,60 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Timeline:** Week 4
 - **Effort:** 2 days
 
+#### 2.6 Image-Script Alignment Evaluation Loop
+- **Priority:** P2 (visual quality — replaces the passthrough evaluator from 1.7 with real scoring)
+- **Status:** Open
+- **Depends on:** 1.7 (tiered queries + passthrough evaluator interface)
+- **Problem:** The pipeline has no way to judge whether a retrieved image actually matches its scene. Token-overlap scoring in `script_image_agent.py` catches keyword mismatches but misses semantic alignment (e.g., a modern cheese factory photo for a scene about 18th-century cheese-making). Without scoring, the pipeline can't decide when to accept an image, keep searching, or request a scene revision.
+- **Scope:**
+  - **Scoring rubric:** Implement `ImageAlignmentEvaluator.score()` using a grading rubric that evaluates each candidate image against the scene's `visual.description` and `vo_line`. The evaluator must support:
+    - **Local model backend:** A vision-capable local model (e.g., LLaVA, CogVLM) for offline/cost-free evaluation.
+    - **Online model backend:** Multimodal LLM via API (GPT-4o, Gemini) for higher-accuracy evaluation.
+    - Backend selected via config (`IMAGE_EVAL_BACKEND=local|online`, default `online`).
+  - **Grading rubric** (scored 1-5 per axis, weighted average):
+    | Axis | Weight | Description |
+    |------|--------|-------------|
+    | Subject match | 0.35 | Does the image contain the primary subject described in the scene? |
+    | Setting/era accuracy | 0.25 | Does the time period, location, and environment match? |
+    | Mood/tone alignment | 0.15 | Does the image mood match the scene mood? |
+    | Composition suitability | 0.15 | Is the framing usable for 9:16 vertical video? |
+    | Distraction/artifacts | 0.10 | Are there watermarks, text, or irrelevant elements? |
+  - **Two-threshold system:**
+    - **Accept threshold (e.g., 4.0):** Image is good enough — stop evaluating further candidates for this scene (early exit).
+    - **Minimum threshold (e.g., 2.5):** If no candidate scores above this after all candidates are evaluated, flag the scene for revision.
+  - **Evaluation modes:**
+    - **Streaming:** Score each image as it arrives from search. Stop early if a candidate exceeds the accept threshold.
+    - **Batch:** Score all candidates for a scene at once, pick the highest-scoring one.
+    Mode selected via config (`IMAGE_EVAL_MODE=streaming|batch`, default `streaming`).
+  - **Scene revision integration:** When all candidates for a scene score below the minimum threshold, emit a revision request to the orchestrator's existing revision loop. The revision targets `visual.search_queries` (try different search terms) and optionally `visual.description` (broaden what the scene depicts).
+  - **Evaluation output:** Per-scene scores written to `evaluation.json` under an `image_alignment` key:
+    ```json
+    {
+      "image_alignment": [
+        {
+          "scene_id": "scene_03",
+          "best_score": 3.8,
+          "best_candidate_id": "pexels_12345",
+          "scores_by_axis": {"subject": 4, "setting": 3, "mood": 4, "composition": 4, "artifacts": 5},
+          "candidates_evaluated": 6,
+          "early_exit": false,
+          "revision_requested": false
+        }
+      ]
+    }
+    ```
+- **Files to change:**
+  - `src/tools/image_alignment_tools.py` — Replace passthrough with real scoring logic, rubric, backend abstraction
+  - `src/config.py` — Add `IMAGE_EVAL_BACKEND`, `IMAGE_EVAL_MODE`, threshold configs
+  - `src/visual_agent.py` — Wire `select_best()` to use scores for selection
+  - `src/orchestrator.py` — Handle `revision_requested` scenes in the existing revision loop
+  - `src/mcp/video_agent_server.py` — Optionally expose `evaluate_image_alignment` as an MCP tool
+- **Success Metric:** Image selection is score-driven. Scenes with poor image matches trigger revision. Accept threshold produces early exit on >50% of scenes (cost savings on eval calls).
+- **Design doc:** [plan-image-generation.md](docs/plan-image-generation.md)
+- **Owner:** TBD
+- **Timeline:** Week 3-4
+- **Effort:** 4-6 hours
+
 ---
 
 ### 🔮 Tier 3: Features & Quality (4-8 weeks)
@@ -492,7 +593,41 @@ This tier is the current execution priority and supersedes older sequencing belo
 - **Timeline:** Week 8
 - **Effort:** 2-3 days
 
-#### 3.5 Web Dashboard (Optional)
+#### 3.5 AI Image Generation Integration
+- **Priority:** P3 (nice-to-have — visual quality upgrade)
+- **Status:** Open
+- **Depends on:** 1.7 (generation prompts in schema), 2.6 (alignment evaluator with scoring)
+- **Problem:** Stock image retrieval has a coverage ceiling — some scenes describe concepts, historical events, or abstract ideas that simply don't exist as stock photos. The `generation_prompts` added in 1.7 are stored but unused. AI image generation can fill this gap at low cost ($0.005-0.07/image).
+- **Investigation areas:**
+  - **Provider selection:** Evaluate OpenAI GPT Image 1 (likely have key already, portrait 1024x1536 native), Google Imagen 4 Fast ($0.02, best price/quality), and Flux via fal.ai/Replicate ($0.003-0.015, cheapest). Pick one primary + one fallback.
+  - **Integration pattern:** Generation as fallback (only when stock scores below minimum threshold from 2.6) vs. generation as parallel candidate (always generate one image, let the alignment evaluator compare it against stock candidates).
+  - **Threshold tuning:** With generated images available, the alignment evaluator thresholds from 2.6 may need adjustment. Generated images should score higher on subject/setting axes but may score lower on artifacts. Consider source-aware weighting.
+  - **Feedback loop design:** When the alignment evaluator rejects all stock candidates and triggers generation:
+    1. Use `generation_prompts.precise` first
+    2. If generated image also scores below threshold, try `generation_prompts.general`
+    3. If still below threshold, request screenplay scene revision (change what the scene depicts, not just how to find/generate it)
+    4. Max 2 revision rounds per scene (matches existing orchestrator limit)
+  - **Script-image agent interaction:** Consider whether the screenplay agent should receive feedback about which generation prompts produced good images, to improve future prompt writing. This could be a lightweight post-run feedback artifact.
+- **Cost projection:**
+  | Scenario | Cost/Video (7 scenes) | Cost/100 Videos |
+  |----------|----------------------|-----------------|
+  | Generate only on stock failure (~30% of scenes) | ~$0.04-0.15 | $4-15 |
+  | Always generate one candidate per scene | ~$0.04-0.50 | $4-50 |
+  | All generated, no stock search | ~$0.04-0.50 | $4-50 |
+- **Files to create/change:**
+  - `src/tools/image_generation_tools.py` — New file: API client for image generation (provider-agnostic interface)
+  - `src/config.py` — Add `IMAGE_GENERATION_PROVIDER`, `IMAGE_GENERATION_API_KEY`
+  - `src/script_image_agent.py` — Add generation provider to source chain, consume `generation_prompts`
+  - `src/tools/image_alignment_tools.py` — Adjust thresholds, add source-aware scoring
+  - `src/orchestrator.py` — Wire generation into revision loop (stock fail -> generate -> revise)
+  - `requirements.txt` — Add provider SDK (e.g., `openai` if not present)
+- **Success Metric:** Generated images available as candidates. Alignment evaluator picks generated over stock when generated scores higher. Per-run cost tracked in `evaluation.json`.
+- **Design doc:** [plan-image-generation.md](docs/plan-image-generation.md)
+- **Owner:** TBD
+- **Timeline:** Weeks 5-6
+- **Effort:** 4-6 hours (implementation) + 2-3 hours (threshold tuning)
+
+#### 3.6 Web Dashboard (Optional)
 - **Priority:** P4 (nice-to-have)
 - **Scope:**
   - Browse market research reports
@@ -623,18 +758,22 @@ winget install ImageMagick.ImageMagick
 - [ ] CI/CD runs tests on every PR
 - [ ] No P0/P1 bugs in issue tracker
 - [x] live2d submodule integrated and buildable (`make live2d-build`)
+- [ ] Screenplay emits tiered search queries (exact/general/fallback) + generation prompts (1.7)
+- [ ] Multi-candidate image retrieval with passthrough alignment evaluator (1.7)
 
 ### Tier 2 Complete When:
 - [ ] LangChain upgraded to 1.x (branch ready, pending human review + merge)
 - [ ] Results cleanup job runs weekly
 - [ ] YouTube quota never exceeds limit
 - [ ] 95%+ render success rate (no crashes)
+- [ ] Image-script alignment evaluator scores candidates with rubric, two-threshold selection (2.6)
 
 ### Tier 3 Complete When:
 - [ ] Content moderation active (0 unsafe assets shipped)
 - [ ] Stock video clips supported
 - [ ] Ken Burns + crossfade effects working
 - [ ] Thumbnails auto-generated
+- [ ] AI image generation available as candidate source with feedback loop (3.5)
 
 ---
 
@@ -704,5 +843,5 @@ Open an issue or start a discussion in the repo to:
 - Suggest priority changes
 - Share use cases
 
-**Maintainer:** TBD  
-**Last Review:** March 12, 2026
+**Maintainer:** TBD
+**Last Review:** March 13, 2026
