@@ -281,6 +281,114 @@ class TestCreateAudioAgent:
         assert agent._tts_backend is None
 
 
+class TestTTSUtilsMeasuredWPM:
+    """Test estimate_duration_s with measured WPM override."""
+
+    def test_measured_wpm_overrides_preset(self):
+        from video_agent.utils.tts_utils import estimate_duration_s
+        text = "one two three four five six seven eight nine ten"  # 10 words
+        # With measured_wpm=120, expect 10/120*60 = 5.0s
+        dur = estimate_duration_s(text, voice_preset="narrator", measured_wpm=120.0)
+        assert dur == pytest.approx(5.0, abs=0.01)
+
+    def test_falls_back_to_preset_when_no_measured_wpm(self):
+        from video_agent.utils.tts_utils import estimate_duration_s
+        text = "one two three four five six seven eight nine ten"  # 10 words
+        # narrator preset = 150 WPM -> 10/150*60 = 4.0s
+        dur = estimate_duration_s(text, voice_preset="narrator", measured_wpm=None)
+        assert dur == pytest.approx(4.0, abs=0.01)
+
+    def test_ignores_zero_measured_wpm(self):
+        from video_agent.utils.tts_utils import estimate_duration_s
+        text = "one two three four five six seven eight nine ten"
+        dur = estimate_duration_s(text, voice_preset="narrator", measured_wpm=0.0)
+        assert dur == pytest.approx(4.0, abs=0.01)
+
+
+class TestChatterboxBackendWPM:
+    """Test WPM parsing in ChatterboxServerBackend."""
+
+    def test_synthesize_parses_x_voice_wpm_header(self):
+        from video_agent.tools.chatterbox_backend import ChatterboxServerBackend, TTSRequest
+
+        backend = ChatterboxServerBackend(base_url="http://localhost:9999")
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = b"fake-wav"
+        mock_response.headers = {"X-Voice-WPM": "135.2"}
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(backend._session, "post", return_value=mock_response):
+            backend.synthesize(TTSRequest(text="Hello world"))
+
+        assert backend.last_voice_wpm == pytest.approx(135.2)
+
+    def test_synthesize_no_wpm_header(self):
+        from video_agent.tools.chatterbox_backend import ChatterboxServerBackend, TTSRequest
+
+        backend = ChatterboxServerBackend(base_url="http://localhost:9999")
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = b"fake-wav"
+        mock_response.headers = {}
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(backend._session, "post", return_value=mock_response):
+            backend.synthesize(TTSRequest(text="Hello world"))
+
+        assert backend.last_voice_wpm is None
+
+    def test_get_voice_wpm(self):
+        from video_agent.tools.chatterbox_backend import ChatterboxServerBackend
+
+        backend = ChatterboxServerBackend(base_url="http://localhost:9999")
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"voice_id": "test", "wpm": 142.5}
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(backend._session, "get", return_value=mock_response):
+            wpm = backend.get_voice_wpm("test")
+
+        assert wpm == pytest.approx(142.5)
+
+    def test_get_voice_wpm_returns_none_on_error(self):
+        from video_agent.tools.chatterbox_backend import ChatterboxServerBackend
+        import requests
+
+        backend = ChatterboxServerBackend(base_url="http://localhost:9999")
+        with patch.object(
+            backend._session, "get",
+            side_effect=requests.exceptions.ConnectionError("refused"),
+        ):
+            wpm = backend.get_voice_wpm("test")
+
+        assert wpm is None
+
+
+class TestAudioAgentWithVoiceWPM:
+    """Test AudioGenerationAgent uses voice_wpm for duration estimates."""
+
+    def test_chatterbox_metadata_includes_wpm(self, sample_video_plan, temp_output_dir):
+        mock_backend = Mock()
+        mock_backend.synthesize.return_value = b"RIFF" + b"\x00" * 100
+        mock_backend.last_voice_wpm = 135.0
+
+        agent = AudioGenerationAgent(
+            output_dir=temp_output_dir,
+            tts_backend=mock_backend,
+            voice_wpm=135.0,
+        )
+        timeline = agent.generate_audio_timeline(sample_video_plan)
+
+        vo_tracks = [t for t in timeline["tracks"] if t["type"] == "voiceover"]
+        assert len(vo_tracks) >= 1
+        for track in vo_tracks:
+            assert track["metadata"]["voice_wpm"] == 135.0
+            assert track["metadata"]["estimated_duration_s"] is not None
+            assert track["metadata"]["estimated_duration_s"] > 0
+
+
 class TestIntegration:
     """Integration tests (require actual API key)."""
     
