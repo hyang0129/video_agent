@@ -216,8 +216,10 @@ class GpuServerManager:
         return False
 
     def stop_acestep(self) -> None:
-        if not self._acestep_owned:
-            return  # reused external server — don't kill it
+        # Always free the port/VRAM on teardown — ACE-Step holds ~6 GB even when idle.
+        # If we reused an externally-started server (_acestep_owned=False), we still
+        # kill it so the GPU is free for the next pipeline stage (e.g. Chatterbox on
+        # a second run). The pre-warm benefit is startup time, not perpetual ownership.
         _stop_proc(self._acestep_proc, "ACE-Step music server")
         self._acestep_proc = None
         self._acestep_owned = False
