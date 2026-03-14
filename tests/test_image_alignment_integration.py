@@ -1,25 +1,32 @@
 """Integration test for image alignment evaluator (issue 2.6).
 
 Runs the evaluator against real stock images using a live vision-model API.
-Prints a human-readable report of per-scene scores for manual review.
+Downloads candidate images and writes them alongside scores for human review.
 
 Usage:
     pytest tests/test_image_alignment_integration.py -v -s
 
 Requires: ANTHROPIC_API_KEY or GOOGLE_API_KEY set in environment.
+
+Output: results/test/alignment_eval/scores_<timestamp>/
+  - scores.json          -- per-scene scoring results
+  - scene_01/            -- one folder per scene
+    - wiki_0.jpg         -- downloaded candidate images
+    - pexels_1.jpg
+    - ...
 """
 
 from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
+import requests
 
 from video_agent.tools.image_alignment_tools import (
     ImageAlignmentEvaluator,
@@ -34,7 +41,7 @@ from video_agent.tools.image_search_tools import (
 # Mark all tests in this module as integration (skip in CI).
 pytestmark = pytest.mark.integration
 
-# Scenes to evaluate — based on WW2 tanks fixture + one deliberately poor match.
+# Scenes to evaluate -- based on WW2 tanks fixture.
 TEST_SCENES: List[Dict[str, Any]] = [
     {
         "scene_id": "scene_01",
@@ -91,7 +98,43 @@ def _fetch_candidates(query: str, per_page: int = 3) -> List[Dict[str, Any]]:
     return candidates
 
 
-def _print_report(scene: Dict[str, Any], result: SceneAlignmentResult, candidates: List[Dict[str, Any]]) -> None:
+def _download_image(url: str, dest: Path, timeout: int = 30) -> bool:
+    """Download an image to disk. Returns True on success."""
+    try:
+        headers: Dict[str, str] = {}
+        if "wikimedia.org" in url or "wikipedia.org" in url:
+            headers["User-Agent"] = "Mozilla/5.0 (compatible; VideoAgent/1.0)"
+        resp = requests.get(url, headers=headers, timeout=timeout, stream=True)
+        resp.raise_for_status()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=1024 * 256):
+                if chunk:
+                    f.write(chunk)
+        return True
+    except Exception as exc:
+        print(f"    [WARN] Failed to download {url[:80]}: {exc}")
+        return False
+
+
+def _guess_extension(url: str) -> str:
+    """Guess file extension from URL."""
+    lower = url.lower().split("?")[0]
+    if lower.endswith(".png"):
+        return ".png"
+    if lower.endswith(".webp"):
+        return ".webp"
+    if lower.endswith(".bmp"):
+        return ".bmp"
+    return ".jpg"
+
+
+def _print_report(
+    scene: Dict[str, Any],
+    result: SceneAlignmentResult,
+    candidates: List[Dict[str, Any]],
+    image_paths: Dict[str, Optional[Path]],
+) -> None:
     """Print a human-readable score report for one scene."""
     print(f"\n{'='*70}")
     print(f"SCENE: {scene['scene_id']}")
@@ -112,7 +155,12 @@ def _print_report(scene: Dict[str, Any], result: SceneAlignmentResult, candidate
         cand = next((c for c in candidates if c.get("candidate_id") == score.candidate_id), None)
         url = (cand or {}).get("url", "unknown")
         alt = ((cand or {}).get("metadata") or {}).get("alt", "")[:60]
-        print(f"  [{score.candidate_id}] score={score.weighted_score:.2f} axes={score.axis_scores}")
+        img_path = image_paths.get(score.candidate_id)
+        is_best = score.candidate_id == result.best_candidate_id
+        marker = " << BEST" if is_best else ""
+        print(f"  [{score.candidate_id}] score={score.weighted_score:.2f} axes={score.axis_scores}{marker}")
+        if img_path:
+            print(f"    Image: {img_path}")
         print(f"    URL: {url}")
         if alt:
             print(f"    Alt: {alt}")
@@ -123,25 +171,28 @@ def _print_report(scene: Dict[str, Any], result: SceneAlignmentResult, candidate
 class TestImageAlignmentIntegration:
     """Run the alignment evaluator against real images and print results for human review."""
 
-    def test_evaluate_scenes_and_print_report(self, tmp_path: Path):
-        """Score real images for test scenes and write results for human review.
+    def test_evaluate_scenes_and_print_report(self):
+        """Score real images for test scenes and write results + images for human review.
 
         This test ALWAYS passes (scores are for human judgment, not assertions).
-        Review the printed output to validate that the rubric produces sensible scores.
+        Review the output folder: each scene gets its own directory with downloaded
+        candidate images and a scores.json with the rubric results.
         """
         evaluator = ImageAlignmentEvaluator(
             backend=OnlineImageEvalBackend(),
             mode="batch",
         )
 
-        results_dir = tmp_path / "alignment_eval"
-        results_dir.mkdir()
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_root = Path("results/test/alignment_eval") / f"scores_{ts}"
+        output_root.mkdir(parents=True, exist_ok=True)
 
         all_results: List[Dict[str, Any]] = []
 
         print("\n\n" + "=" * 70)
         print("IMAGE ALIGNMENT EVALUATOR - INTEGRATION TEST")
         print(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")
+        print(f"Output dir: {output_root}")
         print(f"Backend: online (LLM provider from config)")
         print(f"Mode: batch (score all candidates)")
         print(f"Accept threshold: {evaluator.accept_threshold}")
@@ -149,18 +200,37 @@ class TestImageAlignmentIntegration:
         print("=" * 70)
 
         for scene in TEST_SCENES:
-            print(f"\n[INFO] Fetching candidates for {scene['scene_id']}...")
+            scene_id = scene["scene_id"]
+            scene_dir = output_root / scene_id
+            scene_dir.mkdir(parents=True, exist_ok=True)
+
+            print(f"\n[INFO] Fetching candidates for {scene_id}...")
             candidates = _fetch_candidates(scene["search_query"], per_page=3)
 
             if not candidates:
-                print(f"[SKIP] No candidates found for {scene['scene_id']}")
+                print(f"[SKIP] No candidates found for {scene_id}")
                 continue
+
+            # Download all candidate images to the scene folder
+            image_paths: Dict[str, Optional[Path]] = {}
+            for cand in candidates:
+                cand_id = cand.get("candidate_id", "unknown")
+                url = cand.get("url", "")
+                if not url:
+                    image_paths[cand_id] = None
+                    continue
+                ext = _guess_extension(url)
+                dest = scene_dir / f"{cand_id}{ext}"
+                if _download_image(url, dest):
+                    image_paths[cand_id] = dest
+                else:
+                    image_paths[cand_id] = None
 
             scene_context = {
                 "visual_description": scene["visual_description"],
                 "vo_line": scene["vo_line"],
                 "scene_mood": scene["scene_mood"],
-                "scene_id": scene["scene_id"],
+                "scene_id": scene_id,
             }
 
             t0 = time.monotonic()
@@ -168,30 +238,37 @@ class TestImageAlignmentIntegration:
             elapsed = time.monotonic() - t0
 
             if result is not None:
-                _print_report(scene, result, candidates)
+                _print_report(scene, result, candidates, image_paths)
                 print(f"  Elapsed: {elapsed:.1f}s")
                 entry = result.to_dict()
                 entry["elapsed_s"] = round(elapsed, 1)
-                entry["candidates"] = [
-                    {"candidate_id": c.get("candidate_id"), "url": c.get("url")}
-                    for c in candidates
-                ]
+                entry["candidates"] = []
+                for cand in candidates:
+                    cand_id = cand.get("candidate_id", "")
+                    img = image_paths.get(cand_id)
+                    entry["candidates"].append({
+                        "candidate_id": cand_id,
+                        "url": cand.get("url"),
+                        "image_file": str(img.relative_to(output_root)) if img else None,
+                        "alt": ((cand.get("metadata") or {}).get("alt") or "")[:120],
+                    })
                 all_results.append(entry)
 
-        # Write results to file for later review
-        output_path = results_dir / "alignment_scores.json"
-        output_path.write_text(json.dumps(all_results, indent=2), encoding="utf-8")
-        print(f"\n[INFO] Results written to: {output_path}")
+        # Write scores.json at the root of the output dir
+        scores_path = output_root / "scores.json"
+        scores_path.write_text(json.dumps(all_results, indent=2), encoding="utf-8")
 
-        # Also write to results/test/ if it exists
-        persistent_dir = Path("results/test/alignment_eval")
-        persistent_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        persistent_path = persistent_dir / f"scores_{ts}.json"
-        persistent_path.write_text(json.dumps(all_results, indent=2), encoding="utf-8")
-        print(f"[INFO] Persistent copy: {persistent_path}")
-
-        print("\n[HUMAN REVIEW] Check the scores above against the candidate images.")
+        print(f"\n{'='*70}")
+        print(f"OUTPUT DIRECTORY: {output_root}")
+        print(f"  scores.json   -- all scoring results")
+        for scene in TEST_SCENES:
+            sid = scene["scene_id"]
+            scene_dir = output_root / sid
+            if scene_dir.exists():
+                files = sorted(f.name for f in scene_dir.iterdir() if f.is_file())
+                print(f"  {sid}/       -- {', '.join(files)}")
+        print(f"{'='*70}")
+        print("\n[HUMAN REVIEW] Open the output directory and compare images against scores.")
         print("Look for:")
         print("  - Subject scores: do they reflect whether the image shows the right subject?")
         print("  - Setting scores: does era/location accuracy look correct?")
