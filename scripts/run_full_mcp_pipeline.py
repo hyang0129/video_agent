@@ -357,7 +357,10 @@ def main(preflight_warnings: List[str] | None = None, allow_degraded: bool = Fal
     # ---------------------------------------------------------------
     # Step 12: select_music
     # ---------------------------------------------------------------
-    r12 = _call("select_music", {"audio_timeline": audio_timeline})
+    r12 = _call("select_music", {
+        "audio_timeline": audio_timeline,
+        "script_package": script_package,
+    })
     _status_line(12, "select_music", r12, issues, allow_degraded)
     music_selection = r12.get("music_selection")
     if music_selection:
