@@ -546,11 +546,10 @@ class ScriptImageRetrievalAgent:
         max_candidates = max(1, int(self.config.max_candidates_per_segment))
 
         for query in queries:
-            if len(candidates) >= max_candidates:
-                break
-
+            # Run ALL tiered queries so each tier can contribute candidates.
+            # Deduplication is handled by seen_urls; truncation happens after reranking.
             for source_name in configured_sources:
-                if len(candidates) >= max_candidates:
+                if len(candidates) >= max_candidates * 2:
                     break
 
                 sources_attempted.append(source_name)

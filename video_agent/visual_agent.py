@@ -31,6 +31,7 @@ import requests
 from .config import CACHE_DIR, RESULTS_DIR, VIDEO_RESOLUTION
 from .artifacts.io import write_json
 from .tools.content_validation_tools import validate_image_safety
+from .tools.image_alignment_tools import ImageAlignmentEvaluator
 from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
 
 
@@ -517,11 +518,7 @@ class VisualAssetAgent:
                     seen_urls.add(c.url)
 
             # Pick the best from this round's fresh candidates only.
-            round_chosen = self._llm_select_best_candidate(
-                candidates=round_valid,
-                vo_line=text_context,
-                topic_context=topic_context,
-            )
+            round_chosen = ImageAlignmentEvaluator().select_best(round_valid)
 
             if round_chosen is None:
                 # No candidates at all — try broadening immediately.
@@ -550,11 +547,7 @@ class VisualAssetAgent:
 
         # If the loop exhausted without acceptance, fall back to best available.
         if chosen is None and valid_candidates:
-            chosen = self._llm_select_best_candidate(
-                candidates=valid_candidates,
-                vo_line=text_context,
-                topic_context=topic_context,
-            )
+            chosen = ImageAlignmentEvaluator().select_best(valid_candidates)
             if chosen is not None:
                 chosen_validation = self.validate_content(chosen.url)
                 _log.warning("[INFO] Using best-available fallback after %d attempts", len(tried_queries))

@@ -33,7 +33,14 @@ Each scene object must have:
 - "visual": {{
     "description": specific, concrete description of what the camera sees (NOT abstract, NOT "people talking"),
     "mood": one word mood,
-    "search_queries": list of 1-3 Pexels-friendly search queries ordered by specificity
+    "search_queries": exactly 3 stock-photo search queries ordered by specificity:
+      1. EXACT - precisely what the scene depicts (e.g. "Sherman tank crossing a wooden bridge")
+      2. GENERAL - broader version likely to return results (e.g. "WW2 tank crossing river")
+      3. FALLBACK - bare-minimum stock-friendly query (e.g. "military tank")
+    "generation_prompts": {{
+      "precise": "detailed AI image-generation prompt describing the full scene, photorealistic, vertical 9:16",
+      "general": "simpler generation prompt — core subject only"
+    }}
   }}
 - "on_screen_text": caption text displayed on screen (brief, punchy)
 - "music_energy": "low" | "medium" | "high"
@@ -45,6 +52,8 @@ CRITICAL: visual.description must be concrete and specific. Do NOT write:
 - "background"
 These will fail image search. Write what the camera literally sees: objects, places, events.
 
+search_queries MUST have exactly 3 entries (exact, general, fallback). Never fewer, never more.
+
 Return ONLY the JSON object with keys: target_duration_s, narrator_character, music_tone, scenes.
 No markdown. No explanation.
 """
@@ -55,14 +64,15 @@ You will be given one scene from a screenplay and a revision task.
 Return ONLY a JSON object with the revised fields for that scene.
 
 For a "visual" revision return:
-{"scene_id": "scene_XX", "visual": {"description": "...", "mood": "...", "search_queries": ["...", "..."]}}
+{"scene_id": "scene_XX", "visual": {"description": "...", "mood": "...", "search_queries": ["exact query", "general query", "fallback query"], "generation_prompts": {"precise": "...", "general": "..."}}}
 
 For a "vo_line" revision return:
 {"scene_id": "scene_XX", "vo_line": "..."}
 
 For a "both" revision return:
-{"scene_id": "scene_XX", "vo_line": "...", "visual": {"description": "...", "mood": "...", "search_queries": ["...", "..."]}}
+{"scene_id": "scene_XX", "vo_line": "...", "visual": {"description": "...", "mood": "...", "search_queries": ["exact query", "general query", "fallback query"], "generation_prompts": {"precise": "...", "general": "..."}}}
 
+search_queries MUST have exactly 3 entries: 1) exact scene depiction, 2) broader version, 3) bare-minimum fallback.
 visual.description must be concrete and specific — objects, places, events that Pexels can find.
 No markdown. No explanation. Return only the JSON object.
 """
@@ -91,6 +101,7 @@ def _coerce_scenes(raw_scenes: Any, target_duration_s: int) -> list[dict[str, An
             "description": str(visual_raw.get("description") or "").strip(),
             "mood": str(visual_raw.get("mood") or "neutral").strip(),
             "search_queries": list(visual_raw.get("search_queries") or []),
+            "generation_prompts": dict(visual_raw.get("generation_prompts") or {}),
         }
         scenes.append({
             "scene_id": scene_id,
@@ -241,6 +252,7 @@ class ScreenplayAgent:
                     "description": str(v.get("description") or patched["visual"].get("description") or "").strip(),
                     "mood": str(v.get("mood") or patched["visual"].get("mood") or "neutral").strip(),
                     "search_queries": list(v.get("search_queries") or patched["visual"].get("search_queries") or []),
+                    "generation_prompts": dict(v.get("generation_prompts") or patched["visual"].get("generation_prompts") or {}),
                 }
             updated_scenes.append(patched)
 

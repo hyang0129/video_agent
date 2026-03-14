@@ -24,6 +24,45 @@ class TestCoerceScenes:
         total = sum(s["target_duration_s"] for s in scenes)
         assert abs(total - 30) < 0.1
 
+    def test_coerce_scenes_preserves_generation_prompts(self):
+        raw = [
+            {
+                "scene_id": "scene_01",
+                "vo_line": "A tank rolls.",
+                "target_duration_s": 10.0,
+                "visual": {
+                    "description": "Sherman tank on a bridge",
+                    "mood": "tense",
+                    "search_queries": ["Sherman tank bridge", "WW2 tank river", "military tank"],
+                    "generation_prompts": {
+                        "precise": "Sherman M4 tank crossing a narrow wooden bridge, WW2, photorealistic",
+                        "general": "Sherman tank WW2 photorealistic",
+                    },
+                },
+            }
+        ]
+        scenes = _coerce_scenes(raw, target_duration_s=10)
+        gp = scenes[0]["visual"]["generation_prompts"]
+        assert gp["precise"] == "Sherman M4 tank crossing a narrow wooden bridge, WW2, photorealistic"
+        assert gp["general"] == "Sherman tank WW2 photorealistic"
+
+    def test_coerce_scenes_generation_prompts_defaults_to_empty(self):
+        raw = [
+            {"scene_id": "scene_01", "vo_line": "Line.", "target_duration_s": 5.0,
+             "visual": {"description": "sky", "mood": "calm", "search_queries": ["sky"]}},
+        ]
+        scenes = _coerce_scenes(raw, target_duration_s=5)
+        assert scenes[0]["visual"]["generation_prompts"] == {}
+
+    def test_coerce_scenes_search_queries_preserved(self):
+        raw = [
+            {"scene_id": "scene_01", "vo_line": "Line.", "target_duration_s": 5.0,
+             "visual": {"description": "tank", "mood": "dark",
+                        "search_queries": ["Sherman tank bridge", "WW2 tank", "military tank"]}},
+        ]
+        scenes = _coerce_scenes(raw, target_duration_s=5)
+        assert scenes[0]["visual"]["search_queries"] == ["Sherman tank bridge", "WW2 tank", "military tank"]
+
     def test_coerce_scenes_empty_list(self):
         assert _coerce_scenes([], target_duration_s=30) == []
 

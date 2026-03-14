@@ -116,6 +116,7 @@ def screenplay_to_script_package(screenplay: dict[str, Any]) -> dict[str, Any]:
             "on_screen_text": str(scene.get("on_screen_text") or "").strip(),
             "vo_line": str(scene.get("vo_line") or "").strip(),
             "visual_queries": queries,
+            "generation_prompts": dict(visual.get("generation_prompts") or {}),
         })
 
     voiceover = " ".join(b["vo_line"] for b in beats if b.get("vo_line"))
