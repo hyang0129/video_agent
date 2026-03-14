@@ -417,6 +417,52 @@ class TestSceneIdPropagation:
         beats = pkg["script"]["beats"]
         assert beats[0]["scene_id"] == "scene_01"
 
+    def test_screenplay_to_script_package_propagates_generation_prompts(self):
+        from video_agent.artifacts.screenplay import screenplay_to_script_package
+
+        sp = {
+            "screenplay_id": "sp_gp",
+            "format": "facts",
+            "target_duration_s": 10,
+            "narrator_character": {"voice_preset": "narrator"},
+            "music_tone": "upbeat",
+            "scenes": [
+                {
+                    "scene_id": "scene_01",
+                    "vo_line": "A tank rolls forward.",
+                    "on_screen_text": "Tank",
+                    "target_duration_s": 5,
+                    "visual": {
+                        "description": "Sherman tank on a bridge",
+                        "mood": "tense",
+                        "search_queries": ["Sherman tank bridge", "WW2 tank", "military tank"],
+                        "generation_prompts": {
+                            "precise": "Sherman M4 tank crossing bridge, WW2, photorealistic",
+                            "general": "Sherman tank WW2 photorealistic",
+                        },
+                    },
+                },
+                {
+                    "scene_id": "scene_02",
+                    "vo_line": "Soldiers advance.",
+                    "on_screen_text": "Advance",
+                    "target_duration_s": 5,
+                    "visual": {
+                        "description": "soldiers in a field",
+                        "mood": "intense",
+                        "search_queries": ["soldiers field", "WW2 soldiers", "battlefield"],
+                    },
+                },
+            ],
+        }
+        pkg = screenplay_to_script_package(sp)
+        beats = pkg["script"]["beats"]
+        assert beats[0]["generation_prompts"] == {
+            "precise": "Sherman M4 tank crossing bridge, WW2, photorealistic",
+            "general": "Sherman tank WW2 photorealistic",
+        }
+        assert beats[1]["generation_prompts"] == {}
+
     def test_video_planner_preserves_scene_id_from_beat(self):
         from video_agent.video_planner import script_package_to_video_plan
 

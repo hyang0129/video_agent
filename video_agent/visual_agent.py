@@ -128,6 +128,7 @@ class VisualAssetAgent:
         content_validator: str = "none",
         min_safety_score: float = 0.9,
         min_resolution: Tuple[int, int] = VIDEO_RESOLUTION,
+        alignment_evaluator: Optional[ImageAlignmentEvaluator] = None,
     ):
         """Initialize visual asset agent.
 
@@ -137,7 +138,9 @@ class VisualAssetAgent:
             content_validator: Content safety provider name (Phase 1: "none").
             min_safety_score: Minimum safety score (0-1) to accept an asset.
             min_resolution: Minimum (width, height) to prefer.
+            alignment_evaluator: Image alignment evaluator instance.
         """
+        self.alignment_evaluator = alignment_evaluator or ImageAlignmentEvaluator()
         self.output_dir = output_dir or RESULTS_DIR / f"visual_{uuid.uuid4().hex[:6]}"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -518,7 +521,7 @@ class VisualAssetAgent:
                     seen_urls.add(c.url)
 
             # Pick the best from this round's fresh candidates only.
-            round_chosen = ImageAlignmentEvaluator().select_best(round_valid)
+            round_chosen = self.alignment_evaluator.select_best(round_valid)
 
             if round_chosen is None:
                 # No candidates at all — try broadening immediately.
@@ -547,7 +550,7 @@ class VisualAssetAgent:
 
         # If the loop exhausted without acceptance, fall back to best available.
         if chosen is None and valid_candidates:
-            chosen = ImageAlignmentEvaluator().select_best(valid_candidates)
+            chosen = self.alignment_evaluator.select_best(valid_candidates)
             if chosen is not None:
                 chosen_validation = self.validate_content(chosen.url)
                 _log.warning("[INFO] Using best-available fallback after %d attempts", len(tried_queries))
