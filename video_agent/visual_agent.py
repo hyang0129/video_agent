@@ -31,7 +31,7 @@ import requests
 from .config import CACHE_DIR, RESULTS_DIR, VIDEO_RESOLUTION
 from .artifacts.io import write_json
 from .tools.content_validation_tools import validate_image_safety
-from .tools.image_alignment_tools import ImageAlignmentEvaluator
+from .tools.image_alignment_tools import ImageAlignmentEvaluator, SceneAlignmentResult
 from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
 
 
@@ -329,6 +329,55 @@ class VisualAssetAgent:
         }
 
         write_json(self.output_dir / "visual_manifest.json", visual_manifest)
+
+        # Write image alignment scores for evaluation.json merge
+        alignment_entries = [
+            asset["alignment"]
+            for asset in assets
+            if "alignment" in asset
+        ]
+        if alignment_entries:
+            write_json(
+                self.output_dir / "image_alignment_scores.json",
+                alignment_entries,
+            )
+
+        # Write production issues for scenes that need revision
+        import json as _json
+        production_issues = []
+        for asset in assets:
+            ar = asset.get("alignment")
+            if ar and ar.get("revision_requested"):
+                production_issues.append({
+                    "agent": "ImageAlignmentEvaluator",
+                    "scene_id": ar["scene_id"],
+                    "status": "degraded",
+                    "issue": "low_alignment_score",
+                    "detail": f"Best alignment score {ar['best_score']:.2f} below minimum threshold",
+                    "suggestion": "Rephrase visual.description and search_queries to better match available stock imagery",
+                    "revision_field": "visual",
+                    "revision_possible": True,
+                })
+        if production_issues:
+            report_path = self.output_dir / "production_report.json"
+            existing_issues: List[Dict[str, Any]] = []
+            if report_path.exists():
+                try:
+                    existing = _json.loads(report_path.read_text(encoding="utf-8"))
+                    existing_issues = list(existing.get("issues") or [])
+                except Exception:
+                    pass
+            all_issues = existing_issues + production_issues
+            write_json(report_path, {
+                "schema_version": "1.0.0",
+                "issues": all_issues,
+                "degraded_scene_count": sum(1 for i in all_issues if i.get("status") == "degraded"),
+            })
+            _log.warning(
+                "[WARN] ImageAlignmentEvaluator: %d scene(s) below minimum threshold, revision requested",
+                len(production_issues),
+            )
+
         return visual_manifest
 
     def search_assets(self, query: str, asset_type: str = "image", limit: int = 10) -> List[VisualAssetCandidate]:
@@ -436,17 +485,24 @@ class VisualAssetAgent:
 
         Each iteration:
           1. Search with the current query (10 candidates per source).
-          2. LLM selects the best candidate from the validated pool.
-          3. LLM checks whether the chosen image is relevant to the narration.
-          4. If relevant, accept it. If not, ask the LLM for a broader query and retry.
+          2. Score candidates via the alignment evaluator (vision model).
+          3. If best score >= accept threshold, accept. Else broaden query.
         Up to _max_query_attempts iterations (default 3). All tried queries are
         recorded in the manifest metadata.
         """
         tried_queries: List[str] = []
         chosen: Optional[VisualAssetCandidate] = None
         chosen_validation: Optional[Dict[str, Any]] = None
+        alignment_result: Optional[SceneAlignmentResult] = None
         valid_candidates: List[VisualAssetCandidate] = []
         current_query = query
+
+        scene_context = {
+            "visual_description": text_context,
+            "vo_line": text_context,
+            "scene_mood": "neutral",
+            "scene_id": scene_id,
+        }
 
         for _attempt in range(_max_query_attempts):
             tried_queries.append(current_query)
@@ -473,20 +529,35 @@ class VisualAssetAgent:
                     valid_candidates.append(c)
                     seen_urls.add(c.url)
 
-            # Pick the best from this round's fresh candidates only.
-            round_chosen = self.alignment_evaluator.select_best(round_valid)
+            # Score candidates and pick the best from this round.
+            round_chosen, round_alignment = self.alignment_evaluator.select_best(
+                round_valid, scene_context=scene_context,
+            )
 
             if round_chosen is None:
-                # No candidates at all — try broadening immediately.
                 _log.warning("[INFO] No candidates for query %r (attempt %d/%d)", current_query, _attempt + 1, _max_query_attempts)
             else:
-                # Ask the LLM: is this good enough?
-                if self._llm_is_relevant(round_chosen, text_context, topic_context):
+                # Use accept threshold to decide: good enough or broaden?
+                accepted = (
+                    round_alignment is not None
+                    and round_alignment.best_score >= self.alignment_evaluator.accept_threshold
+                )
+                if round_alignment is None or accepted:
                     chosen = round_chosen
+                    alignment_result = round_alignment
                     chosen_validation = self.validate_content(chosen.url)
-                    _log.warning("[INFO] Accepted image on attempt %d: %s", _attempt + 1, round_chosen.metadata.get("alt", "")[:80])
+                    score_str = f" (score {round_alignment.best_score:.2f})" if round_alignment else ""
+                    _log.warning("[INFO] Accepted image on attempt %d%s: %s", _attempt + 1, score_str, round_chosen.metadata.get("alt", "")[:80])
                     break
-                _log.warning("[INFO] Rejected image on attempt %d, broadening query: %s", _attempt + 1, round_chosen.metadata.get("alt", "")[:80])
+
+                # Below accept threshold — keep best so far, try broadening
+                if alignment_result is None or round_alignment.best_score > alignment_result.best_score:
+                    chosen = round_chosen
+                    alignment_result = round_alignment
+                _log.warning(
+                    "[INFO] Below accept threshold on attempt %d (score %.2f < %.2f), broadening query",
+                    _attempt + 1, round_alignment.best_score, self.alignment_evaluator.accept_threshold,
+                )
 
             # Need a broader query — ask the LLM.
             if _attempt < _max_query_attempts - 1:
@@ -503,7 +574,9 @@ class VisualAssetAgent:
 
         # If the loop exhausted without acceptance, fall back to best available.
         if chosen is None and valid_candidates:
-            chosen = self.alignment_evaluator.select_best(valid_candidates)
+            chosen, alignment_result = self.alignment_evaluator.select_best(
+                valid_candidates, scene_context=scene_context,
+            )
             if chosen is not None:
                 chosen_validation = self.validate_content(chosen.url)
                 _log.warning("[INFO] Using best-available fallback after %d attempts", len(tried_queries))
@@ -588,12 +661,12 @@ class VisualAssetAgent:
                 "resolution": [width, height],
                 "attribution": {"required": False, "text": "Generated placeholder", "license": "internal"},
                 "content_safety": {"validated": True, "service": "none", "flags": ["placeholder_download_fallback"], "score": 1.0},
-                "metadata": {"search_query": query, "alternatives_considered": len(candidates), "selection_reason": "Download failed for all candidates; using placeholder", "text_context": text_context},
+                "metadata": {"search_query": query, "alternatives_considered": len(valid_candidates), "selection_reason": "Download failed for all candidates; using placeholder", "text_context": text_context},
             }
 
         rel_path = str(downloaded.relative_to(self.output_dir)).replace("\\", "/")
 
-        return {
+        asset_dict: Dict[str, Any] = {
             "asset_id": f"asset_{scene_id}",
             "scene_id": scene_id,
             "type": "image",
@@ -607,10 +680,13 @@ class VisualAssetAgent:
                 **chosen.metadata,
                 "queries_tried": tried_queries,
                 "alternatives_considered": len(valid_candidates),
-                "selection_reason": "LLM-selected from validated candidates",
+                "selection_reason": "Alignment-scored from validated candidates",
                 "script_line": text_context,
             },
         }
+        if alignment_result is not None:
+            asset_dict["alignment"] = alignment_result.to_dict()
+        return asset_dict
 
     def _validate_video_plan(self, video_plan: Dict[str, Any]) -> None:
         if not isinstance(video_plan, dict):
