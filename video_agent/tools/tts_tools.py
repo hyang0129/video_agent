@@ -35,8 +35,9 @@ def _get_retry_session() -> requests.Session:
     """Create requests session with retry logic."""
     session = requests.Session()
     retry = Retry(
-        total=3,
-        backoff_factor=1,
+        total=5,
+        connect=5,
+        backoff_factor=2,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET", "POST"],
     )
