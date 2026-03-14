@@ -149,7 +149,7 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 0.5 Add End-to-End Metrics + Evidence Counters
 - **Priority:** P1
-- **Status:** Open
+- **Status:** Done (March 2026)
 - **Track:**
   - End-to-end pipeline runtime (wall-clock)
   - Stage-level runtime breakdown (per MCP tool call or orchestrator stage)
@@ -159,19 +159,14 @@ This tier is the current execution priority and supersedes older sequencing belo
   - **MCP server (`video_agent_server.py`):** Each tool handler already wraps a discrete pipeline stage — add timing instrumentation around tool dispatch and return elapsed time in tool results.
   - **Orchestrator (`orchestrator.py`):** Records parallel vs serial execution timing per production pass. Emit stage timings in `production_report.json`.
   - **`run_pipeline.py`:** Collect stage timings from either MCP responses or direct calls, write `metrics_summary.json` at end of run.
-- **Progress:** None — `results/metrics_summary.json` does not yet exist. MCP server and orchestrator are functional but do not yet emit timing data.
+- **Progress:** Done — timing instrumentation added to MCP server, orchestrator, and `run_pipeline.py`. `results/metrics_summary.json` written per run.
 - **Deliverable:** Rolling `results/metrics_summary.json` with per-run and aggregate stats. Surface snapshot in README (e.g., "generated 20+ test videos, avg pipeline time Xs").
 
 #### 0.6 Async/Parallel Agent Execution (Systems Credibility Upgrade)
 - **Priority:** P2
-- **Status:** Partially Done
+- **Status:** Done (March 2026)
 - **Depends on:** 0.5 (timing instrumentation provides the benchmark data)
-- **Progress:** `ProductionOrchestrator` in `src/orchestrator.py` runs audio + image fetch in parallel via `asyncio.gather` + `ThreadPoolExecutor`. Both MCP and direct modes support parallel and serial execution. `run_pipeline.py` remains fully sequential.
-- **Remaining work:**
-  - Wire `run_pipeline.py` to use orchestrator's parallel mode (currently sequential only).
-  - Once 0.5 timing instrumentation lands, run identical topic through both `serial=True` and `serial=False` orchestrator modes and record wall-clock delta.
-  - Optionally compare MCP-server vs direct-dispatch overhead on same workload.
-  - Document benchmark results in README or `docs/`.
+- **Progress:** `ProductionOrchestrator` runs audio + image fetch in parallel via `asyncio.gather` + `ThreadPoolExecutor`. Parallel benchmark implemented and documented.
 - **Success Metric:** Documented wall-clock improvement (serial vs parallel) with no quality regression. Benchmark reproducible from a single CLI command.
 
 #### 0.7 MCP Full Server Mode (Architecture Showcase) 🔥
@@ -218,7 +213,7 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 1.0a Complete MCP Tool Coverage (All Pipeline Stages)
 - **Priority:** P1
-- **Status:** Open
+- **Status:** Done (March 2026)
 - **Depends on:** 0.7 (MCP server already done)
 - **Problem:** The MCP server currently exposes 10 tools but only covers stages 2-4 and 6-10. Five pipeline stages are only reachable via direct Python imports, meaning the MCP server cannot serve as a complete pipeline router. The E2E test and `main.py` screenplay mode call these stages as direct imports, bypassing MCP entirely.
 - **Missing tools:**
@@ -238,7 +233,7 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 1.0b Remove Legacy Execution Paths
 - **Priority:** P1
-- **Status:** Open
+- **Status:** Done (March 2026)
 - **Depends on:** 1.0a (full MCP tool coverage)
 - **Problem:** The codebase has two parallel execution paths — MCP server dispatch and direct agent invocation — with duplicated orchestration logic. The direct paths (`mvp`, `mvp_offline`, individual-stage modes, `run_pipeline.py`) are legacy code predating the MCP server and offer no additional capability. This adds maintenance burden, splits metrics instrumentation, and muddies the architecture story.
 - **Scope:**
@@ -777,14 +772,14 @@ winget install ImageMagick.ImageMagick
 - [x] At least one real generated video artifact link is live in README
 - [ ] Audio continuity passes duration parity checks in validation runs (`run_pipeline.py` hard-fail wired)
 - [ ] Per-run evaluation artifacts are generated (`evaluation.json`) from `run_pipeline.py`
-- [ ] Metrics summary exists with runtime + output-count evidence (`results/metrics_summary.json`)
-- [ ] Parallel execution benchmark is documented (wall-clock comparison logged)
+- [x] Metrics summary exists with runtime + output-count evidence (`results/metrics_summary.json`)
+- [x] Parallel execution benchmark is documented (wall-clock comparison logged)
 - [x] MCP HTTPS server with TLS, health checks, and full-pipeline integration tests
 - [x] chatterbox submodule integrated as default TTS backend (`vendor/chatterbox/`)
 
 ### Tier 1 Complete When:
-- [ ] All 15 MCP tools implemented and tested (1.0a)
-- [ ] Legacy execution paths removed; single MCP pipeline (1.0b)
+- [x] All 15 MCP tools implemented and tested (1.0a)
+- [x] Legacy execution paths removed; single MCP pipeline (1.0b)
 - [x] Videos have on-screen text overlays rendered
 - [x] Final MP4 has audible voiceover track in validation runs
 - [ ] Audio has background music mixed in
