@@ -158,7 +158,10 @@ def _parse_scores_response(text: str) -> Dict[str, int]:
 def _fetch_image_bytes(url: str, timeout: int = 15) -> Optional[bytes]:
     """Fetch image bytes from a URL. Returns None on failure."""
     try:
-        resp = requests.get(url, timeout=timeout, stream=False)
+        headers: Dict[str, str] = {}
+        if "wikimedia.org" in url or "wikipedia.org" in url:
+            headers["User-Agent"] = "Mozilla/5.0 (compatible; VideoAgent/1.0)"
+        resp = requests.get(url, headers=headers, timeout=timeout, stream=False)
         resp.raise_for_status()
         return resp.content
     except Exception as exc:
