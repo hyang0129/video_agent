@@ -205,53 +205,6 @@ class VisualAssetAgent:
             _log.warning("[WARN] LLM query extraction failed, using raw vo_line: %s", exc)
             return vo_line
 
-    def _llm_select_best_candidate(
-        self,
-        candidates: List[VisualAssetCandidate],
-        vo_line: str,
-        topic_context: str,
-    ) -> Optional[VisualAssetCandidate]:
-        """Use LLM to pick the best candidate from a list based on metadata.
-
-        Each candidate's alt text and title are presented as a numbered list.
-        The LLM returns the 1-based index of the best match for the narration.
-        Falls back to the first candidate on any error.
-        """
-        if not candidates:
-            return None
-        if len(candidates) == 1:
-            return candidates[0]
-        try:
-            from .config import make_llm
-            llm = make_llm(temperature=0.0)
-            lines = []
-            for i, c in enumerate(candidates, 1):
-                alt = c.metadata.get("alt") or c.metadata.get("title") or ""
-                src = c.source
-                lines.append(f"{i}. [{src}] {alt[:200]}")
-            candidates_text = "\n".join(lines)
-            prompt = (
-                "You are selecting the best image for a video scene.\n\n"
-                f"VIDEO TOPIC: {topic_context}\n"
-                f"SCENE NARRATION: {vo_line}\n\n"
-                "CANDIDATE IMAGES (by description):\n"
-                f"{candidates_text}\n\n"
-                "Rules:\n"
-                "- Return ONLY the number of the best matching image.\n"
-                "- Choose the image whose description is most visually relevant to the narration.\n"
-                "- Prefer historically accurate images over generic ones.\n"
-                "- If multiple are equally relevant, prefer the one from a historical archive.\n\n"
-                "Best image number:"
-            )
-            result = llm.invoke(prompt)
-            raw = str(result.content).strip()
-            idx = int("".join(filter(str.isdigit, raw.split()[0]))) - 1
-            if 0 <= idx < len(candidates):
-                return candidates[idx]
-        except Exception as exc:
-            _log.warning("[WARN] LLM candidate selection failed, using first: %s", exc)
-        return candidates[0]
-
     def _llm_is_relevant(
         self,
         candidate: VisualAssetCandidate,

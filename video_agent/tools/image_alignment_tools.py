@@ -22,13 +22,14 @@ class ImageAlignmentEvaluator:
 
     def select_best(
         self,
-        candidates: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
+        candidates: list[Any],
+    ) -> Any | None:
         """Return the best candidate from the pool.
 
         Args:
-            candidates: Candidate dicts, pre-ranked by relevance score
-                (highest score first, as produced by ScriptImageRetrievalAgent).
+            candidates: Candidate objects (dicts or VisualAssetCandidate
+                dataclasses), pre-ranked by relevance score (highest score
+                first).
 
         Returns:
             The first candidate, or None if the list is empty.
