@@ -135,6 +135,17 @@ class ScreenplayReviewer:
                         "severity": "warn",
                     })
 
+            # Check: search_queries count (must be exactly 3: exact, general, fallback)
+            queries = visual.get("search_queries") or []
+            if len(queries) != 3:
+                issues.append({
+                    "scene_id": scene_id,
+                    "issue": "search_queries_count",
+                    "detail": f"visual.search_queries has {len(queries)} entries; expected exactly 3 (exact, general, fallback)",
+                    "suggestion": "Emit exactly 3 tiered search queries per scene",
+                    "severity": "warn",
+                })
+
             # Check: visual specificity
             if description and _is_generic_visual(description):
                 issues.append({

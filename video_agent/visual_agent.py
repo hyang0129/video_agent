@@ -31,6 +31,7 @@ import requests
 from .config import CACHE_DIR, RESULTS_DIR, VIDEO_RESOLUTION
 from .artifacts.io import write_json
 from .tools.content_validation_tools import validate_image_safety
+from .tools.image_alignment_tools import ImageAlignmentEvaluator
 from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
 
 
@@ -127,6 +128,7 @@ class VisualAssetAgent:
         content_validator: str = "none",
         min_safety_score: float = 0.9,
         min_resolution: Tuple[int, int] = VIDEO_RESOLUTION,
+        alignment_evaluator: Optional[ImageAlignmentEvaluator] = None,
     ):
         """Initialize visual asset agent.
 
@@ -136,7 +138,9 @@ class VisualAssetAgent:
             content_validator: Content safety provider name (Phase 1: "none").
             min_safety_score: Minimum safety score (0-1) to accept an asset.
             min_resolution: Minimum (width, height) to prefer.
+            alignment_evaluator: Image alignment evaluator instance.
         """
+        self.alignment_evaluator = alignment_evaluator or ImageAlignmentEvaluator()
         self.output_dir = output_dir or RESULTS_DIR / f"visual_{uuid.uuid4().hex[:6]}"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -200,53 +204,6 @@ class VisualAssetAgent:
         except Exception as exc:
             _log.warning("[WARN] LLM query extraction failed, using raw vo_line: %s", exc)
             return vo_line
-
-    def _llm_select_best_candidate(
-        self,
-        candidates: List[VisualAssetCandidate],
-        vo_line: str,
-        topic_context: str,
-    ) -> Optional[VisualAssetCandidate]:
-        """Use LLM to pick the best candidate from a list based on metadata.
-
-        Each candidate's alt text and title are presented as a numbered list.
-        The LLM returns the 1-based index of the best match for the narration.
-        Falls back to the first candidate on any error.
-        """
-        if not candidates:
-            return None
-        if len(candidates) == 1:
-            return candidates[0]
-        try:
-            from .config import make_llm
-            llm = make_llm(temperature=0.0)
-            lines = []
-            for i, c in enumerate(candidates, 1):
-                alt = c.metadata.get("alt") or c.metadata.get("title") or ""
-                src = c.source
-                lines.append(f"{i}. [{src}] {alt[:200]}")
-            candidates_text = "\n".join(lines)
-            prompt = (
-                "You are selecting the best image for a video scene.\n\n"
-                f"VIDEO TOPIC: {topic_context}\n"
-                f"SCENE NARRATION: {vo_line}\n\n"
-                "CANDIDATE IMAGES (by description):\n"
-                f"{candidates_text}\n\n"
-                "Rules:\n"
-                "- Return ONLY the number of the best matching image.\n"
-                "- Choose the image whose description is most visually relevant to the narration.\n"
-                "- Prefer historically accurate images over generic ones.\n"
-                "- If multiple are equally relevant, prefer the one from a historical archive.\n\n"
-                "Best image number:"
-            )
-            result = llm.invoke(prompt)
-            raw = str(result.content).strip()
-            idx = int("".join(filter(str.isdigit, raw.split()[0]))) - 1
-            if 0 <= idx < len(candidates):
-                return candidates[idx]
-        except Exception as exc:
-            _log.warning("[WARN] LLM candidate selection failed, using first: %s", exc)
-        return candidates[0]
 
     def _llm_is_relevant(
         self,
@@ -479,7 +436,7 @@ class VisualAssetAgent:
 
         Each iteration:
           1. Search with the current query (10 candidates per source).
-          2. LLM selects the best candidate from the validated pool.
+          2. Alignment evaluator picks the best candidate from the validated pool.
           3. LLM checks whether the chosen image is relevant to the narration.
           4. If relevant, accept it. If not, ask the LLM for a broader query and retry.
         Up to _max_query_attempts iterations (default 3). All tried queries are
@@ -517,11 +474,7 @@ class VisualAssetAgent:
                     seen_urls.add(c.url)
 
             # Pick the best from this round's fresh candidates only.
-            round_chosen = self._llm_select_best_candidate(
-                candidates=round_valid,
-                vo_line=text_context,
-                topic_context=topic_context,
-            )
+            round_chosen = self.alignment_evaluator.select_best(round_valid)
 
             if round_chosen is None:
                 # No candidates at all — try broadening immediately.
@@ -550,11 +503,7 @@ class VisualAssetAgent:
 
         # If the loop exhausted without acceptance, fall back to best available.
         if chosen is None and valid_candidates:
-            chosen = self._llm_select_best_candidate(
-                candidates=valid_candidates,
-                vo_line=text_context,
-                topic_context=topic_context,
-            )
+            chosen = self.alignment_evaluator.select_best(valid_candidates)
             if chosen is not None:
                 chosen_validation = self.validate_content(chosen.url)
                 _log.warning("[INFO] Using best-available fallback after %d attempts", len(tried_queries))

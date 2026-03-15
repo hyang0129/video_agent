@@ -320,6 +320,7 @@ class ScriptImageConfig:
     max_candidates_per_segment: int = 5
     max_queries_per_segment: int = 3
     orientation: str = "portrait"
+    candidate_pool_factor: int = 2
 
 
 class ScriptImageRetrievalAgent:
@@ -546,11 +547,10 @@ class ScriptImageRetrievalAgent:
         max_candidates = max(1, int(self.config.max_candidates_per_segment))
 
         for query in queries:
-            if len(candidates) >= max_candidates:
+            if len(candidates) >= max_candidates * self.config.candidate_pool_factor:
                 break
-
             for source_name in configured_sources:
-                if len(candidates) >= max_candidates:
+                if len(candidates) >= max_candidates * self.config.candidate_pool_factor:
                     break
 
                 sources_attempted.append(source_name)
@@ -567,7 +567,7 @@ class ScriptImageRetrievalAgent:
                     continue
 
                 for item in results:
-                    if len(candidates) >= max_candidates:
+                    if len(candidates) >= max_candidates * self.config.candidate_pool_factor:
                         break
 
                     url = str(item.get("url") or "").strip()

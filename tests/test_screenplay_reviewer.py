@@ -20,7 +20,7 @@ def _valid_screenplay():
                 "visual": {
                     "description": "WWII Tiger tank crossing muddy field",
                     "mood": "dramatic",
-                    "search_queries": ["tank field"],
+                    "search_queries": ["Tiger tank muddy field WW2", "WW2 tank battle", "military tank"],
                 },
                 "on_screen_text": "The Tiger Tank",
             },
@@ -29,9 +29,9 @@ def _valid_screenplay():
                 "vo_line": "It changed warfare forever.",
                 "target_duration_s": 15.0,
                 "visual": {
-                    "description": "soldiers watching tank advance",
+                    "description": "soldiers watching tank advance across open ground",
                     "mood": "intense",
-                    "search_queries": ["soldiers battlefield"],
+                    "search_queries": ["soldiers watching tank advance WW2", "WW2 soldiers battlefield", "soldiers battlefield"],
                 },
                 "on_screen_text": "Forever Changed",
             },
@@ -93,6 +93,26 @@ class TestScreenplayReviewer:
                   if i["issue"] == "vo_too_long"]
         assert len(issues) >= 1
         assert issues[0]["severity"] == "warn"
+
+    def test_warn_search_queries_count_too_few(self):
+        reviewer = ScreenplayReviewer()
+        sp = _valid_screenplay()
+        sp["scenes"][0]["visual"]["search_queries"] = ["only one query"]
+        report = reviewer.review(sp)
+        issues = [i for i in report["scene_issues"]
+                  if i["issue"] == "search_queries_count" and i["scene_id"] == "scene_01"]
+        assert len(issues) == 1
+        assert issues[0]["severity"] == "warn"
+        assert "3" in issues[0]["detail"]
+
+    def test_warn_search_queries_count_correct(self):
+        reviewer = ScreenplayReviewer()
+        sp = _valid_screenplay()
+        for scene in sp["scenes"]:
+            scene["visual"]["search_queries"] = ["exact query", "general query", "fallback query"]
+        report = reviewer.review(sp)
+        issues = [i for i in report["scene_issues"] if i["issue"] == "search_queries_count"]
+        assert issues == []
 
     def test_score_calculation(self):
         reviewer = ScreenplayReviewer()
