@@ -52,8 +52,10 @@ def test_music_selection_produces_valid_selection(tmp_path: Path) -> None:
     audio_agent = create_audio_agent(output_dir=tmp_path, voice="silent")
     audio_timeline = audio_agent.generate_audio_timeline(video_plan=video_plan)
 
-    music_agent = create_music_agent()
-    music_selection = music_agent.select_music(audio_timeline)
+    music_agent = create_music_agent(output_dir=tmp_path)
+    music_selection = music_agent.select_music(
+        audio_timeline, script_package=script_package,
+    )
 
     music_path = Path(music_selection.get("music_file_path", ""))
     assert music_path.exists(), f"Music file not found: {music_path}"

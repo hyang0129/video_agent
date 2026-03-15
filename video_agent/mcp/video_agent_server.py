@@ -594,12 +594,22 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             audio_timeline_arg: Dict[str, Any] = arguments["audio_timeline"]
 
             from ..music_agent import create_music_agent
-            agent = create_music_agent()
-            music_selection = agent.select_music(
-                audio_timeline_arg,
-                video_plan=arguments.get("video_plan"),
-                script_package=arguments.get("script_package"),
-                visual_manifest=arguments.get("visual_manifest"),
+            from ..config import RESULTS_DIR
+            import asyncio
+            agent = create_music_agent(output_dir=RESULTS_DIR)
+
+            # MusicAgent uses asyncio.run() internally (sync wrappers for
+            # httpx.AsyncClient). Run in a thread to avoid "cannot call
+            # asyncio.run() from a running event loop" when dispatched
+            # from the MCP in-process path.
+            music_selection = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: agent.select_music(
+                    audio_timeline_arg,
+                    video_plan=arguments.get("video_plan"),
+                    script_package=arguments.get("script_package"),
+                    visual_manifest=arguments.get("visual_manifest"),
+                ),
             )
             return _json({"status": "ok", "music_selection": music_selection})
 

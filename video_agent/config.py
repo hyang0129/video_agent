@@ -118,6 +118,11 @@ TTS_SIMILARITY_BOOST = 0.75  # ElevenLabs similarity boost (0.0-1.0)
 AUDIO_EXPORT_FORMAT = "mp3"  # or "wav" for uncompressed
 AUDIO_BITRATE = "192k"  # MP3 bitrate
 
+# Music Generation (ACE-Step)
+# Values: "acestep" | "default"
+MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "acestep")
+ACESTEP_BASE_URL = os.getenv("ACESTEP_BASE_URL", "http://localhost:8001")
+
 # TTS Backend Selection
 # Values: "elevenlabs" | "chatterbox_direct" | "chatterbox_server"
 TTS_BACKEND = os.getenv("TTS_BACKEND", "chatterbox_server")

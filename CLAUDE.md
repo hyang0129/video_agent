@@ -86,6 +86,43 @@ Target format: faceless, caption-first, voiceover-narrated, 9:16 vertical, 15–
 
 ---
 
+## External GPU Tools (Optional — require separate setup)
+
+Two GPU-heavy services can be plugged in to replace the default fallbacks.
+**Neither is required for a basic pipeline run.** If not set up, the pipeline
+falls back gracefully:
+
+| Tool | Purpose | Default fallback | Env var to enable |
+|------|---------|-----------------|-------------------|
+| **Chatterbox TTS** | Local GPU voiceover | Silent audio segments | `TTS_BACKEND=chatterbox_server` |
+| **ACE-Step music** | Local GPU music generation | `assets/default_music.mp3` | `MUSIC_BACKEND=acestep` |
+
+### Chatterbox TTS
+
+Repo: `repos/chatterbox/` — FastAPI server wrapping Chatterbox Turbo TTS.
+Setup: see `docs/chatterbox-integration-plan.md`.
+Requires: CUDA GPU (~3 GB VRAM), uvicorn at `/workspaces/.venvs/chatterbox/bin/uvicorn`.
+The pipeline starts and stops the server automatically via `GpuServerManager`.
+
+### ACE-Step Music Generation
+
+Repo: `repos/ace_step_server/` — the ACE-Step v1.5 inference server.
+Client library: `repos/ace_step/` — installed into this venv via `pip install -e`.
+Setup: see `docs/music-generation.md`.
+Requires: CUDA GPU (~6 GB VRAM free), `uv sync` in `ace_step_server/`.
+
+**Default pipeline behaviour:** `MUSIC_BACKEND=default` — the pipeline uses
+`assets/default_music.mp3` (Kevin MacLeod CC BY 4.0). ACE-Step is only
+invoked when `MUSIC_BACKEND=acestep` is set in `.env`.
+
+**Serial GPU constraint:** Chatterbox and ACE-Step cannot run concurrently on
+a 12 GB GPU. `GpuServerManager` (`src/tools/gpu_server_manager.py`) starts
+Chatterbox, runs TTS, stops it, then starts ACE-Step for music — in serial.
+ACE-Step cold-start takes ~2–3 minutes; pre-warm it before running the
+pipeline if iterating quickly.
+
+---
+
 ## Development Environment
 
 **Python:** 3.10.11 — venv is at `/workspaces/.venvs/video_agent/`.

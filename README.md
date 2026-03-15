@@ -319,12 +319,33 @@ video_agent/
 | Agent orchestration | LangChain 0.3.x |
 | LLM (default) | Anthropic Claude (claude-sonnet) |
 | LLM (alternative) | Google Gemini (via langchain-google-genai) |
-| TTS voiceover | [Chatterbox Turbo TTS](https://github.com/hyang0129/chatterbox) (local GPU, CUDA required, default) or ElevenLabs API (`TTS_BACKEND=elevenlabs`) |
+| TTS voiceover | ElevenLabs API (`TTS_BACKEND=elevenlabs`) **default** · or Chatterbox Turbo TTS (local GPU, `TTS_BACKEND=chatterbox_server` — requires separate setup) |
+| Background music | `assets/default_music.mp3` Kevin MacLeod CC BY 4.0 **default** · or ACE-Step v1.5 AI generation (local GPU, `MUSIC_BACKEND=acestep` — requires separate setup) |
 | Image retrieval | Pexels API |
 | Video rendering | FFmpeg (local, zero cloud cost) |
 | Artifact format | Typed JSON files |
 | Tests | pytest |
 | Python | 3.10.11 |
+
+---
+
+## External GPU Tools *(optional — not required for core pipeline)*
+
+Two optional services replace the built-in fallbacks when a CUDA GPU is available.
+The pipeline works without either — it falls back to silence + default music.
+
+| Tool | What it replaces | Env var | Setup doc |
+|------|-----------------|---------|-----------|
+| **Chatterbox TTS** (`repos/chatterbox/`) | Silent voiceover segments | `TTS_BACKEND=chatterbox_server` | `docs/chatterbox-integration-plan.md` |
+| **ACE-Step music** (`repos/ace_step_server/`) | `assets/default_music.mp3` | `MUSIC_BACKEND=acestep` | `docs/music-generation.md` |
+
+**Default pipeline runs use neither.** Set the env vars in `.env` only after
+completing the setup steps in the linked docs.
+
+**Serial GPU constraint:** Both tools load large models into VRAM. On a 12 GB
+GPU they cannot run simultaneously. `GpuServerManager`
+(`video_agent/tools/gpu_server_manager.py`) handles this automatically — Chatterbox
+runs and stops before ACE-Step starts.
 
 ---
 
@@ -372,7 +393,7 @@ This runs the WW2 tanks fixture through both modes and prints a wall-clock compa
 These are tracked in [ROADMAP.md](ROADMAP.md):
 
 - **Audio continuity:** Voiceover can end before video duration in some renders. Full-duration padding is in progress (Tier 0.2).
-- **Background music:** `MusicSelection.json` is generated but the music track is not yet mixed into the final MP4.
+- **Background music prompt quality:** Music descriptions are not yet calibrated for short-form content — see [issue #10](https://github.com/hyang0129/video_agent/issues/10). Default fallback track works without ACE-Step.
 - **Ken Burns / transitions:** Specified in `RenderSpec.json` but not yet applied by the FFmpeg engine.
 - **LUFS normalization:** Voiceover volume can be inconsistent across videos; `normalize_audio()` is stubbed.
 - **Image relevance:** Scene images depend on Pexels keyword matching; CLIP semantic scoring is not yet wired in.
