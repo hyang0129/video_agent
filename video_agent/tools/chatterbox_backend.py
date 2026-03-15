@@ -109,6 +109,7 @@ class ChatterboxServerBackend:
     def synthesize(self, req: TTSRequest) -> bytes:
         if not req.text or not req.text.strip():
             raise TTSError("Text cannot be empty")
+        self.last_voice_wpm = None  # reset before each request
         try:
             r = self._session.post(
                 f"{self._base_url}/tts",

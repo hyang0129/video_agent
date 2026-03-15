@@ -287,7 +287,8 @@ class AudioGenerationAgent:
                     segment_path.write_bytes(wav_bytes)
                     audio_path = segment_path
                     # Use per-request header WPM if available, else pre-fetched WPM
-                    effective_wpm = getattr(self._tts_backend, "last_voice_wpm", None) or self._voice_wpm
+                    header_wpm = getattr(self._tts_backend, "last_voice_wpm", None)
+                    effective_wpm = header_wpm if header_wpm is not None else self._voice_wpm
                     est_dur = _estimate_duration_s(vo_line, measured_wpm=effective_wpm)
                     metadata = {
                         "voice_id": CHATTERBOX_VOICE,
