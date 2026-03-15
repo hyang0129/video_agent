@@ -154,6 +154,9 @@ class GpuServerManager:
 
         _stop_proc(self._chatterbox_proc, "Chatterbox")
         self._chatterbox_proc = None
+        if self._chatterbox_log:
+            self._chatterbox_log.close()
+            self._chatterbox_log = None
         return False
 
     def stop_chatterbox(self) -> None:
@@ -220,6 +223,9 @@ class GpuServerManager:
         _stop_proc(self._acestep_proc, "ACE-Step")
         self._acestep_proc = None
         self._acestep_owned = False
+        if self._acestep_log:
+            self._acestep_log.close()
+            self._acestep_log = None
         return False
 
     def stop_acestep(self) -> None:

@@ -10,11 +10,11 @@ description derived from the script package.
 
 ```
 FullPipelineRunner
-  └── GpuServerManager          # serial GPU lifecycle (src/tools/gpu_server_manager.py)
+  └── GpuServerManager          # serial GPU lifecycle (video_agent/tools/gpu_server_manager.py)
        ├── mgr.chatterbox()     # start Chatterbox TTS → run AudioAgent → stop
        └── mgr.acestep()        # start ACE-Step → run MusicAgent → stop (or reuse)
 
-MusicAgent (src/music_agent.py)
+MusicAgent (video_agent/music_agent.py)
   └── _describe_music()         # LLM crafts ACE-Step caption from script
   └── AceStepClient.generate_sync()  # submits task, polls, downloads MP3
 ```
@@ -87,7 +87,7 @@ ACESTEP_INIT_LLM=false .venv/bin/acestep-api --host 0.0.0.0 --port 8001 &
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MUSIC_BACKEND` | `acestep` | `acestep` or `default` (uses `assets/default_music.mp3`) |
+| `MUSIC_BACKEND` | `default` | `acestep` or `default` (uses `assets/default_music.mp3`) |
 | `ACESTEP_BASE_URL` | `http://localhost:8001` | ACE-Step server URL |
 | `ACESTEP_PORT` | `8001` | Port for GpuServerManager to start the server on |
 | `ACESTEP_APP_DIR` | `/workspaces/hub/repos/ace_step_server` | Path to ace_step_server repo |

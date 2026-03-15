@@ -602,7 +602,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             # httpx.AsyncClient). Run in a thread to avoid "cannot call
             # asyncio.run() from a running event loop" when dispatched
             # from the MCP in-process path.
-            music_selection = await asyncio.get_event_loop().run_in_executor(
+            music_selection = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: agent.select_music(
                     audio_timeline_arg,
