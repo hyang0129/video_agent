@@ -37,7 +37,8 @@ def _utc_now_iso() -> str:
 
 def _probe_duration_seconds(path: Path) -> Optional[float]:
     """Return ffprobe-measured duration, or None if unavailable."""
-    ffprobe = shutil.which("ffprobe")
+    from video_agent.config import FFPROBE_PATH
+    ffprobe = shutil.which(FFPROBE_PATH)
     if not ffprobe or not path.exists() or path.stat().st_size == 0:
         return None
     cmd = [

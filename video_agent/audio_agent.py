@@ -508,7 +508,8 @@ class AudioGenerationAgent:
         if len(segment_paths) == 1:
             return segment_paths[0]
 
-        ffmpeg_path = shutil.which("ffmpeg")
+        from video_agent.config import FFMPEG_PATH
+        ffmpeg_path = shutil.which(FFMPEG_PATH)
         if not ffmpeg_path:
             return None
 
