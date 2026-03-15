@@ -30,7 +30,8 @@ loguru>=0.7.0
 elevenlabs>=0.2.0
 
 # Music generation (ACE-Step)
-ace-step-client @ file:///workspaces/hub/repos/ace_step
+# ace-step-client is installed from a local path (dev-container only).
+# Set ACE_STEP_CLIENT_PATH in .env and run: pip install -e "$ACE_STEP_CLIENT_PATH"
 
 # MCP (Model Context Protocol) server/client
 mcp>=1.0.0

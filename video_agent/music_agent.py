@@ -2,9 +2,9 @@
 
 Uses an LLM to analyse the script and produce a tailored ACE-Step music
 description, then generates background music via the ACE-Step v1.5 model.
-Uses the bundled default_music.mp3 only when ``MUSIC_BACKEND=default``.
-When ``MUSIC_BACKEND=acestep``, failures raise ``MusicAgentError`` rather
-than silently falling back.
+Uses the bundled default_music.mp3 when ``MUSIC_BACKEND=default``.
+When ``MUSIC_BACKEND=acestep``, falls back to the default MP3 (marked
+DEGRADED) if the server is unreachable or generation fails.
 
 Input:  AudioTimeline  (+ optional VideoPlan / ScriptPackage / VisualManifest)
 Output: MusicSelection artifact
@@ -160,7 +160,8 @@ class MusicAgent:
 
     When backend is ``acestep``, uses an LLM to analyse the script and
     craft a tailored ACE-Step music description, then generates the track.
-    Falls back to the bundled default MP3 if the server is down.
+    Falls back to the bundled default MP3 (marked DEGRADED) if the
+    server is unreachable or generation fails.
 
     Example:
         >>> agent = create_music_agent(output_dir=Path("results/run_001"))
@@ -226,21 +227,33 @@ class MusicAgent:
         target_duration_s: float,
         script_package: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Generate music via ACE-Step. Raises MusicAgentError on failure."""
+        """Generate music via ACE-Step.
+
+        Falls back to default music (DEGRADED) if the package is missing
+        or the server is unreachable.
+        """
         try:
             from ace_step.client import AceStepClient
         except ImportError:
-            raise MusicAgentError(
-                "ace_step package not installed. "
-                "Install it or set MUSIC_BACKEND=default."
+            logger.warning(
+                "[WARN] ace_step package not installed, falling back to default music"
+            )
+            return self._default_selection(
+                target_duration_s=target_duration_s,
+                degraded_reason="ace_step package not installed",
             )
 
         client = AceStepClient(base_url=self.acestep_url)
 
         if not client.health_sync():
-            raise MusicAgentError(
-                f"ACE-Step server unreachable at {self.acestep_url}. "
-                f"Start the server or set MUSIC_BACKEND=default."
+            logger.warning(
+                "[WARN] ACE-Step server unreachable at %s, "
+                "falling back to default music",
+                self.acestep_url,
+            )
+            return self._default_selection(
+                target_duration_s=target_duration_s,
+                degraded_reason=f"ACE-Step server unreachable at {self.acestep_url}",
             )
 
         duration = max(10, min(600, int(target_duration_s))) if target_duration_s > 0 else 30

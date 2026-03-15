@@ -100,6 +100,8 @@ class GpuServerManager:
         self._acestep_proc: Optional[subprocess.Popen] = None
         self._chatterbox_owned: bool = False  # True if we started it
         self._acestep_owned: bool = False
+        self._chatterbox_log: Optional[object] = None
+        self._acestep_log: Optional[object] = None
         self._log_dir = log_dir or "/tmp"
 
     def _open_log(self, name: str):
@@ -131,6 +133,7 @@ class GpuServerManager:
         env.setdefault("HF_HUB_OFFLINE", "1")
 
         log = self._open_log("chatterbox")
+        self._chatterbox_log = log
         self._chatterbox_proc = subprocess.Popen(
             [
                 CHATTERBOX_UVICORN, "app.main:app",
@@ -159,6 +162,9 @@ class GpuServerManager:
         _stop_proc(self._chatterbox_proc, "Chatterbox TTS server")
         self._chatterbox_proc = None
         self._chatterbox_owned = False
+        if self._chatterbox_log:
+            self._chatterbox_log.close()
+            self._chatterbox_log = None
         _kill_port(CHATTERBOX_PORT)
 
     # ----- ACE-Step -----
@@ -192,6 +198,7 @@ class GpuServerManager:
         env.pop("VIRTUAL_ENV", None)
 
         log = self._open_log("acestep")
+        self._acestep_log = log
         self._acestep_proc = subprocess.Popen(
             [
                 _ACESTEP_VENV_BIN,
@@ -223,6 +230,9 @@ class GpuServerManager:
         _stop_proc(self._acestep_proc, "ACE-Step music server")
         self._acestep_proc = None
         self._acestep_owned = False
+        if self._acestep_log:
+            self._acestep_log.close()
+            self._acestep_log = None
         _kill_port(ACESTEP_PORT)
 
     # ----- Context managers -----

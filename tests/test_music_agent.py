@@ -65,21 +65,6 @@ class TestDefaultSelection:
             agent.select_music(SAMPLE_TIMELINE)
 
 
-class TestSelectByTone:
-    @patch("video_agent.music_agent.shutil.which", return_value="/usr/bin/ffprobe")
-    @patch("video_agent.music_agent.subprocess.run")
-    def test_select_by_tone_delegates(self, mock_run, mock_which, tmp_path):
-        mock_run.return_value = MagicMock(returncode=0, stdout="60.0\n")
-        music_file = tmp_path / "test.mp3"
-        music_file.write_bytes(b"\x00" * 100)
-        agent = MusicAgent(default_music_path=music_file)
-        timeline = {"duration_seconds": 30.0}
-        result_tone = agent.select_by_tone("dramatic", timeline)
-        result_direct = agent.select_music(timeline)
-        assert result_tone["selection_method"] == result_direct["selection_method"]
-        assert result_tone["target_duration_s"] == result_direct["target_duration_s"]
-
-
 # ---------------------------------------------------------------------------
 # Script summary extraction
 # ---------------------------------------------------------------------------
@@ -239,8 +224,14 @@ class TestAceStepGeneration:
         assert call_kwargs["bpm"] == 100
         assert call_kwargs["instrumental"] is True
 
-    def test_acestep_raises_on_server_down(self, tmp_path):
-        """When ACE-Step server is unreachable, raises MusicAgentError."""
+    @patch("video_agent.music_agent.shutil.which", return_value="/usr/bin/ffprobe")
+    @patch("video_agent.music_agent.subprocess.run")
+    def test_acestep_degrades_on_server_down(self, mock_run, mock_which, tmp_path):
+        """When ACE-Step server is unreachable, falls back to default (DEGRADED)."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="45.0\n")
+        music_file = tmp_path / "default.mp3"
+        music_file.write_bytes(b"\x00" * 100)
+
         import ace_step.client as ace_client
         mock_client_instance = MagicMock()
         mock_client_instance.health_sync.return_value = False
@@ -250,10 +241,12 @@ class TestAceStepGeneration:
         ):
             agent = MusicAgent(
                 output_dir=tmp_path, backend="acestep",
-                default_music_path=tmp_path / "default.mp3",
+                default_music_path=music_file,
             )
-            with pytest.raises(MusicAgentError, match="unreachable"):
-                agent.select_music(SAMPLE_TIMELINE)
+            result = agent.select_music(SAMPLE_TIMELINE)
+
+        assert result["selection_method"] == "default"
+        assert "unreachable" in result["degraded_reason"].lower()
 
     @patch("video_agent.music_agent.make_llm")
     def test_llm_failure_raises(self, mock_make_llm, tmp_path):
@@ -315,9 +308,9 @@ class TestCreateMusicAgentFactory:
         agent = create_music_agent(default_music_path=Path("/tmp/fake.mp3"))
         assert isinstance(agent, MusicAgent)
 
-    def test_backend_default_is_acestep(self):
+    def test_backend_default_is_default(self):
         agent = create_music_agent()
-        assert agent.backend == "acestep"
+        assert agent.backend == "default"
 
     def test_output_dir_passed_through(self, tmp_path):
         agent = create_music_agent(output_dir=tmp_path)

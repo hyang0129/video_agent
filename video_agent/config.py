@@ -120,7 +120,7 @@ AUDIO_BITRATE = "192k"  # MP3 bitrate
 
 # Music Generation (ACE-Step)
 # Values: "acestep" | "default"
-MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "acestep")
+MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "default")
 ACESTEP_BASE_URL = os.getenv("ACESTEP_BASE_URL", "http://localhost:8001")
 
 # TTS Backend Selection

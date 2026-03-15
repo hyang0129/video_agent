@@ -59,6 +59,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 - Use Pexels for image retrieval; placeholder BMPs when Pexels is unavailable.
 - Follow the Human Review Protocol for every change that affects media output — see below.
 - Follow the Integration Testing Guide when writing or running tests — see `docs/integration-testing.md`.
+- Define new environment variables in `.env.example` (commented-out, with description — no real values) and set actual values in `.env`. Read them via `os.getenv()` in `config.py`. Never hardcode paths or secrets in source files or `requirements.txt`.
 
 ### Don't
 - Don't use cloud rendering services (Shotstack, etc.) — avoids cost and vendor lock-in.
@@ -71,6 +72,7 @@ Do not start Tier 1+ work until Tier 0 success criteria are met.
 - Don't merge a media-affecting change without human sign-off on the relevant artifact.
 - **Don't use emoji or non-ASCII characters in `print()` or `logging` calls.** Use ASCII tags instead: `[OK]`, `[ERROR]`, `[WARN]`, `[INFO]`, `[SKIP]`, `[WAIT]`, `[LLM]`, `[debug]`. This prevents `UnicodeEncodeError` on Windows (CP1252 terminals). Non-ASCII is fine in comments, docstrings, and data strings (e.g., voiceover content).
 - Don't perform git actions unless the user specifically asks.
+- Don't dismiss test failures as "pre-existing" or "not related." Every failure deserves a root-cause investigation: is the test wrong, is the code wrong, or is the environment wrong? Propose a concrete fix (mark as integration, add a mock, fix the default, file an issue) — never hand-wave.
 
 ---
 
@@ -130,6 +132,12 @@ pipeline if iterating quickly.
 Activate: `source /workspaces/.venvs/video_agent/bin/activate`
 
 This repo is also installable as a package: `pip install -e .`
+
+**Environment variables:** `.env.example` is the schema (commented-out keys
+with descriptions, no real values). `.env` holds actual values (loaded by
+`python-dotenv`, gitignored). Copy `.env.example` to `.env` and fill in
+your values. All backend selection, API keys, and local paths belong in
+`.env` — never hardcoded in code or `requirements.txt`.
 
 **Installed LangChain versions (as of 2026-03-06):**
 
