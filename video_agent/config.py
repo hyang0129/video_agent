@@ -124,6 +124,10 @@ TTS_BACKEND = os.getenv("TTS_BACKEND", "chatterbox_server")
 CHATTERBOX_SERVER_URL = os.getenv("CHATTERBOX_SERVER_URL", "http://localhost:8000")
 CHATTERBOX_VOICE = os.getenv("CHATTERBOX_VOICE", "kronimi7030")
 
+# FFmpeg / FFprobe
+FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
+FFPROBE_PATH = os.getenv("FFPROBE_PATH", "ffprobe")
+
 # Rhubarb Lip Sync
 RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", "")
 RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)

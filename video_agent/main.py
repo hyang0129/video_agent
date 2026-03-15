@@ -16,6 +16,7 @@ from video_agent.artifacts.io import ensure_run_dir, new_run_id, write_json
 from video_agent.config import (
     ANTHROPIC_API_KEY,
     ELEVENLABS_API_KEY,
+    FFMPEG_PATH,
     GOOGLE_API_KEY,
     LLM_PROVIDER,
     RESULTS_DIR,
@@ -50,7 +51,7 @@ def preflight() -> None:
     for k, ok in keys.items():
         print(f"- {k}: {'OK' if ok else 'MISSING'}")
 
-    ffmpeg_ok = bool(shutil.which("ffmpeg"))
+    ffmpeg_ok = bool(shutil.which(FFMPEG_PATH))
     print(f"- ffmpeg on PATH: {'OK' if ffmpeg_ok else 'MISSING'}")
     if not ffmpeg_ok:
         print("  Windows install tip: winget install Gyan.FFmpeg")
