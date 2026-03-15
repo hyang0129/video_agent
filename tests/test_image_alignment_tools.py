@@ -22,9 +22,9 @@ class TestParseScoresResponse:
         assert scores["subject"] == 2
         assert scores["setting"] == 4
 
-    def test_malformed_json_returns_neutral(self):
+    def test_malformed_json_returns_none(self):
         scores = _parse_scores_response("I can't score this image properly")
-        assert all(v == 3 for v in scores.values())
+        assert scores is None
 
     def test_scores_clamped_to_1_5(self):
         text = '{"subject": 0, "setting": 7, "mood": 3, "composition": 3, "artifacts": 3}'
@@ -96,7 +96,7 @@ class TestImageAlignmentEvaluator:
         """Mock backend: first candidate scores above accept threshold."""
 
         class MockBackend:
-            def score_image(self, image_url, visual_description, vo_line, scene_mood):
+            def score_image(self, image_url, visual_description, vo_line, scene_mood, image_bytes=None):
                 return AlignmentScore(
                     candidate_id="",
                     weighted_score=4.5,
@@ -130,7 +130,7 @@ class TestImageAlignmentEvaluator:
         call_count = 0
 
         class MockBackend:
-            def score_image(self, image_url, visual_description, vo_line, scene_mood):
+            def score_image(self, image_url, visual_description, vo_line, scene_mood, image_bytes=None):
                 nonlocal call_count
                 call_count += 1
                 if "b.jpg" in image_url:
@@ -157,7 +157,7 @@ class TestImageAlignmentEvaluator:
         """All candidates below min threshold triggers revision request."""
 
         class MockBackend:
-            def score_image(self, image_url, visual_description, vo_line, scene_mood):
+            def score_image(self, image_url, visual_description, vo_line, scene_mood, image_bytes=None):
                 return AlignmentScore(candidate_id="", weighted_score=2.0, axis_scores={})
 
         evaluator = ImageAlignmentEvaluator(

@@ -32,6 +32,7 @@ from video_agent.tools.image_alignment_tools import (
     ImageAlignmentEvaluator,
     OnlineImageEvalBackend,
     SceneAlignmentResult,
+    _build_rubric_prompt,
 )
 from video_agent.tools.image_search_tools import (
     search_pexels_images,
@@ -83,8 +84,8 @@ def _fetch_candidates(query: str, per_page: int = 3) -> List[Dict[str, Any]]:
         for r in results:
             r["candidate_id"] = f"wiki_{len(candidates)}"
             candidates.append(r)
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"    [ERROR] Wikimedia search failed: {type(exc).__name__}: {exc}")
 
     if _has_pexels_key() and len(candidates) < per_page:
         try:
@@ -92,8 +93,8 @@ def _fetch_candidates(query: str, per_page: int = 3) -> List[Dict[str, Any]]:
             for r in results:
                 r["candidate_id"] = f"pexels_{len(candidates)}"
                 candidates.append(r)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"    [ERROR] Pexels search failed: {type(exc).__name__}: {exc}")
 
     return candidates
 
@@ -103,6 +104,8 @@ def _download_image(url: str, dest: Path, timeout: int = 30) -> bool:
     try:
         headers: Dict[str, str] = {}
         if "wikimedia.org" in url or "wikipedia.org" in url:
+            from video_agent.tools.image_search_tools import wikimedia_rate_limiter
+            wikimedia_rate_limiter.throttle()
             headers["User-Agent"] = "Mozilla/5.0 (compatible; VideoAgent/1.0)"
         resp = requests.get(url, headers=headers, timeout=timeout, stream=True)
         resp.raise_for_status()
@@ -158,7 +161,8 @@ def _print_report(
         img_path = image_paths.get(score.candidate_id)
         is_best = score.candidate_id == result.best_candidate_id
         marker = " << BEST" if is_best else ""
-        print(f"  [{score.candidate_id}] score={score.weighted_score:.2f} axes={score.axis_scores}{marker}")
+        error_tag = f" [ERROR: {score.error}]" if score.error else ""
+        print(f"  [{score.candidate_id}] score={score.weighted_score:.2f} axes={score.axis_scores}{marker}{error_tag}")
         if img_path:
             print(f"    Image: {img_path}")
         print(f"    URL: {url}")
@@ -223,6 +227,9 @@ class TestImageAlignmentIntegration:
                 dest = scene_dir / f"{cand_id}{ext}"
                 if _download_image(url, dest):
                     image_paths[cand_id] = dest
+                    # Set local_path so the evaluator reads from disk
+                    # instead of re-downloading.
+                    cand["local_path"] = str(dest)
                 else:
                     image_paths[cand_id] = None
 
@@ -242,6 +249,17 @@ class TestImageAlignmentIntegration:
                 print(f"  Elapsed: {elapsed:.1f}s")
                 entry = result.to_dict()
                 entry["elapsed_s"] = round(elapsed, 1)
+                entry["scene_context"] = {
+                    "visual_description": scene["visual_description"],
+                    "vo_line": scene["vo_line"],
+                    "scene_mood": scene["scene_mood"],
+                    "search_query": scene["search_query"],
+                }
+                entry["llm_prompt"] = _build_rubric_prompt(
+                    scene["visual_description"],
+                    scene["vo_line"],
+                    scene["scene_mood"],
+                )
                 entry["candidates"] = []
                 for cand in candidates:
                     cand_id = cand.get("candidate_id", "")

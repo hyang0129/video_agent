@@ -11,6 +11,7 @@ Backends:
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import re
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import requests
+from PIL import Image
 
 _log = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ class AlignmentScore:
     weighted_score: float
     axis_scores: Dict[str, int]
     raw_rationale: str = ""
+    error: str = ""
 
 
 @dataclass
@@ -76,6 +79,16 @@ class SceneAlignmentResult:
             "candidates_evaluated": self.candidates_evaluated,
             "early_exit": self.early_exit,
             "revision_requested": self.revision_requested,
+            "all_scores": [
+                {
+                    "candidate_id": s.candidate_id,
+                    "weighted_score": round(s.weighted_score, 2),
+                    "axis_scores": s.axis_scores,
+                    "raw_rationale": s.raw_rationale,
+                    "error": s.error,
+                }
+                for s in self.all_scores
+            ],
         }
 
 
@@ -93,6 +106,7 @@ class ImageEvalBackend(Protocol):
         visual_description: str,
         vo_line: str,
         scene_mood: str,
+        image_bytes: Optional[bytes] = None,
     ) -> AlignmentScore: ...
 
 
@@ -129,30 +143,68 @@ def _build_rubric_prompt(
     )
 
 
-def _parse_scores_response(text: str) -> Dict[str, int]:
+def _parse_scores_response(text: str) -> Optional[Dict[str, int]]:
     """Extract axis scores from LLM response text.
 
-    Attempts to find a JSON object with the 5 axis keys. Falls back to
-    neutral scores (3 on all axes) if parsing fails.
+    Returns the parsed scores dict, or None if parsing fails.
     """
-    # Try to find JSON object in the response
-    match = re.search(r"\{[^}]+\}", text)
-    if match:
-        try:
-            raw = json.loads(match.group(0))
-            scores: Dict[str, int] = {}
-            for name in AXIS_NAMES:
-                val = raw.get(name)
-                if isinstance(val, (int, float)):
-                    scores[name] = max(1, min(5, int(round(val))))
-                else:
-                    scores[name] = 3
-            return scores
-        except (json.JSONDecodeError, KeyError, TypeError):
-            pass
+    if not text:
+        _log.error("[ERROR] ImageAlignmentEvaluator: empty LLM response, cannot parse scores")
+        return None
 
-    _log.warning("[WARN] ImageAlignmentEvaluator: failed to parse scores from LLM response, using neutral defaults")
-    return {name: 3 for name in AXIS_NAMES}
+    match = re.search(r"\{[^}]+\}", text)
+    if not match:
+        _log.error("[ERROR] ImageAlignmentEvaluator: no JSON object found in LLM response: %s", text[:200])
+        return None
+
+    try:
+        raw = json.loads(match.group(0))
+        scores: Dict[str, int] = {}
+        for name in AXIS_NAMES:
+            val = raw.get(name)
+            if isinstance(val, (int, float)):
+                scores[name] = max(1, min(5, int(round(val))))
+            else:
+                scores[name] = 3
+        return scores
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        _log.error("[ERROR] ImageAlignmentEvaluator: failed to parse JSON from LLM response: %s -- response: %s", exc, text[:200])
+        return None
+
+
+_RE_CODE_FENCE = re.compile(r"```(?:json)?\s*\{[^}]+\}\s*```", re.DOTALL)
+_RE_MARKDOWN_BOLD = re.compile(r"\*\*([^*]+)\*\*")
+
+
+def _extract_rationale(text: str) -> str:
+    """Extract the human-readable rationale from an LLM scoring response.
+
+    Strips JSON code fences and markdown bold markers so the result reads
+    as plain text in a JSON file.
+    """
+    if not text:
+        return ""
+    # Remove ```json {...} ``` blocks (the scores are stored separately)
+    cleaned = _RE_CODE_FENCE.sub("", text)
+    # Remove markdown bold markers
+    cleaned = _RE_MARKDOWN_BOLD.sub(r"\1", cleaned)
+    # Collapse blank lines left behind
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+_MAX_IMAGE_DIM = 480
+
+
+def _compress_to_jpeg(image_bytes: bytes) -> bytes:
+    """Resize image to fit within 480x480 (keeping aspect ratio) and compress to JPEG."""
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    img.thumbnail((_MAX_IMAGE_DIM, _MAX_IMAGE_DIM), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
 
 
 def _fetch_image_bytes(url: str, timeout: int = 15) -> Optional[bytes]:
@@ -160,25 +212,21 @@ def _fetch_image_bytes(url: str, timeout: int = 15) -> Optional[bytes]:
     try:
         headers: Dict[str, str] = {}
         if "wikimedia.org" in url or "wikipedia.org" in url:
+            from .image_search_tools import wikimedia_rate_limiter
+            wikimedia_rate_limiter.throttle()
             headers["User-Agent"] = "Mozilla/5.0 (compatible; VideoAgent/1.0)"
         resp = requests.get(url, headers=headers, timeout=timeout, stream=False)
         resp.raise_for_status()
         return resp.content
-    except Exception as exc:
-        _log.warning("[WARN] ImageAlignmentEvaluator: failed to fetch image from %s: %s", url, exc)
+    except requests.exceptions.HTTPError as exc:
+        _log.error("[ERROR] ImageAlignmentEvaluator: HTTP %s fetching %s", exc.response.status_code, url[:80])
         return None
-
-
-def _mime_from_url(url: str) -> str:
-    """Guess MIME type from URL path."""
-    lower = url.lower().split("?")[0]
-    if lower.endswith(".png"):
-        return "image/png"
-    if lower.endswith(".webp"):
-        return "image/webp"
-    if lower.endswith(".bmp"):
-        return "image/bmp"
-    return "image/jpeg"
+    except requests.exceptions.Timeout:
+        _log.error("[ERROR] ImageAlignmentEvaluator: timeout fetching %s", url[:80])
+        return None
+    except Exception as exc:
+        _log.error("[ERROR] ImageAlignmentEvaluator: failed to fetch image from %s: %s: %s", url[:80], type(exc).__name__, exc)
+        return None
 
 
 class OnlineImageEvalBackend:
@@ -190,45 +238,72 @@ class OnlineImageEvalBackend:
         visual_description: str,
         vo_line: str,
         scene_mood: str,
+        image_bytes: Optional[bytes] = None,
     ) -> AlignmentScore:
         from ..config import make_llm
         from langchain_core.messages import HumanMessage
 
-        image_bytes = _fetch_image_bytes(image_url)
         if image_bytes is None:
-            _log.warning("[WARN] Skipping scoring for %s (download failed)", image_url[:80])
+            image_bytes = _fetch_image_bytes(image_url)
+        if image_bytes is None:
+            _log.error("[ERROR] Skipping scoring for %s -- image not available", image_url[:80])
             return AlignmentScore(
                 candidate_id="",
                 weighted_score=0.0,
-                axis_scores={name: 1 for name in AXIS_NAMES},
-                raw_rationale="image download failed",
+                axis_scores={},
+                error="image_download_failed",
+            )
+
+        try:
+            image_bytes = _compress_to_jpeg(image_bytes)
+        except Exception as exc:
+            _log.error("[ERROR] ImageAlignmentEvaluator: failed to compress image from %s: %s: %s", image_url[:80], type(exc).__name__, exc)
+            return AlignmentScore(
+                candidate_id="",
+                weighted_score=0.0,
+                axis_scores={},
+                error=f"image_compress_failed: {type(exc).__name__}",
             )
 
         b64 = base64.b64encode(image_bytes).decode("ascii")
-        mime = _mime_from_url(image_url)
         prompt = _build_rubric_prompt(visual_description, vo_line, scene_mood)
 
         llm = make_llm(temperature=0.0)
         msg = HumanMessage(content=[
             {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
         ])
 
         try:
             result = llm.invoke([msg])
             response_text = str(result.content)
         except Exception as exc:
-            _log.warning("[WARN] ImageAlignmentEvaluator: LLM call failed: %s", exc)
-            response_text = ""
+            _log.error("[ERROR] ImageAlignmentEvaluator: LLM call failed for %s: %s: %s", image_url[:80], type(exc).__name__, exc)
+            return AlignmentScore(
+                candidate_id="",
+                weighted_score=0.0,
+                axis_scores={},
+                error=f"llm_call_failed: {type(exc).__name__}",
+            )
 
         axis_scores = _parse_scores_response(response_text)
+        rationale = _extract_rationale(response_text)
+        if axis_scores is None:
+            return AlignmentScore(
+                candidate_id="",
+                weighted_score=0.0,
+                axis_scores={},
+                error="llm_response_parse_failed",
+                raw_rationale=rationale,
+            )
+
         weighted = _compute_weighted_score(axis_scores)
 
         return AlignmentScore(
             candidate_id="",
             weighted_score=weighted,
             axis_scores=axis_scores,
-            raw_rationale=response_text[:500],
+            raw_rationale=rationale,
         )
 
 
@@ -311,11 +386,22 @@ class ImageAlignmentEvaluator:
                 continue
 
             candidate_id = self._get_candidate_id(candidate)
+
+            # Prefer local file over re-downloading from URL.
+            image_bytes: Optional[bytes] = None
+            local_path = self._get_local_path(candidate)
+            if local_path:
+                try:
+                    image_bytes = Path(local_path).read_bytes()
+                except OSError as exc:
+                    _log.warning("[WARN] Failed to read local image %s: %s", local_path, exc)
+
             score = self._backend.score_image(
                 image_url=url,
                 visual_description=visual_description,
                 vo_line=vo_line,
                 scene_mood=scene_mood,
+                image_bytes=image_bytes,
             )
             # Attach the candidate_id
             score = AlignmentScore(
@@ -323,6 +409,7 @@ class ImageAlignmentEvaluator:
                 weighted_score=score.weighted_score,
                 axis_scores=score.axis_scores,
                 raw_rationale=score.raw_rationale,
+                error=score.error,
             )
             result.all_scores.append(score)
             result.candidates_evaluated += 1
@@ -370,4 +457,13 @@ class ImageAlignmentEvaluator:
         if isinstance(candidate, dict):
             cid = candidate.get("candidate_id") or candidate.get("asset_id") or ""
             return str(cid)
+        return ""
+
+    @staticmethod
+    def _get_local_path(candidate: Any) -> str:
+        """Extract local file path from a candidate, if present."""
+        if hasattr(candidate, "local_path"):
+            return str(candidate.local_path or "")
+        if isinstance(candidate, dict):
+            return str(candidate.get("local_path") or "")
         return ""
