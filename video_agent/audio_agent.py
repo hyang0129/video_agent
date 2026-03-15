@@ -46,6 +46,7 @@ from .tools.tts_tools import (
     AudioMixingError,
 )
 from .tools.chatterbox_backend import TTSRequest as ChatterboxTTSRequest
+from .utils.tts_utils import estimate_duration_s as _estimate_duration_s
 from .config import (
     RESULTS_DIR,
     DEFAULT_MUSIC_PATH,
@@ -154,6 +155,7 @@ class AudioGenerationAgent:
         voice_id: str = "narrator",
         music_volume_db: float = -18.0,
         tts_backend=None,
+        voice_wpm: Optional[float] = None,
     ):
         """Initialize audio generation agent.
 
@@ -165,6 +167,8 @@ class AudioGenerationAgent:
                          When set, synthesis is delegated to this backend instead of
                          ElevenLabs. Must implement synthesize(TTSRequest) -> bytes
                          and close().
+            voice_wpm: Calibrated words-per-minute from the TTS backend.
+                       Used for duration estimates instead of hardcoded presets.
         """
         self.output_dir = output_dir or RESULTS_DIR / f"audio_{uuid.uuid4().hex[:6]}"
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -172,6 +176,7 @@ class AudioGenerationAgent:
         self._tts_backend = tts_backend
         self.voice_id = "chatterbox" if tts_backend is not None else get_voice_id(voice_id)
         self.music_volume_db = music_volume_db
+        self._voice_wpm = voice_wpm
 
         # Create subdirectories
         self.audio_segments_dir = self.output_dir / "audio_segments"
@@ -281,11 +286,16 @@ class AudioGenerationAgent:
                     )
                     segment_path.write_bytes(wav_bytes)
                     audio_path = segment_path
+                    # Use per-request header WPM if available, else pre-fetched WPM
+                    header_wpm = getattr(self._tts_backend, "last_voice_wpm", None)
+                    effective_wpm = header_wpm if header_wpm is not None else self._voice_wpm
+                    est_dur = _estimate_duration_s(vo_line, measured_wpm=effective_wpm)
                     metadata = {
                         "voice_id": CHATTERBOX_VOICE,
                         "character_count": len(vo_line),
                         "file_size_bytes": segment_path.stat().st_size,
-                        "estimated_duration_s": None,
+                        "estimated_duration_s": round(est_dur, 3),
+                        "voice_wpm": effective_wpm,
                     }
                 else:
                     segment_path = self.audio_segments_dir / f"vo_{scene_id}.mp3"
@@ -604,10 +614,15 @@ def create_audio_agent(
       - "chatterbox_direct" — ChatterboxDirectBackend (in-process GPU, serial only)
     """
     backend = None
+    voice_wpm = None
     if TTS_BACKEND == "chatterbox_server":
         from .tools.chatterbox_backend import ChatterboxServerBackend
         backend = ChatterboxServerBackend(base_url=CHATTERBOX_SERVER_URL)
-        print(f"[INFO] TTS backend: chatterbox_server ({CHATTERBOX_SERVER_URL}), voice: {CHATTERBOX_VOICE}")
+        voice_wpm = backend.get_voice_wpm(CHATTERBOX_VOICE)
+        if voice_wpm is not None:
+            print(f"[INFO] TTS backend: chatterbox_server ({CHATTERBOX_SERVER_URL}), voice: {CHATTERBOX_VOICE}, wpm: {voice_wpm:.0f}")
+        else:
+            print(f"[INFO] TTS backend: chatterbox_server ({CHATTERBOX_SERVER_URL}), voice: {CHATTERBOX_VOICE}, wpm: unavailable (using hardcoded fallback)")
     elif TTS_BACKEND == "chatterbox_direct":
         from .tools.chatterbox_backend import ChatterboxDirectBackend
         backend = ChatterboxDirectBackend()
@@ -620,4 +635,5 @@ def create_audio_agent(
         voice_id=voice,
         music_volume_db=music_volume_db,
         tts_backend=backend,
+        voice_wpm=voice_wpm,
     )
