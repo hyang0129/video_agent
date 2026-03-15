@@ -480,6 +480,7 @@ class VisualAssetAgent:
         topic_context: str = "",
         used_urls: Optional[set] = None,
         _max_query_attempts: int = 3,
+        visual_description: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Select one valid asset for a scene using a specific-to-general query loop.
 
@@ -497,8 +498,11 @@ class VisualAssetAgent:
         valid_candidates: List[VisualAssetCandidate] = []
         current_query = query
 
+        # visual_description is not yet in the video_plan schema -- once the
+        # screenplay's per-scene visual description flows through, pass it here
+        # instead of reusing the vo_line.
         scene_context = {
-            "visual_description": text_context,
+            "visual_description": visual_description or text_context,
             "vo_line": text_context,
             "scene_mood": "neutral",
             "scene_id": scene_id,

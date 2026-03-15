@@ -944,12 +944,11 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
             alignment_path = run_dir / "image_alignment_scores.json"
             if alignment_path.exists():
                 try:
-                    import json as _json_mod
-                    evaluation["image_alignment"] = _json_mod.loads(
+                    evaluation["image_alignment"] = json.loads(
                         alignment_path.read_text(encoding="utf-8")
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("[WARN] Failed to load image alignment scores: %s", exc)
 
             evaluation_path = run_dir / "evaluation.json"
             write_json(evaluation_path, evaluation)
