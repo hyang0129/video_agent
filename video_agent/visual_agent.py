@@ -436,7 +436,7 @@ class VisualAssetAgent:
 
         Each iteration:
           1. Search with the current query (10 candidates per source).
-          2. LLM selects the best candidate from the validated pool.
+          2. Alignment evaluator picks the best candidate from the validated pool.
           3. LLM checks whether the chosen image is relevant to the narration.
           4. If relevant, accept it. If not, ask the LLM for a broader query and retry.
         Up to _max_query_attempts iterations (default 3). All tried queries are
