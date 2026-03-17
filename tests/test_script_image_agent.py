@@ -255,3 +255,260 @@ def test_multi_source_fallback_uses_next_provider_when_first_is_unavailable(
     assert notes["source_fallback_strategy"] == "ordered_provider_chain"
     assert notes["source_fallback_used"] is True
     assert any("future_source" in error and "not implemented" in error for error in notes["provider_errors"])
+
+
+# ---------------------------------------------------------------------------
+# AI image generation fallback tests (issue 3.5)
+# ---------------------------------------------------------------------------
+
+
+def _make_gen_result(tmp_path: Path, scene_id: str, prompt_key: str = "precise") -> dict:
+    """Return a fake generate_image() result dict."""
+    dest = tmp_path / "assets" / f"{scene_id}_gen_{prompt_key}.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(b"\x89PNG\r\n\x1a\n")
+    return {
+        "source": "generated_openai",
+        "url": str(dest),
+        "resolution": [1024, 1536],
+        "attribution": {"required": False, "text": "AI-generated", "license": "generated"},
+        "metadata": {"cost_usd": 0.07, "provider": "openai", "generation_prompt": "test"},
+    }
+
+
+def test_generation_triggers_when_stock_empty(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When all stock sources return empty, generation fires for each beat."""
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "openai")
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_QUALITY", "medium")
+
+    beats = sample_script_package["script"]["beats"]
+    for i, beat in enumerate(beats):
+        beat["scene_id"] = f"scene_{i + 1:02d}"
+        beat["generation_prompts"] = {
+            "precise": "cinematic scene precise prompt",
+            "general": "simple general prompt",
+        }
+
+    call_count = {"n": 0}
+
+    def _fake_generate(prompt, output_path, provider, quality):
+        call_count["n"] += 1
+        scene_id = output_path.stem.split("_gen_")[0]
+        return _make_gen_result(tmp_path, scene_id)
+
+    monkeypatch.setattr(
+        "video_agent.script_image_agent.generate_image",
+        _fake_generate,
+    )
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(
+            output_dir=tmp_path,
+            image_sources=("pexels", "wikimedia"),
+            min_candidates_per_segment=1,
+        )
+    )
+    manifest = agent.generate_script_image_manifest(sample_script_package)
+
+    expected_beats = len(sample_script_package["script"]["beats"])
+    assert call_count["n"] == expected_beats, (
+        f"generate_image should be called once per beat, expected {expected_beats}, got {call_count['n']}"
+    )
+    for seg in manifest["segments"]:
+        assert seg["candidate_count"] >= 1
+        assert any("generated" in str(c.get("source", "")) for c in seg["candidates"])
+
+
+def test_generation_skipped_when_stock_succeeds(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When stock search returns candidates, generation is never called."""
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "openai")
+
+    def _stock_result(query, per_page, orientation):
+        return [{
+            "source": "pexels",
+            "url": f"https://example.com/{query.replace(' ', '_')}.jpg",
+            "resolution": [1080, 1920],
+            "attribution": {"required": True, "text": "Photo", "license": "Pexels"},
+            "metadata": {"alt": f"photo matching {query}"},
+        }]
+
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", _stock_result)
+
+    gen_called = {"called": False}
+
+    def _fake_generate(*args, **kwargs):
+        gen_called["called"] = True
+        raise AssertionError("generate_image should not be called when stock succeeds")
+
+    monkeypatch.setattr("video_agent.script_image_agent.generate_image", _fake_generate)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(output_dir=tmp_path, image_sources=("pexels",), min_candidates_per_segment=1)
+    )
+    agent.generate_script_image_manifest(sample_script_package)
+
+    assert not gen_called["called"]
+
+
+def test_generation_skipped_when_provider_not_configured(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When IMAGE_GENERATION_PROVIDER is empty string, generation is never attempted."""
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "")
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
+
+    gen_called = {"called": False}
+
+    def _fake_generate(*args, **kwargs):
+        gen_called["called"] = True
+
+    monkeypatch.setattr("video_agent.script_image_agent.generate_image", _fake_generate)
+
+    for beat in sample_script_package["script"]["beats"]:
+        beat["generation_prompts"] = {"precise": "test prompt"}
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(output_dir=tmp_path, image_sources=("pexels",))
+    )
+    agent.generate_script_image_manifest(sample_script_package)
+
+    assert not gen_called["called"]
+
+
+def test_generation_falls_back_precise_to_general(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When 'precise' generation fails, 'general' prompt is tried."""
+    from video_agent.tools.image_generation_tools import ImageGenerationError
+
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "openai")
+
+    for beat in sample_script_package["script"]["beats"]:
+        beat["generation_prompts"] = {
+            "precise": "very specific detailed prompt that fails",
+            "general": "simple fallback prompt",
+        }
+
+    prompts_tried: list = []
+
+    def _fake_generate(prompt, output_path, provider, quality):
+        prompts_tried.append(prompt)
+        if "specific" in prompt:
+            raise ImageGenerationError("content policy violation")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"\x89PNG")
+        scene_id = output_path.stem.split("_gen_")[0]
+        return _make_gen_result(tmp_path, scene_id, "general")
+
+    monkeypatch.setattr("video_agent.script_image_agent.generate_image", _fake_generate)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(output_dir=tmp_path, min_candidates_per_segment=1)
+    )
+    manifest = agent.generate_script_image_manifest(sample_script_package)
+
+    assert any("specific" in p for p in prompts_tried), "precise prompt should have been tried"
+    assert any("simple" in p for p in prompts_tried), "general prompt should have been tried as fallback"
+    # At least some scenes should have a generated candidate
+    generated = [
+        seg for seg in manifest["segments"]
+        if any("generated" in str(c.get("source", "")) for c in seg["candidates"])
+    ]
+    assert len(generated) > 0
+
+
+def test_generation_cost_tracked_in_manifest(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """image_generation section in manifest tracks total cost and scene count."""
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "openai")
+
+    for i, beat in enumerate(sample_script_package["script"]["beats"]):
+        beat["scene_id"] = f"scene_{i + 1:02d}"
+        beat["generation_prompts"] = {"precise": "test prompt"}
+
+    def _fake_generate(prompt, output_path, provider, quality):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"\x89PNG")
+        scene_id = output_path.stem.split("_gen_")[0]
+        return _make_gen_result(tmp_path, scene_id)
+
+    monkeypatch.setattr("video_agent.script_image_agent.generate_image", _fake_generate)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(output_dir=tmp_path, min_candidates_per_segment=1)
+    )
+    manifest = agent.generate_script_image_manifest(sample_script_package)
+
+    assert "image_generation" in manifest
+    ig = manifest["image_generation"]
+    assert ig["provider"] == "openai"
+    assert ig["scenes_generated"] >= 1
+    assert ig["total_cost_usd"] > 0
+
+
+def test_generation_both_prompts_fail(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When both precise and general generation fail, segment has 0 candidates and status is insufficient."""
+    from video_agent.tools.image_generation_tools import ImageGenerationError
+
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "openai")
+
+    for beat in sample_script_package["script"]["beats"]:
+        beat["generation_prompts"] = {
+            "precise": "content policy violating prompt",
+            "general": "also rejected prompt",
+        }
+
+    errors_raised: list = []
+
+    def _always_fail(prompt, output_path, provider, quality):
+        errors_raised.append(prompt)
+        raise ImageGenerationError("content policy violation")
+
+    monkeypatch.setattr("video_agent.script_image_agent.generate_image", _always_fail)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(output_dir=tmp_path, min_candidates_per_segment=1)
+    )
+    manifest = agent.generate_script_image_manifest(sample_script_package)
+
+    # Both prompts tried per beat
+    beats = sample_script_package["script"]["beats"]
+    assert len(errors_raised) == len(beats) * 2, (
+        f"Expected {len(beats) * 2} generation attempts (precise + general per beat), got {len(errors_raised)}"
+    )
+
+    # Every segment should have 0 candidates and insufficient status
+    for seg in manifest["segments"]:
+        assert seg["candidate_count"] == 0
+        assert seg["status"] == "insufficient_candidates"
+        provider_errors = seg.get("retrieval_notes", {}).get("provider_errors", [])
+        gen_errors = [e for e in provider_errors if "generation" in e]
+        assert len(gen_errors) == 2, f"Expected 2 generation errors in provider_errors, got: {provider_errors}"

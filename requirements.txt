@@ -32,6 +32,9 @@ loguru>=0.7.0
 # Audio processing
 elevenlabs>=0.2.0
 
+# AI Image Generation (optional -- only needed if IMAGE_GENERATION_PROVIDER is set)
+openai>=1.0.0
+
 # MCP (Model Context Protocol) server/client
 mcp>=1.0.0
 fastapi>=0.111.0
