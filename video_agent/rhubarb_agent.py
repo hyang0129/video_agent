@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from video_agent.config import (
+    FFMPEG_PATH,
     RHUBARB_EXECUTABLE,
     RHUBARB_OUTPUT_FORMAT,
     RHUBARB_RECOGNIZER,
@@ -118,7 +119,7 @@ class RhubarbAgent:
     def _convert_to_wav(self, src: Path, dst: Path) -> bool:
         """Convert audio file to mono WAV via FFmpeg. Returns True on success."""
         cmd = [
-            "ffmpeg", "-y",
+            FFMPEG_PATH, "-y",
             "-i", str(src),
             "-ar", str(RHUBARB_WAV_SAMPLE_RATE),
             "-ac", "1",

@@ -157,6 +157,8 @@ These paths are **environment-specific** and must be set in `.env`. No defaults 
 |----------|---------|-------|
 | `CHATTERBOX_APP_DIR` | `chatterbox_server_manager` | Root of the chatterbox repo (contains `app/main.py`). TTS degrades to silence if absent. |
 | `CHATTERBOX_UVICORN` | `chatterbox_server_manager` | Path to `uvicorn` in the chatterbox venv. Only needed for auto-start. |
+| `FFMPEG_PATH` | render, audio, rhubarb, avatar agents | Path to `ffmpeg` binary. Defaults to `"ffmpeg"` (PATH lookup). Set for Windows portable installs. |
+| `FFPROBE_PATH` | `music_agent` | Path to `ffprobe` binary. Defaults to `"ffprobe"` (PATH lookup). |
 | `RHUBARB_PATH` | `rhubarb_agent` | Rhubarb Lip Sync binary. Lip-sync degrades to silent neutral pose if absent. |
 | `LIVE2D_RENDER_PATH` | `avatar_render_agent` | `live2d-render` binary (built from `repos/live2d`). Avatar render fails if absent. |
 | `LIVE2D_REPO_ROOT` | `avatar_render_agent` | Root of the live2d repo — the binary's working directory for asset resolution. |

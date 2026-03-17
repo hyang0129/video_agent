@@ -54,8 +54,9 @@ class DryRunRenderEngine(RenderEngine):
 class FfmpegRenderEngine(RenderEngine):
     """Local FFmpeg slideshow renderer."""
 
-    def __init__(self, ffmpeg_bin: str = "ffmpeg"):
-        self.ffmpeg_bin = ffmpeg_bin
+    def __init__(self, ffmpeg_bin: str | None = None):
+        from video_agent.config import FFMPEG_PATH
+        self.ffmpeg_bin = ffmpeg_bin or FFMPEG_PATH
 
     def render(self, render_spec: Dict[str, Any], work_dir: Path) -> Path:
         ffmpeg_path = shutil.which(self.ffmpeg_bin)

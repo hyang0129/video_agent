@@ -130,6 +130,10 @@ IMAGE_EVAL_MODE = os.getenv("IMAGE_EVAL_MODE", "streaming")          # "streamin
 IMAGE_EVAL_ACCEPT_THRESHOLD = float(os.getenv("IMAGE_EVAL_ACCEPT_THRESHOLD", "4.0"))
 IMAGE_EVAL_MIN_THRESHOLD = float(os.getenv("IMAGE_EVAL_MIN_THRESHOLD", "2.5"))
 
+# FFmpeg / FFprobe
+FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
+FFPROBE_PATH = os.getenv("FFPROBE_PATH", "ffprobe")
+
 # Rhubarb Lip Sync
 RHUBARB_EXECUTABLE = os.getenv("RHUBARB_PATH", "")
 RHUBARB_RECOGNIZER = "phonetic"   # "phonetic" (offline) | "pocketSphinx" (more accurate)

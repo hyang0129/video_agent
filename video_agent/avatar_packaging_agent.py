@@ -18,6 +18,7 @@ from pathlib import Path
 
 from video_agent.config import (
     AUDIO_SAMPLE_RATE,
+    FFMPEG_PATH,
     LIVE2D_MODEL_ID,
     LIVE2D_MODEL_PATH,
     RHUBARB_WAV_SAMPLE_RATE,
@@ -310,7 +311,7 @@ class AvatarPackagingAgent:
             shutil.copy(str(wav_paths[0]), str(output_path))
             return True
 
-        cmd = ["ffmpeg", "-y"]
+        cmd = [FFMPEG_PATH, "-y"]
         for p in wav_paths:
             cmd.extend(["-i", str(p)])
 
@@ -482,7 +483,7 @@ class AvatarPackagingAgent:
     def _convert_to_wav(self, src: Path, dst: Path) -> bool:
         """Convert audio file to WAV via FFmpeg. Returns True on success."""
         cmd = [
-            "ffmpeg", "-y",
+            FFMPEG_PATH, "-y",
             "-i", str(src),
             "-ar", str(AUDIO_SAMPLE_RATE),
             "-ac", "1",

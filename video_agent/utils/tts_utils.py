@@ -16,16 +16,25 @@ _WPM_BY_PRESET: dict[str, int] = {
 _DEFAULT_WPM = 150
 
 
-def estimate_duration_s(text: str, voice_preset: str = "narrator") -> float:
+def estimate_duration_s(
+    text: str,
+    voice_preset: str = "narrator",
+    measured_wpm: float | None = None,
+) -> float:
     """Estimate TTS speech duration in seconds using a word-count heuristic.
 
     Args:
         text: Voiceover text to estimate.
         voice_preset: One of calm | narrator | energetic | authoritative.
+        measured_wpm: Calibrated words-per-minute from the TTS backend.
+                      When provided, overrides the hardcoded preset value.
 
     Returns:
         Estimated duration in seconds.
     """
-    wpm = _WPM_BY_PRESET.get(voice_preset, _DEFAULT_WPM)
+    if measured_wpm is not None and measured_wpm > 0:
+        wpm = measured_wpm
+    else:
+        wpm = _WPM_BY_PRESET.get(voice_preset, _DEFAULT_WPM)
     words = len(text.split())
     return (words / wpm) * 60.0
