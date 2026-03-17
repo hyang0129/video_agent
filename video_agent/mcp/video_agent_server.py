@@ -1000,6 +1000,16 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 "failures": failures,
                 "render_health": render_health,
             }
+            # Merge image alignment scores if available (issue 2.6)
+            alignment_path = run_dir / "image_alignment_scores.json"
+            if alignment_path.exists():
+                try:
+                    evaluation["image_alignment"] = json.loads(
+                        alignment_path.read_text(encoding="utf-8")
+                    )
+                except Exception as exc:
+                    logger.warning("[WARN] Failed to load image alignment scores: %s", exc)
+
             evaluation_path = run_dir / "evaluation.json"
             write_json(evaluation_path, evaluation)
 
