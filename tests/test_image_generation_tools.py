@@ -73,7 +73,7 @@ class TestGenerateImageOpenAI:
         assert result["url"] == str(dest)
         assert result["resolution"] == [1024, 1536]
         assert result["attribution"]["required"] is False
-        assert result["metadata"]["cost_usd"] == 0.07
+        assert result["metadata"]["cost_usd"] == 0.063
         assert result["metadata"]["provider"] == "openai"
         assert result["metadata"]["model"] == "gpt-image-1"
         assert "a dramatic tiger tank" in result["metadata"]["alt"]
@@ -100,7 +100,7 @@ class TestGenerateImageOpenAI:
             with patch("video_agent.tools.image_generation_tools.openai", mock_openai_module, create=True):
                 result = generate_image("a cat", output_path=dest, provider="openai", quality="low")
 
-        assert result["metadata"]["cost_usd"] == 0.005
+        assert result["metadata"]["cost_usd"] == 0.016
         assert result["metadata"]["quality"] == "low"
 
     @patch("video_agent.tools.image_generation_tools.IMAGE_GENERATION_API_KEY", "sk-test")

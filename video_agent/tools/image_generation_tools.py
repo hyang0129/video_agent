@@ -21,10 +21,12 @@ class ImageGenerationError(Exception):
 
 
 # Quality tier -> (provider-specific value, estimated cost per image USD)
+# Costs are for 1024x1536 portrait (the default size used by this pipeline).
+# Source: https://openai.com/api/pricing/ (verified 2026-03)
 _OPENAI_QUALITY_MAP: Dict[str, tuple[str, float]] = {
-    "low": ("low", 0.005),
-    "medium": ("medium", 0.07),
-    "high": ("high", 0.167),
+    "low": ("low", 0.016),
+    "medium": ("medium", 0.063),
+    "high": ("high", 0.250),
 }
 
 
