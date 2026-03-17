@@ -38,7 +38,7 @@ class TestGenerateImageOpenAI:
     @patch("video_agent.tools.image_generation_tools.IMAGE_GENERATION_API_KEY", "sk-test")
     def test_openai_import_error_raises(self, tmp_path: Path) -> None:
         with patch.dict("sys.modules", {"openai": None}):
-            with pytest.raises((ImageGenerationError, ImportError)):
+            with pytest.raises(ImageGenerationError, match="not installed"):
                 generate_image("a cat", output_path=tmp_path / "out.png", provider="openai")
 
     @patch("video_agent.tools.image_generation_tools.IMAGE_GENERATION_API_KEY", "sk-test")

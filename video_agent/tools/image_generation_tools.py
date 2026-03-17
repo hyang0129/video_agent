@@ -61,6 +61,11 @@ def _generate_openai(
             "openai package is not installed. Run: pip install openai>=1.0.0"
         )
 
+    if quality not in _OPENAI_QUALITY_MAP:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[WARN] generate_image: unknown quality %r, falling back to 'medium'", quality
+        )
     oai_quality, cost_usd = _OPENAI_QUALITY_MAP.get(quality, _OPENAI_QUALITY_MAP["medium"])
 
     try:

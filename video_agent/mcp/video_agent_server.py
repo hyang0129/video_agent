@@ -765,6 +765,7 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 pexels_agent = ScriptImageRetrievalAgent(ScriptImageConfig(
                     output_dir=run_dir,
                     image_sources=("pexels",),
+                    enable_generation=False,  # generation is managed explicitly below
                 ))
                 pexels_manifest = pexels_agent.generate_script_image_manifest(
                     script_package, scene_ids=placeholder_ids, run_id=run_id
@@ -863,6 +864,15 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                 except Exception:
                     pass
 
+            # Index final visual manifest by scene_id for status computation below.
+            # The visual manifest reflects any MCP-level generation retries so it is
+            # more accurate than production_report.json, which was written earlier.
+            vm_assets_by_sid = {
+                a.get("scene_id"): a
+                for a in (visual_manifest.get("assets") or [])
+                if a.get("scene_id")
+            }
+
             scene_assets = []
             for seg in (script_image_manifest.get("segments") or []):
                 sid = seg.get("segment_id") or seg.get("beat_id") or seg.get("scene_id", "")
@@ -877,10 +887,11 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                     if url:
                         image_paths.append(url)
 
-                degraded = any(
-                    i.get("scene_id") == sid and i.get("status") == "degraded"
-                    for i in production_issues
-                )
+                # A scene is degraded only if its final resolved asset is still a
+                # placeholder.  Generated images (from any retry level) are not degraded.
+                vm_asset = vm_assets_by_sid.get(sid)
+                final_source = str((vm_asset or {}).get("source", "placeholder"))
+                degraded = final_source == "placeholder"
                 scene_assets.append({
                     "scene_id": sid,
                     "image_paths": image_paths[:3],

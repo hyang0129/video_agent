@@ -152,10 +152,10 @@ def test_generate_image_direct(tmp_path: Path) -> None:
     assert dest.exists(), "Generated image was not saved"
     assert dest.stat().st_size > 1000, "Generated image is suspiciously small"
     # All major image formats start with a recognisable magic byte sequence
-    magic = dest.read_bytes()[:8]
+    magic = dest.read_bytes()[:12]
     is_png = magic[:4] == b"\x89PNG"
     is_jpeg = magic[:2] == b"\xff\xd8"
-    is_webp = magic[8:12] == b"WEBP" if len(magic) >= 12 else False
+    is_webp = magic[:4] == b"RIFF" and magic[8:12] == b"WEBP"
     assert is_png or is_jpeg or is_webp, f"File does not look like a valid image: {magic!r}"
 
     review = copy_to_review(tmp_path, "06b_imagegen_direct")

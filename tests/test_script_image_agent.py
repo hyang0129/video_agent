@@ -316,7 +316,10 @@ def test_generation_triggers_when_stock_empty(
     )
     manifest = agent.generate_script_image_manifest(sample_script_package)
 
-    assert call_count["n"] >= 1, "generate_image should have been called at least once"
+    expected_beats = len(sample_script_package["script"]["beats"])
+    assert call_count["n"] == expected_beats, (
+        f"generate_image should be called once per beat, expected {expected_beats}, got {call_count['n']}"
+    )
     for seg in manifest["segments"]:
         assert seg["candidate_count"] >= 1
         assert any("generated" in str(c.get("source", "")) for c in seg["candidates"])
@@ -340,7 +343,6 @@ def test_generation_skipped_when_stock_succeeds(
         }]
 
     monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", _stock_result)
-    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
 
     gen_called = {"called": False}
 
@@ -464,3 +466,49 @@ def test_generation_cost_tracked_in_manifest(
     assert ig["provider"] == "openai"
     assert ig["scenes_generated"] >= 1
     assert ig["total_cost_usd"] > 0
+
+
+def test_generation_both_prompts_fail(
+    tmp_path: Path,
+    sample_script_package: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When both precise and general generation fail, segment has 0 candidates and status is insufficient."""
+    from video_agent.tools.image_generation_tools import ImageGenerationError
+
+    monkeypatch.setattr("video_agent.script_image_agent.search_pexels_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.search_wikimedia_images", lambda **kw: [])
+    monkeypatch.setattr("video_agent.script_image_agent.IMAGE_GENERATION_PROVIDER", "openai")
+
+    for beat in sample_script_package["script"]["beats"]:
+        beat["generation_prompts"] = {
+            "precise": "content policy violating prompt",
+            "general": "also rejected prompt",
+        }
+
+    errors_raised: list = []
+
+    def _always_fail(prompt, output_path, provider, quality):
+        errors_raised.append(prompt)
+        raise ImageGenerationError("content policy violation")
+
+    monkeypatch.setattr("video_agent.script_image_agent.generate_image", _always_fail)
+
+    agent = ScriptImageRetrievalAgent(
+        config=ScriptImageConfig(output_dir=tmp_path, min_candidates_per_segment=1)
+    )
+    manifest = agent.generate_script_image_manifest(sample_script_package)
+
+    # Both prompts tried per beat
+    beats = sample_script_package["script"]["beats"]
+    assert len(errors_raised) == len(beats) * 2, (
+        f"Expected {len(beats) * 2} generation attempts (precise + general per beat), got {len(errors_raised)}"
+    )
+
+    # Every segment should have 0 candidates and insufficient status
+    for seg in manifest["segments"]:
+        assert seg["candidate_count"] == 0
+        assert seg["status"] == "insufficient_candidates"
+        provider_errors = seg.get("retrieval_notes", {}).get("provider_errors", [])
+        gen_errors = [e for e in provider_errors if "generation" in e]
+        assert len(gen_errors) == 2, f"Expected 2 generation errors in provider_errors, got: {provider_errors}"

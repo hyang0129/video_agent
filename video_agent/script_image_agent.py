@@ -322,6 +322,7 @@ class ScriptImageConfig:
     max_queries_per_segment: int = 3
     orientation: str = "portrait"
     candidate_pool_factor: int = 2
+    enable_generation: bool = True
 
 
 class ScriptImageRetrievalAgent:
@@ -466,18 +467,25 @@ class ScriptImageRetrievalAgent:
                     "revision_possible": True,
                 })
             else:
-                best_score = self._best_relevance_score(segment)
-                if best_score < _RELEVANCE_THRESHOLD:
-                    production_issues.append({
-                        "agent": "ScriptImageAgent",
-                        "scene_id": beat_scene_id,
-                        "status": "degraded",
-                        "issue": "no_relevant_image",
-                        "detail": f"Best result relevance {best_score:.2f}, threshold {_RELEVANCE_THRESHOLD:.2f}",
-                        "suggestion": "Rephrase visual.description to be more concrete and specific",
-                        "revision_field": "visual",
-                        "revision_possible": True,
-                    })
+                # Generated candidates carry no stock relevance score; skip the
+                # threshold check for them -- generation success is its own signal.
+                has_generated = any(
+                    str(c.get("source", "")).startswith("generated")
+                    for c in (segment.get("candidates") or [])
+                )
+                if not has_generated:
+                    best_score = self._best_relevance_score(segment)
+                    if best_score < _RELEVANCE_THRESHOLD:
+                        production_issues.append({
+                            "agent": "ScriptImageAgent",
+                            "scene_id": beat_scene_id,
+                            "status": "degraded",
+                            "issue": "no_relevant_image",
+                            "detail": f"Best result relevance {best_score:.2f}, threshold {_RELEVANCE_THRESHOLD:.2f}",
+                            "suggestion": "Rephrase visual.description to be more concrete and specific",
+                            "revision_field": "visual",
+                            "revision_possible": True,
+                        })
 
         total_generation_cost = sum(
             float(seg.get("generation_cost_usd") or 0.0) for seg in segment_assets
@@ -628,7 +636,7 @@ class ScriptImageRetrievalAgent:
         # AND a generation provider is configured.  Uses beat.generation_prompts
         # written by the screenplay agent (issue 1.7).
         generation_cost_usd = 0.0
-        if IMAGE_GENERATION_PROVIDER and len(candidates) < min_candidates:
+        if self.config.enable_generation and IMAGE_GENERATION_PROVIDER and len(candidates) < min_candidates:
             gen_prompts = beat.get("generation_prompts") or {}
             assets_dir = self.output_dir / "assets" if self.output_dir else None
             if gen_prompts and assets_dir:
