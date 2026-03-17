@@ -25,7 +25,8 @@ import re
 import uuid
 
 from .artifacts.io import write_json
-from .config import RESULTS_DIR
+from .config import IMAGE_GENERATION_PROVIDER, IMAGE_GENERATION_QUALITY, RESULTS_DIR
+from .tools.image_generation_tools import ImageGenerationError, generate_image
 from .tools.image_search_tools import ImageSearchError, search_pexels_images, search_wikimedia_images
 
 # Relevance score below which an image candidate is considered too low-quality
@@ -478,7 +479,18 @@ class ScriptImageRetrievalAgent:
                         "revision_possible": True,
                     })
 
-        manifest = {
+        total_generation_cost = sum(
+            float(seg.get("generation_cost_usd") or 0.0) for seg in segment_assets
+        )
+        scenes_generated = sum(
+            1 for seg in segment_assets
+            if any(
+                "generated" in str(c.get("source", ""))
+                for c in (seg.get("candidates") or [])
+            )
+        )
+
+        manifest: Dict[str, Any] = {
             "schema_version": "1.0.0",
             "script_image_manifest_id": f"sim_{uuid.uuid4().hex[:8]}",
             "created_at": _utc_now_iso(),
@@ -492,6 +504,13 @@ class ScriptImageRetrievalAgent:
             "total_segments": len(segment_assets),
             "segments": segment_assets,
         }
+
+        if total_generation_cost > 0 or scenes_generated > 0:
+            manifest["image_generation"] = {
+                "total_cost_usd": round(total_generation_cost, 4),
+                "provider": IMAGE_GENERATION_PROVIDER,
+                "scenes_generated": scenes_generated,
+            }
 
         write_json(self.output_dir / "script_image_manifest.json", manifest)
 
@@ -603,6 +622,48 @@ class ScriptImageRetrievalAgent:
             object_terms=object_terms,
         )
         candidates = candidates[:max_candidates]
+
+        # -- AI image generation fallback --
+        # Fires only when stock search produced fewer candidates than the minimum
+        # AND a generation provider is configured.  Uses beat.generation_prompts
+        # written by the screenplay agent (issue 1.7).
+        generation_cost_usd = 0.0
+        if IMAGE_GENERATION_PROVIDER and len(candidates) < min_candidates:
+            gen_prompts = beat.get("generation_prompts") or {}
+            assets_dir = self.output_dir / "assets" if self.output_dir else None
+            if gen_prompts and assets_dir:
+                for prompt_key in ("precise", "general"):
+                    prompt_text = gen_prompts.get(prompt_key)
+                    if not prompt_text:
+                        continue
+                    gen_dest = assets_dir / f"{beat_id}_gen_{prompt_key}.png"
+                    try:
+                        gen_result = generate_image(
+                            prompt=prompt_text,
+                            output_path=gen_dest,
+                            provider=IMAGE_GENERATION_PROVIDER,
+                            quality=IMAGE_GENERATION_QUALITY,
+                        )
+                        generation_cost_usd += float(
+                            (gen_result.get("metadata") or {}).get("cost_usd") or 0.0
+                        )
+                        candidates.append({
+                            "candidate_id": f"cand_{uuid.uuid4().hex[:8]}",
+                            "source": gen_result.get("source", "generated"),
+                            "url": gen_result["url"],
+                            "resolution": gen_result.get("resolution", [0, 0]),
+                            "attribution": gen_result.get("attribution", {}),
+                            "metadata": {
+                                "search_query": f"[generated:{prompt_key}]",
+                                **(gen_result.get("metadata") or {}),
+                            },
+                        })
+                        print(f"[INFO] Generated image for {beat_id} using {prompt_key} prompt")
+                        break  # one generated image is enough (B1 fallback)
+                    except ImageGenerationError as exc:
+                        provider_errors.append(f"generation({prompt_key}): {exc}")
+                        continue
+
         candidate_sources = sorted(
             {
                 str(candidate.get("source") or "").strip().lower()
@@ -630,6 +691,7 @@ class ScriptImageRetrievalAgent:
             "required_candidate_min": min_candidates,
             "candidates": candidates,
             "status": "ok" if len(candidates) >= min_candidates else "insufficient_candidates",
+            "generation_cost_usd": generation_cost_usd,
             "retrieval_notes": {
                 "configured_sources": configured_sources,
                 "sources_attempted": list(dict.fromkeys(sources_attempted)),

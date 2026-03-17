@@ -16,6 +16,14 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
+# Image Generation (AI-generated backgrounds as stock fallback)
+IMAGE_GENERATION_PROVIDER = os.getenv("IMAGE_GENERATION_PROVIDER", "")  # "openai" | ""
+IMAGE_GENERATION_API_KEY = os.getenv(
+    "IMAGE_GENERATION_API_KEY",
+    os.getenv("OPENAI_API_KEY", ""),
+)
+IMAGE_GENERATION_QUALITY = os.getenv("IMAGE_GENERATION_QUALITY", "medium")
+
 # Model configuration
 GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-flash-latest")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")

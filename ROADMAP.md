@@ -624,7 +624,7 @@ This tier is the current execution priority and supersedes older sequencing belo
 
 #### 3.5 AI Image Generation Integration
 - **Priority:** P3 (nice-to-have — visual quality upgrade)
-- **Status:** Open
+- **Status:** ✅ Done (March 2026)
 - **Depends on:** 1.7 (generation prompts in schema), 2.6 (alignment evaluator with scoring)
 - **Problem:** Stock image retrieval has a coverage ceiling — some scenes describe concepts, historical events, or abstract ideas that simply don't exist as stock photos. The `generation_prompts` added in 1.7 are stored but unused. AI image generation can fill this gap at low cost ($0.005-0.07/image).
 - **Investigation areas:**

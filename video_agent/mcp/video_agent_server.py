@@ -57,7 +57,9 @@ from ..render_agent import create_render_agent
 from ..screenwriting.concept_agent import ConceptAgent
 from ..screenwriting.screenplay_agent import ScreenplayAgent
 from ..screenwriting.screenplay_reviewer import ScreenplayReviewer
+from ..config import IMAGE_GENERATION_PROVIDER, IMAGE_GENERATION_QUALITY
 from ..script_image_agent import ScriptImageConfig, ScriptImageRetrievalAgent
+from ..tools.image_generation_tools import ImageGenerationError, generate_image
 from ..tools.image_search_tools import ImageSearchError, score_candidate_relevance, search_pexels_images, wikimedia_rate_limiter
 from ..utils.ffprobe_utils import probe_video_info
 from ..utils.tts_utils import _WPM_BY_PRESET, estimate_duration_s
@@ -104,6 +106,15 @@ _WIKIMEDIA_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org")
 
 def _download_image(url: str, dest: Path) -> bool:
     try:
+        # Handle local file paths (e.g. AI-generated images already on disk)
+        source = Path(url)
+        if source.is_file():
+            import shutil
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if source.resolve() != dest.resolve():
+                shutil.copy2(source, dest)
+            return True
+
         if any(h in url for h in _WIKIMEDIA_HOSTS):
             wikimedia_rate_limiter.throttle()
         resp = requests.get(url, timeout=30, stream=True, headers=_DOWNLOAD_HEADERS)
@@ -771,6 +782,55 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:  # noqa: C
                             for a in (visual_manifest.get("assets") or [])
                         ],
                     }
+
+            # If any scenes are still placeholders and a generation provider is configured,
+            # try AI image generation as a last resort before giving up.
+            if IMAGE_GENERATION_PROVIDER:
+                still_placeholder_ids = [
+                    a["scene_id"] for a in (visual_manifest.get("assets") or [])
+                    if a.get("source") == "placeholder" and a.get("scene_id")
+                ]
+                if still_placeholder_ids:
+                    beats_by_scene: Dict[str, Any] = {}
+                    for _beat in (script_package.get("script", {}).get("beats") or []):
+                        _sid = str(_beat.get("scene_id") or "")
+                        if _sid:
+                            beats_by_scene[_sid] = _beat
+
+                    assets_dir = run_dir / "assets"
+                    assets_dir.mkdir(parents=True, exist_ok=True)
+
+                    for _scene_id in still_placeholder_ids:
+                        _beat = beats_by_scene.get(_scene_id, {})
+                        _gen_prompts = _beat.get("generation_prompts") or {}
+                        if not _gen_prompts:
+                            continue
+
+                        for _prompt_key in ("precise", "general"):
+                            _prompt_text = _gen_prompts.get(_prompt_key)
+                            if not _prompt_text:
+                                continue
+                            _gen_dest = assets_dir / f"{_scene_id}_gen.png"
+                            try:
+                                _gen_result = generate_image(
+                                    prompt=_prompt_text,
+                                    output_path=_gen_dest,
+                                    provider=IMAGE_GENERATION_PROVIDER,
+                                    quality=IMAGE_GENERATION_QUALITY,
+                                )
+                                for _asset in (visual_manifest.get("assets") or []):
+                                    if _asset.get("scene_id") == _scene_id:
+                                        _asset["file_path"] = str(
+                                            _gen_dest.relative_to(run_dir)
+                                        ).replace("\\", "/")
+                                        _asset["source"] = _gen_result.get("source", "generated")
+                                        _asset["attribution"] = _gen_result.get("attribution", {})
+                                        break
+                                print(f"[INFO] Generated image for {_scene_id} (fetch_assets fallback)")
+                                break  # success, move to next scene
+                            except ImageGenerationError as _exc:
+                                print(f"[WARN] Generation failed for {_scene_id} ({_prompt_key}): {_exc}")
+                                continue
 
             # When re-fetching a subset of scenes, merge into the existing manifest.
             existing_vm_path = run_dir / "visual_manifest.json"
