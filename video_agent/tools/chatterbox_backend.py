@@ -104,10 +104,12 @@ class ChatterboxServerBackend:
     def __init__(self, base_url: str = "http://localhost:8000") -> None:
         self._base_url = base_url.rstrip("/")
         self._session = _get_retry_session()
+        self.last_voice_wpm: float | None = None
 
     def synthesize(self, req: TTSRequest) -> bytes:
         if not req.text or not req.text.strip():
             raise TTSError("Text cannot be empty")
+        self.last_voice_wpm = None  # reset before each request
         try:
             r = self._session.post(
                 f"{self._base_url}/tts",
@@ -115,9 +117,38 @@ class ChatterboxServerBackend:
                 timeout=120,
             )
             r.raise_for_status()
+            wpm_header = r.headers.get("X-Voice-WPM")
+            if wpm_header is not None:
+                try:
+                    self.last_voice_wpm = float(wpm_header)
+                except (TypeError, ValueError):
+                    pass
             return r.content
         except requests.exceptions.RequestException as e:
             raise TTSError(f"ChatterboxServer request failed: {e}") from e
+
+    def get_voice_wpm(self, voice_id: str) -> float | None:
+        """Query calibrated WPM for a voice from the Chatterbox server.
+
+        Args:
+            voice_id: Voice identifier (e.g. "kronimi7030").
+
+        Returns:
+            Calibrated WPM as a float, or None if unavailable.
+        """
+        try:
+            r = self._session.get(
+                f"{self._base_url}/voices/{voice_id}",
+                timeout=10,
+            )
+            r.raise_for_status()
+            data = r.json()
+            wpm = data.get("wpm")
+            if wpm is not None:
+                return float(wpm)
+        except (requests.exceptions.RequestException, ValueError, KeyError):
+            pass
+        return None
 
     def close(self) -> None:
         self._session.close()

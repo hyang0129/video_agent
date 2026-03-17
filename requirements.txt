@@ -12,6 +12,9 @@ google-auth-httplib2>=0.1.1
 youtube-transcript-api>=0.6.0
 google-auth-oauthlib>=1.1.0
 
+# Image processing
+Pillow>=10.0.0
+
 # Data processing
 pandas>=2.0.0
 requests>=2.31.0
